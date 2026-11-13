@@ -1,564 +1,427 @@
 'use strict';
-const express = require('express');
-const http = require('http');
-const path = require('path');
-const fs = require('fs');
-const crypto = require('crypto');
-const cors = require('cors');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-const { Server } = require('socket.io');
+const express = require('express'), http = require('http'), crypto = require('crypto'), fs = require('fs');
+const cors = require('cors'), helmet = require('helmet'), rateLimit = require('express-rate-limit');
+const { Server } = require('socket.io'), { MongoClient } = require('mongodb');
 
-/* ===================== CONFIG ===================== */
-const PORT = Number(process.env.PORT) || 3000;
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
-const ORIGINS = (process.env.FRONTEND_ORIGIN || '*').split(',').map(s => s.trim()).filter(Boolean);
-const WILDCARD = ORIGINS.includes('*');
-const ADMIN_NAMES = (process.env.ADMIN_USERNAMES || 'dedokxxxreal,dedokxxreal').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-const ADMIN_IDS = (process.env.ADMIN_ROBLOX_IDS || '').split(',').map(s => s.trim()).filter(Boolean); // daha güvenli
-const BOT_USERNAME = process.env.BOT_USERNAME || 'DedokAmp';
-const DEFAULT_LINK = 'https://www.roblox.com/share?code=a0dd8a7bc68f034b99e078f454d4e903&type=Server';
-let BOT_JOIN_LINK = process.env.BOT_JOIN_LINK || DEFAULT_LINK;
-if (!/^https:\/\/www\.roblox\.com\//.test(BOT_JOIN_LINK)) BOT_JOIN_LINK = DEFAULT_LINK;
-const BOT_SECRET = process.env.BOT_SECRET || '';
+/* ================= CONFIG (Render > Environment) ================= */
+const E = process.env;
+const PORT = E.PORT || 3000;
+const ORIGINS = (E.FRONTEND_ORIGIN || '*').split(',').map(s => s.trim()).filter(Boolean);
+const CORS_ORIGIN = ORIGINS.includes('*') ? true : ORIGINS;
+const ADMIN_NAMES = (E.ADMIN_USERS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+const ADMIN_IDS = (E.ADMIN_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+const BOT_SECRET = E.BOT_SECRET || '';
+const BOT_NAME = E.BOT_USERNAME || 'DedokAmp';
+const BOT_LINK = E.BOT_JOIN_LINK || 'https://www.roblox.com/share?code=a0dd8a7bc68f034b99e078f454d4e903&type=Server';
+const RANGE = Number(E.JOIN_RANGE || 0.10);   // join value tolerance (+-10%)
+const MAX_ITEMS = 8;
 
-const RANGE = 0.05;            // join aralığı ±%5
-const MAX_ITEMS = 15;
-const COUNTDOWN_MS = 3000;
-const FLIP_MS = 2800;
-const KEEP_MS = 20000;         // biten maç dışarıda 20sn kalır
-const SESSION_TTL = 30 * 24 * 3600 * 1000;
-const GIVEAWAY_TIMES = [30, 120, 300];
+/* ================= STATE + PERSISTENCE ================= */
+let S = { users: {}, sessions: {}, catalog: [], matches: {}, history: [], giveaways: {}, chat: [], withdrawals: [], audit: [], refs: {} };
+let dirty = false, col = null;
+const save = () => { dirty = true; };
+async function initDB() {
+  let saved = null;
+  if (E.MONGODB_URI) {
+    const c = new MongoClient(E.MONGODB_URI); await c.connect();
+    col = c.db('amproll').collection('kv');
+    const d = await col.findOne({ _id: 'state' }); if (d) saved = d.data;
+  } else if (fs.existsSync('state.json')) saved = JSON.parse(fs.readFileSync('state.json', 'utf8'));
+  if (saved) S = Object.assign(S, saved);
+  console.log(col ? 'MongoDB connected' : 'WARNING: no MONGODB_URI, using local file (data is lost on Render redeploy!)');
+}
+async function flush() {
+  if (!dirty) return; dirty = false;
+  try {
+    if (col) await col.replaceOne({ _id: 'state' }, { _id: 'state', data: S }, { upsert: true });
+    else fs.writeFileSync('state.json', JSON.stringify(S));
+  } catch (e) { console.error('save failed', e.message); dirty = true; }
+}
+setInterval(flush, 2000);
+for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, async () => { dirty = true; await flush(); process.exit(0); });
 
-/* ===================== HELPERS ===================== */
-class HttpError extends Error { constructor(status, msg) { super(msg); this.status = status; } }
+/* ================= HELPERS ================= */
 const sha = s => crypto.createHash('sha256').update(s).digest('hex');
 const rid = (n = 8) => crypto.randomBytes(n).toString('hex');
-const r2 = x => Math.round(x * 100) / 100;
-const ah = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+const now = () => Date.now();
+const round2 = n => Math.round(n * 100) / 100;
+const vsum = a => round2(a.reduce((s, i) => s + i.value, 0));
+const bad = (res, msg, code = 400) => res.status(code).json({ error: msg });
+const pp = u => ({ id: u.id, username: u.username, avatar: u.avatar });
+const isAdmin = u => ADMIN_IDS.includes(u.id) || ADMIN_NAMES.includes(u.username.toLowerCase());
+const rankOf = b => b >= 100000 ? 'Whale' : b >= 10000 ? 'Highroller' : b >= 1000 ? 'Roller' : 'Rookie';
+const WORDS = ['apple','bunny','candy','cloud','daisy','eagle','fairy','ginger','happy','honey','igloo','jelly','kitten','lemon','magic','nectar','ocean','panda','queen','rabbit','sunny','tiger','unicorn','violet','waffle','yellow','zebra','berry','cookie','dragon','flower','garden','castle','puppy','rocket','silver','turtle','velvet','window','maple','otter','pearl','pixel','robin','sugar','thunder','wizard','rainbow'];
+const genCode = () => Array.from({ length: 6 }, () => WORDS[crypto.randomInt(WORDS.length)]).join(' ');
+function addTx(u, type, id, amount) { u.tx.unshift({ type, id, ts: now(), amount: round2(amount) }); if (u.tx.length > 300) u.tx.length = 300; }
+function audit(u, action, detail) { S.audit.unshift({ ts: now(), by: u.username, action, detail }); if (S.audit.length > 300) S.audit.length = 300; save(); }
+function meView(u) {
+  return { id: u.id, username: u.username, displayName: u.displayName, avatar: u.avatar, isAdmin: isAdmin(u),
+    totalBet: round2(u.totalBet), totalWon: round2(u.totalWon), profit: round2(u.profit || 0), rank: rankOf(u.totalBet), inventory: u.inventory };
+}
 
-/* ===================== DATABASE (atomik JSON) ===================== */
-const DB_FILE = path.join(DATA_DIR, 'db.json');
-let db = { users: {}, sessions: {}, catalog: {}, matches: {}, history: [], giveaways: {}, chat: [], withdrawals: {}, tx: [], adminLog: [] };
-function loadDB() {
-  try {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-    if (fs.existsSync(DB_FILE)) db = Object.assign(db, JSON.parse(fs.readFileSync(DB_FILE, 'utf8')));
-  } catch (e) { console.error('DB load failed, refusing to start to avoid data loss:', e); process.exit(1); }
-}
-let saveTimer = null;
-function saveNow() {
-  try { const tmp = DB_FILE + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(db)); fs.renameSync(tmp, DB_FILE); }
-  catch (e) { console.error('DB save failed', e); }
-}
-function save() { if (saveTimer) return; saveTimer = setTimeout(() => { saveTimer = null; saveNow(); }, 300); }
-loadDB();
-
-function seedCatalog() {
-  if (Object.keys(db.catalog).length) return;
-  const seed = [
-    ['Shadow Dragon', 15250, 'mega', true, true], ['Bat Dragon', 9800, 'neon', true, true],
-    ['Frost Dragon', 6180, 'mega', true, true], ['Giraffe', 2310, 'neon', true, true],
-    ['Owl', 1450, 'normal', true, true], ['Parrot', 980, 'neon', true, true],
-    ['Evil Unicorn', 760, 'mega', true, true], ['Crow', 68, 'neon', true, true],
-    ['Cow', 55, 'normal', true, true], ['Turtle', 38, 'neon', false, true]
-  ];
-  for (const [name, value, variant, fly, ride] of seed) {
-    const id = 'c_' + rid(5);
-    db.catalog[id] = { id, name, img: '', value, variant, fly, ride, tag: makeTag(variant, fly, ride), hidden: false, createdAt: Date.now() };
-  }
-  save();
-}
-function makeTag(variant, fly, ride) { return (variant === 'mega' ? 'M' : variant === 'neon' ? 'N' : '') + (fly ? 'F' : '') + (ride ? 'R' : ''); }
-seedCatalog();
-
-/* ===================== ROBLOX API ===================== */
-async function rbx(url, opts = {}) {
-  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 8000);
-  try {
-    const r = await fetch(url, { ...opts, signal: ctl.signal, headers: { 'Content-Type': 'application/json', Accept: 'application/json' } });
-    if (!r.ok) throw new Error('roblox ' + r.status);
-    return await r.json();
-  } finally { clearTimeout(t); }
-}
-async function resolveUsername(name) {
-  const j = await rbx('https://users.roblox.com/v1/usernames/users', { method: 'POST', body: JSON.stringify({ usernames: [name], excludeBannedUsers: true }) });
-  const u = j.data && j.data[0];
+/* ================= ROBLOX API ================= */
+async function robloxLookup(username) {
+  const r = await fetch('https://users.roblox.com/v1/usernames/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ usernames: [username], excludeBannedUsers: true }) });
+  if (!r.ok) throw new Error('roblox');
+  const j = await r.json(); const u = j.data && j.data[0];
   return u ? { id: String(u.id), username: u.name, displayName: u.displayName } : null;
 }
-const getRbxUser = id => rbx('https://users.roblox.com/v1/users/' + id);
-async function getThumb(id, type = 'avatar-headshot', size = '150x150') {
+async function robloxDescription(id) {
+  const r = await fetch('https://users.roblox.com/v1/users/' + id); if (!r.ok) throw new Error('roblox');
+  return (await r.json()).description || '';
+}
+async function robloxAvatar(id) {
   try {
-    const j = await rbx(`https://thumbnails.roblox.com/v1/users/${type}?userIds=${id}&size=${size}&format=Png&isCircular=false`);
-    const d = j.data && j.data[0];
-    return d && d.state === 'Completed' ? d.imageUrl : '';
-  } catch { return ''; }
+    const r = await fetch(`https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=${id}&size=150x150&format=Png&isCircular=false`);
+    const j = await r.json(); return (j.data && j.data[0] && j.data[0].imageUrl) || null;
+  } catch { return null; }
+}
+let bot = { username: BOT_NAME, id: null, avatar: null, link: BOT_LINK };
+async function loadBot() {
+  try { const u = await robloxLookup(BOT_NAME); if (u) { bot.id = u.id; bot.username = u.username; bot.avatar = await robloxAvatar(u.id); } } catch {}
+  if (!bot.avatar) setTimeout(loadBot, 60000);
 }
 
-let BOT = { username: BOT_USERNAME, displayName: BOT_USERNAME, id: '', avatar: '', joinLink: BOT_JOIN_LINK };
-async function refreshBot() {
-  try {
-    const u = await resolveUsername(BOT_USERNAME);
-    if (u) BOT = { username: u.username, displayName: u.displayName, id: u.id, avatar: await getThumb(u.id), joinLink: BOT_JOIN_LINK };
-  } catch (e) { console.warn('bot refresh failed', e.message); }
-}
-refreshBot(); setInterval(refreshBot, 30 * 60 * 1000);
-
-/* ===================== USERS / INVENTORY ===================== */
-const isAdmin = u => !!u && (ADMIN_IDS.includes(u.id) || ADMIN_NAMES.includes(String(u.username).toLowerCase()));
-const pubUser = u => ({ id: u.id, username: u.username, avatar: u.avatar || '' });
-function newUser(info, avatar, bust) {
-  return { id: info.id, username: info.username, displayName: info.displayName || info.username, avatar, bust, inventory: [], stats: { bet: 0, won: 0, profit: 0 }, ledger: [], createdAt: Date.now(), avatarAt: Date.now(), banned: false };
-}
-function snap(inst) { const c = db.catalog[inst.itemId]; return { uid: inst.uid, itemId: inst.itemId, name: c.name, img: c.img, value: c.value, tag: c.tag }; }
-const unsnap = s => ({ uid: s.uid, itemId: s.itemId });
-function rankOf(bet) { return bet >= 250000 ? 'Whale' : bet >= 50000 ? 'Highroller' : bet >= 5000 ? 'Player' : 'Rookie'; }
-function mePayload(u) {
-  const inv = u.inventory.map(snap);
-  return { id: u.id, username: u.username, displayName: u.displayName, avatar: u.avatar, bust: u.bust || u.avatar, isAdmin: isAdmin(u), inventory: inv, worth: r2(inv.reduce((a, b) => a + b.value, 0)), stats: u.stats, rank: rankOf(u.stats.bet) };
-}
-function pushMe(u) { io.to('user:' + u.id).emit('me', mePayload(u)); }
-function notify(u, type, text, extra) { io.to('user:' + u.id).emit('notify', { type, text, ...extra }); }
-function ledger(u, type, id, amount) { u.ledger.unshift({ type, id, at: Date.now(), amount: r2(amount) }); if (u.ledger.length > 1000) u.ledger.length = 1000; }
-function pickItems(user, ids, max = MAX_ITEMS) {
-  if (!Array.isArray(ids) || ids.length < 1 || ids.length > max) throw new HttpError(400, `Select between 1 and ${max} items`);
-  const set = new Set(ids);
-  if (set.size !== ids.length) throw new HttpError(400, 'Duplicate items');
-  const picks = [];
-  for (const uid of set) {
-    if (typeof uid !== 'string') throw new HttpError(400, 'Invalid item');
-    const inst = user.inventory.find(i => i.uid === uid);
-    if (!inst) throw new HttpError(400, 'Item not in your inventory');
-    picks.push(inst);
-  }
-  return picks;
-}
-function removeItems(user, picks) { const s = new Set(picks.map(p => p.uid)); user.inventory = user.inventory.filter(i => !s.has(i.uid)); }
-const sumVal = arr => r2(arr.reduce((a, b) => a + b.value, 0));
-function sysMsg(text) { const m = { id: rid(6), system: true, text, at: Date.now() }; db.chat.push(m); if (db.chat.length > 60) db.chat.shift(); io.emit('chat', m); }
-
-/* ===================== EXPRESS + SOCKET ===================== */
+/* ================= APP / SOCKET ================= */
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: WILDCARD ? '*' : ORIGINS }, maxHttpBufferSize: 1e4 });
 app.set('trust proxy', 1);
-app.disable('x-powered-by');
-app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: { policy: 'cross-origin' } }));
-app.use(cors({ origin: WILDCARD ? '*' : ORIGINS, allowedHeaders: ['Content-Type', 'Authorization', 'X-Bot-Secret'], methods: ['GET', 'POST', 'PUT', 'DELETE'] }));
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+app.use(cors({ origin: CORS_ORIGIN }));
 app.use(express.json({ limit: '20kb' }));
-app.use('/api', rateLimit({ windowMs: 60 * 1000, max: 240, standardHeaders: true, legacyHeaders: false }));
-const authLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 40, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many attempts, wait a few minutes.' } });
-const actLimiter = rateLimit({ windowMs: 60 * 1000, max: 40, standardHeaders: true, legacyHeaders: false, message: { error: 'Slow down!' } });
+app.use('/api/', rateLimit({ windowMs: 60000, max: 300, standardHeaders: true, legacyHeaders: false }));
+const authLimit = rateLimit({ windowMs: 60000, max: 15 });
+const actLimit = rateLimit({ windowMs: 60000, max: 40 });
+const server = http.createServer(app);
+const io = new Server(server, { cors: { origin: CORS_ORIGIN }, maxHttpBufferSize: 1e4 });
 
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
-app.get('/healthz', (req, res) => res.json({ ok: true }));
-
-function userFromToken(tok) {
-  if (!tok || tok.length < 20) return null;
-  const h = sha(tok); const s = db.sessions[h];
-  if (!s) return null;
-  if (Date.now() - s.at > SESSION_TTL) { delete db.sessions[h]; return null; }
-  return db.users[s.userId] || null;
+function userFromToken(t) {
+  if (!t || typeof t !== 'string' || t.length > 128) return null;
+  const s = S.sessions[sha(t)]; if (!s || s.exp < now()) return null;
+  const u = S.users[s.userId]; return (u && !u.banned) ? u : null;
 }
 function auth(req, res, next) {
-  const h = req.headers.authorization || '';
-  const tok = h.startsWith('Bearer ') ? h.slice(7) : '';
-  const u = userFromToken(tok);
-  if (!u) return res.status(401).json({ error: 'Not logged in' });
-  if (u.banned) return res.status(403).json({ error: 'Account banned' });
-  req.user = u; req.token = tok; next();
+  const u = userFromToken((req.headers.authorization || '').replace('Bearer ', ''));
+  if (!u) return bad(res, 'Not logged in', 401);
+  req.user = u; next();
 }
-const adminOnly = (req, res, next) => isAdmin(req.user) ? next() : res.status(404).json({ error: 'Not found' });
+const adminOnly = [auth, (req, res, next) => isAdmin(req.user) ? next() : bad(res, 'forbidden', 403)];
+const emitMe = u => io.to('u:' + u.id).emit('me:update', meView(u));
 
-/* ---------- public config ---------- */
-app.get('/api/config', (req, res) => res.json({ bot: BOT, range: RANGE, maxItems: MAX_ITEMS }));
+/* ================= INVENTORY PRIMITIVES (dupe-safe, all synchronous) ================= */
+function pick(user, uids, max) {
+  if (!Array.isArray(uids) || uids.length < 1 || uids.length > max || !uids.every(x => typeof x === 'string')) return null;
+  if (new Set(uids).size !== uids.length) return null;
+  const out = [];
+  for (const id of uids) { const it = user.inventory.find(i => i.uid === id); if (!it) return null; out.push(it); }
+  return out;
+}
+function takeItems(user, uids, max) {
+  const items = pick(user, uids, max); if (!items) return null;
+  const set = new Set(uids); user.inventory = user.inventory.filter(i => !set.has(i.uid));
+  return items;
+}
+const newItem = c => ({ uid: rid(8), catalogId: c.id, name: c.name, image: c.image, value: c.value, age: c.age, fly: c.fly, ride: c.ride });
 
-/* ---------- ROBLOX LOGIN (açıklama kodu ile doğrulama) ---------- */
+/* ================= AUTH (Roblox bio code) ================= */
 const pending = new Map();
-setInterval(() => { const n = Date.now(); for (const [k, v] of pending) if (v.expires < n) pending.delete(k); for (const [k, s] of Object.entries(db.sessions)) if (n - s.at > SESSION_TTL) delete db.sessions[k]; }, 10 * 60 * 1000);
-
-app.post('/api/auth/start', authLimiter, ah(async (req, res) => {
-  const name = String((req.body || {}).username || '').trim();
-  if (!/^[A-Za-z0-9_]{3,20}$/.test(name)) throw new HttpError(400, 'Invalid Roblox username');
-  let u;
-  try { u = await resolveUsername(name); } catch { throw new HttpError(502, 'Roblox is not responding, try again'); }
-  if (!u) throw new HttpError(404, 'Roblox user not found');
-  const ex = db.users[u.id];
-  if (ex && ex.banned) throw new HttpError(403, 'This account is banned');
-  const pendingId = rid(16);
-  const code = 'AMPROLL-' + rid(5).toUpperCase();
-  const avatar = await getThumb(u.id);
-  pending.set(pendingId, { ...u, code, expires: Date.now() + 10 * 60 * 1000 });
-  res.json({ pendingId, code, user: { id: u.id, username: u.username, displayName: u.displayName, avatar } });
-}));
-
-app.post('/api/auth/verify', authLimiter, ah(async (req, res) => {
-  const pid = String((req.body || {}).pendingId || '');
-  const p = pending.get(pid);
-  if (!p || p.expires < Date.now()) throw new HttpError(400, 'Code expired, start again');
-  let info;
-  try { info = await getRbxUser(p.id); } catch { throw new HttpError(502, 'Roblox is not responding, try again'); }
-  if (!pending.has(pid)) throw new HttpError(400, 'Code already used');
-  if (!String(info.description || '').includes(p.code)) throw new HttpError(400, 'Code not found in your Roblox description yet. Save it and try again.');
-  pending.delete(pid);
-  const [avatar, bust] = await Promise.all([getThumb(p.id), getThumb(p.id, 'avatar-bust', '420x420')]);
-  let user = db.users[p.id];
-  if (!user) user = db.users[p.id] = newUser({ id: p.id, username: info.name, displayName: info.displayName }, avatar, bust);
-  else { user.username = info.name; user.displayName = info.displayName; if (avatar) user.avatar = avatar; if (bust) user.bust = bust; user.avatarAt = Date.now(); }
-  if (user.banned) throw new HttpError(403, 'This account is banned');
+app.post('/api/auth/start', authLimit, async (req, res) => {
+  const username = String(req.body.username || '').trim();
+  if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return bad(res, 'Invalid Roblox username');
+  let u; try { u = await robloxLookup(username); } catch { return bad(res, 'Roblox API error, try again', 502); }
+  if (!u) return bad(res, 'Roblox user not found', 404);
+  const code = genCode();
+  pending.set(u.id, { ...u, code, exp: now() + 10 * 60000, tries: 0 });
+  res.json({ id: u.id, username: u.username, code, avatar: await robloxAvatar(u.id) });
+});
+app.post('/api/auth/verify', authLimit, async (req, res) => {
+  const id = String(req.body.id || ''); const p = pending.get(id);
+  if (!p || p.exp < now()) return bad(res, 'Code expired, start again');
+  if (++p.tries > 20) { pending.delete(id); return bad(res, 'Too many tries, start again'); }
+  let desc; try { desc = await robloxDescription(id); } catch { return bad(res, 'Roblox API error, try again', 502); }
+  if (!desc.includes(p.code)) return bad(res, 'Code not found in your Roblox "About" yet. Save it and try again in a few seconds.', 401);
+  pending.delete(id);
+  const avatar = await robloxAvatar(id);
+  let u = S.users[id];
+  if (!u) u = S.users[id] = { id, username: p.username, displayName: p.displayName, avatar: null, createdAt: now(), inventory: [], totalBet: 0, totalWon: 0, profit: 0, tx: [], banned: false };
+  if (u.banned) return bad(res, 'Account banned', 403);
+  u.username = p.username; u.displayName = p.displayName; if (avatar) u.avatar = avatar;
   const token = rid(32);
-  db.sessions[sha(token)] = { userId: user.id, at: Date.now() };
-  save();
-  res.json({ token, me: mePayload(user) });
-}));
-
-app.post('/api/auth/logout', auth, (req, res) => { delete db.sessions[sha(req.token)]; save(); res.json({ ok: true }); });
-
-app.get('/api/me', auth, (req, res) => {
-  const u = req.user;
-  if (Date.now() - (u.avatarAt || 0) > 12 * 3600 * 1000) {
-    u.avatarAt = Date.now();
-    Promise.all([getThumb(u.id), getThumb(u.id, 'avatar-bust', '420x420')]).then(([a, b]) => { if (a) u.avatar = a; if (b) u.bust = b; save(); pushMe(u); });
-  }
-  res.json(mePayload(u));
+  S.sessions[sha(token)] = { userId: id, exp: now() + 30 * 864e5 };
+  save(); res.json({ token, user: meView(u) });
 });
-app.get('/api/me/ledger', auth, (req, res) => {
-  const size = 8; const total = req.user.ledger.length;
-  const pages = Math.max(1, Math.ceil(total / size));
-  const page = Math.min(pages, Math.max(1, parseInt(req.query.page) || 1));
-  res.json({ rows: req.user.ledger.slice((page - 1) * size, page * size), page, pages, total, stats: req.user.stats, rank: rankOf(req.user.stats.bet) });
+app.post('/api/auth/logout', auth, (req, res) => {
+  delete S.sessions[sha((req.headers.authorization || '').replace('Bearer ', ''))]; save(); res.json({ ok: true });
 });
-app.get('/api/me/history', auth, (req, res) => {
-  const id = req.user.id;
-  res.json({ matches: db.history.filter(h => h.host.id === id || (h.opp && h.opp.id === id)).slice(0, 50).map(pubMatch) });
-});
+setInterval(() => { for (const k in S.sessions) if (S.sessions[k].exp < now()) delete S.sessions[k]; for (const [k, v] of pending) if (v.exp < now()) pending.delete(k); }, 600000);
 
-/* ===================== COINFLIP ===================== */
-function pubItem(i) { return { name: i.name, img: i.img, value: i.value, tag: i.tag }; }
+/* ================= PUBLIC VIEWS ================= */
 function pubMatch(m) {
-  const rev = m.state === 'flipping' || m.state === 'finished';
-  return {
-    id: m.id, hash: m.hash, state: m.state, createdAt: m.createdAt,
-    host: m.host, hostSide: m.hostSide, hostItems: m.hostItems.map(pubItem), hostValue: m.hostValue,
-    opp: m.opp, oppSide: m.oppSide, oppItems: m.oppItems.map(pubItem), oppValue: m.oppValue,
-    countdownEndsAt: m.countdownEndsAt || 0, flipEndsAt: m.flipEndsAt || 0,
-    winnerSide: rev ? m.winnerSide : null,
-    winnerId: m.state === 'finished' ? m.winnerId : null,
-    seed: m.state === 'finished' ? m.seed : null, finishedAt: m.finishedAt || 0
-  };
+  const o = { id: m.id, state: m.state, hash: m.hash, host: m.host, opp: m.opp, hostSide: m.hostSide, oppSide: m.hostSide === 'dog' ? 'cat' : 'dog',
+    hostItems: m.hostItems, oppItems: m.oppItems, hostValue: m.hostValue, oppValue: m.oppValue, createdAt: m.createdAt, elapsed: m.startedAt ? now() - m.startedAt : 0 };
+  if (m.state === 'flipping' || m.state === 'finished') o.winnerSide = m.winnerSide;
+  if (m.state === 'finished') { o.winnerId = m.winnerId; o.seed = m.seed; o.finishedAt = m.finishedAt; }
+  return o;
 }
-const broadcastMatches = () => io.emit('matches', Object.values(db.matches).map(pubMatch));
-const computeSide = (seed, id) => parseInt(sha(seed + ':' + id).slice(0, 8), 16) % 2 === 0 ? 'dog' : 'cat';
+const pubGA = g => ({ id: g.id, host: g.host, items: g.items, value: g.value, left: Math.max(0, g.endsAt - now()), minBet: g.minBet, entrantIds: g.entrants });
+app.get('/api/state', (req, res) => res.json({
+  matches: Object.values(S.matches).map(pubMatch), giveaways: Object.values(S.giveaways).map(pubGA), chat: S.chat,
+  online: io.engine.clientsCount, bot, config: { range: RANGE, maxItems: MAX_ITEMS }
+}));
+app.get('/api/me', auth, (req, res) => res.json({ user: meView(req.user) }));
+app.get('/api/profile', auth, (req, res) => {
+  const u = req.user, per = 6, pages = Math.max(1, Math.ceil(u.tx.length / per));
+  const page = Math.min(Math.max(1, parseInt(req.query.page) || 1), pages);
+  res.json({ user: meView(u), rows: u.tx.slice((page - 1) * per, page * per), page, pages });
+});
+app.get('/api/history/me', auth, (req, res) => res.json({ history: S.history.filter(h => h.host.id === req.user.id || (h.opp && h.opp.id === req.user.id)).slice(0, 30) }));
 
-app.post('/api/coinflip/create', auth, actLimiter, (req, res) => {
-  const { itemIds, side } = req.body || {};
-  if (side !== 'dog' && side !== 'cat') throw new HttpError(400, 'Invalid side');
-  const mine = Object.values(db.matches).filter(m => m.host.id === req.user.id && m.state === 'waiting').length;
-  if (mine >= 5) throw new HttpError(400, 'You can only have 5 open matches');
-  const picks = pickItems(req.user, itemIds);
-  const items = picks.map(snap); const value = sumVal(items);
-  if (value <= 0) throw new HttpError(400, 'Items must have value');
-  removeItems(req.user, picks);
-  const seed = rid(32); const id = rid(6);
-  const m = db.matches[id] = {
-    id, seed, hash: sha(seed), state: 'waiting', createdAt: Date.now(),
-    host: pubUser(req.user), hostSide: side, hostItems: items, hostValue: value,
-    opp: null, oppSide: side === 'dog' ? 'cat' : 'dog', oppItems: [], oppValue: 0,
-    winnerSide: null, winnerId: null
-  };
-  save(); broadcastMatches(); pushMe(req.user);
+/* ================= COINFLIP ================= */
+function runMatch(m) {
+  setTimeout(() => {
+    if (m.state !== 'countdown') return;
+    m.state = 'flipping'; io.emit('match:update', pubMatch(m)); save();
+    setTimeout(() => finishMatch(m), 3600);
+  }, 3000);
+}
+function finishMatch(m) {
+  if (m.state === 'finished') return;
+  m.state = 'finished'; m.finishedAt = now();
+  const hostWins = m.winnerSide === m.hostSide;
+  const w = S.users[(hostWins ? m.host : m.opp).id], l = S.users[(hostWins ? m.opp : m.host).id];
+  const loseStake = hostWins ? m.oppValue : m.hostValue, winStake = hostWins ? m.hostValue : m.oppValue;
+  m.winnerId = w.id;
+  w.inventory.push(...[...m.hostItems, ...m.oppItems].map(i => ({ ...i })));
+  S.users[m.host.id].totalBet += m.hostValue; S.users[m.opp.id].totalBet += m.oppValue;
+  w.totalWon += m.hostValue + m.oppValue; w.profit = (w.profit || 0) + loseStake; l.profit = (l.profit || 0) - loseStake;
+  addTx(w, 'Coinflip Win', m.id, loseStake); addTx(l, 'Coinflip Loss', m.id, -(hostWins ? m.oppValue : m.hostValue));
+  S.history.unshift(JSON.parse(JSON.stringify(pubMatch(m)))); if (S.history.length > 500) S.history.length = 500;
+  io.emit('match:update', pubMatch(m)); emitMe(w); emitMe(l); save();
+  setTimeout(() => { delete S.matches[m.id]; io.emit('match:remove', { id: m.id }); save(); }, 20000);
+}
+app.post('/api/match/create', auth, actLimit, (req, res) => {
+  const u = req.user, side = req.body.side;
+  if (side !== 'dog' && side !== 'cat') return bad(res, 'Pick a side');
+  if (Object.values(S.matches).filter(m => m.host.id === u.id && m.state === 'waiting').length >= 3) return bad(res, 'Max 3 open matches');
+  if (Object.keys(S.matches).length >= 150) return bad(res, 'Lobby is full');
+  const picked = pick(u, req.body.uids, MAX_ITEMS); if (!picked) return bad(res, 'Invalid item selection');
+  if (vsum(picked) <= 0) return bad(res, 'Value too low');
+  const items = takeItems(u, req.body.uids, MAX_ITEMS);
+  const seed = rid(32), id = rid(10);
+  const m = { id, state: 'waiting', seed, hash: sha(seed), host: pp(u), opp: null, hostSide: side, hostItems: items, oppItems: [], hostValue: vsum(items), oppValue: 0, createdAt: now(), startedAt: 0, winnerSide: null, winnerId: null };
+  S.matches[id] = m; io.emit('match:new', pubMatch(m)); emitMe(u); save();
   res.json({ match: pubMatch(m) });
 });
-
-app.post('/api/coinflip/:id/join', auth, actLimiter, (req, res) => {
-  const m = db.matches[req.params.id];
-  if (!m || m.state !== 'waiting') throw new HttpError(409, 'Match is no longer available');
-  if (m.host.id === req.user.id) throw new HttpError(400, "You can't join your own match");
-  const picks = pickItems(req.user, (req.body || {}).itemIds);
-  const items = picks.map(snap); const value = sumVal(items);
-  if (value < r2(m.hostValue * (1 - RANGE)) || value > r2(m.hostValue * (1 + RANGE))) throw new HttpError(400, 'Your value is outside the allowed range');
-  // --- senkron kritik bölüm (await yok => race/dupe yok) ---
-  removeItems(req.user, picks);
-  m.opp = pubUser(req.user); m.oppItems = items; m.oppValue = value;
-  m.state = 'countdown';
-  m.countdownEndsAt = Date.now() + COUNTDOWN_MS;
-  m.flipEndsAt = m.countdownEndsAt + FLIP_MS;
-  m.winnerSide = computeSide(m.seed, m.id);
-  // ---------------------------------------------------------
-  scheduleMatch(m);
-  save(); broadcastMatches(); pushMe(req.user);
+app.post('/api/match/join', auth, actLimit, (req, res) => {
+  const u = req.user, m = S.matches[String(req.body.id)];
+  if (!m || m.state !== 'waiting') return bad(res, 'This match is no longer available');
+  if (m.host.id === u.id) return bad(res, 'You cannot join your own match');
+  const picked = pick(u, req.body.uids, MAX_ITEMS); if (!picked) return bad(res, 'Invalid item selection');
+  const v = vsum(picked), min = m.hostValue * (1 - RANGE), max = m.hostValue * (1 + RANGE);
+  if (v < min - 0.001 || v > max + 0.001) return bad(res, 'Your value must be inside the required range');
+  const items = takeItems(u, req.body.uids, MAX_ITEMS);
+  m.opp = pp(u); m.oppItems = items; m.oppValue = vsum(items); m.state = 'countdown'; m.startedAt = now();
+  const roll = parseInt(crypto.createHmac('sha256', m.seed).update(m.id).digest('hex').slice(0, 8), 16) / 0x100000000;
+  m.winnerSide = roll < 0.5 ? 'dog' : 'cat';
+  io.emit('match:update', pubMatch(m)); emitMe(u); save(); runMatch(m);
   res.json({ match: pubMatch(m) });
 });
-
-app.post('/api/coinflip/:id/cancel', auth, actLimiter, (req, res) => {
-  const m = db.matches[req.params.id];
-  if (!m || m.state !== 'waiting') throw new HttpError(409, 'Cannot cancel: opponent already joined');
-  if (m.host.id !== req.user.id) throw new HttpError(403, 'Not your match');
-  delete db.matches[m.id];
-  m.hostItems.forEach(it => req.user.inventory.push(unsnap(it)));
-  save(); broadcastMatches(); pushMe(req.user);
-  res.json({ ok: true });
+app.post('/api/match/cancel', auth, actLimit, (req, res) => {
+  const m = S.matches[String(req.body.id)];
+  if (!m || m.state !== 'waiting' || m.host.id !== req.user.id) return bad(res, 'Cannot cancel this match');
+  req.user.inventory.push(...m.hostItems); delete S.matches[m.id];
+  io.emit('match:remove', { id: m.id }); emitMe(req.user); save(); res.json({ ok: true });
 });
 
-function scheduleMatch(m) {
-  const n = Date.now();
-  setTimeout(() => { if (m.state === 'countdown') { m.state = 'flipping'; save(); broadcastMatches(); } }, Math.max(0, m.countdownEndsAt - n));
-  setTimeout(() => finishMatch(m.id), Math.max(50, m.flipEndsAt - n));
-}
-function finishMatch(id) {
-  const m = db.matches[id];
-  if (!m || (m.state !== 'countdown' && m.state !== 'flipping')) return;
-  m.state = 'finished'; m.finishedAt = Date.now();
-  const hostWon = m.winnerSide === m.hostSide;
-  const winner = hostWon ? m.host : m.opp, loser = hostWon ? m.opp : m.host;
-  const wv = hostWon ? m.hostValue : m.oppValue, lv = hostWon ? m.oppValue : m.hostValue;
-  m.winnerId = winner.id;
-  const wu = db.users[winner.id], lu = db.users[loser.id];
-  const pot = [...m.hostItems, ...m.oppItems];
-  if (wu) {
-    pot.forEach(it => wu.inventory.push(unsnap(it)));
-    wu.stats.bet = r2(wu.stats.bet + wv); wu.stats.won = r2(wu.stats.won + wv + lv); wu.stats.profit = r2(wu.stats.profit + lv);
-    ledger(wu, 'Coinflip Win', m.id, lv);
-  }
-  if (lu) {
-    lu.stats.bet = r2(lu.stats.bet + lv); lu.stats.profit = r2(lu.stats.profit - lv);
-    ledger(lu, 'Coinflip Loss', m.id, -lv);
-  }
-  db.history.unshift(m); if (db.history.length > 1500) db.history.length = 1500;
-  save(); broadcastMatches();
-  if (wu) { pushMe(wu); notify(wu, 'win', `You won ${r2(wv + lv)} value in the coinflip!`); }
-  if (lu) { pushMe(lu); notify(lu, 'lose', 'You lost the coinflip. Better luck next time!'); }
-  setTimeout(() => { delete db.matches[id]; save(); broadcastMatches(); }, KEEP_MS);
-}
-
-/* ===================== GIVEAWAYS ===================== */
-const pubGW = g => ({ id: g.id, host: g.host, item: pubItem(g.item), endsAt: g.endsAt, mode: g.mode, minBet: g.minBet, entries: g.entries, status: g.status, winner: g.winner || null });
-const broadcastGW = () => io.emit('giveaways', Object.values(db.giveaways).map(pubGW));
-
-app.post('/api/giveaway/create', auth, actLimiter, (req, res) => {
-  const { itemIds, durationSec, mode } = req.body || {};
-  const minBet = Math.max(0, Math.min(1e9, Number((req.body || {}).minBet) || 0));
-  if (!GIVEAWAY_TIMES.includes(Number(durationSec))) throw new HttpError(400, 'Invalid duration');
-  if (mode !== 'easy' && mode !== 'advanced') throw new HttpError(400, 'Invalid mode');
-  const act = Object.values(db.giveaways).filter(g => g.status === 'active');
-  if (act.some(g => g.host.id === req.user.id)) throw new HttpError(400, 'You already have an active giveaway');
-  if (act.length >= 10) throw new HttpError(400, 'Too many active giveaways');
-  const picks = pickItems(req.user, itemIds, 1);
-  const item = snap(picks[0]);
-  removeItems(req.user, picks);
-  const id = rid(6);
-  const g = db.giveaways[id] = { id, host: pubUser(req.user), item, createdAt: Date.now(), endsAt: Date.now() + Number(durationSec) * 1000, mode, minBet: mode === 'advanced' ? minBet : 0, entries: [], status: 'active' };
-  scheduleGW(g); save(); broadcastGW(); pushMe(req.user);
-  sysMsg(`🎁 ${req.user.username} started a giveaway: ${item.tag ? item.tag + ' ' : ''}${item.name}!`);
-  res.json({ ok: true });
-});
-app.post('/api/giveaway/:id/enter', auth, actLimiter, (req, res) => {
-  const g = db.giveaways[req.params.id];
-  if (!g || g.status !== 'active' || g.endsAt <= Date.now()) throw new HttpError(409, 'Giveaway is over');
-  if (g.host.id === req.user.id) throw new HttpError(400, "You can't enter your own giveaway");
-  if (g.entries.includes(req.user.id)) throw new HttpError(400, 'Already entered');
-  if (g.mode === 'advanced' && req.user.stats.bet < g.minBet) throw new HttpError(400, `You need at least ${g.minBet} total bet to enter`);
-  g.entries.push(req.user.id); save(); broadcastGW();
-  res.json({ ok: true });
-});
-function scheduleGW(g) { setTimeout(() => endGiveaway(g.id), Math.max(50, g.endsAt - Date.now())); }
+/* ================= GIVEAWAYS ================= */
+function pushChat(msg) { S.chat.push(msg); if (S.chat.length > 60) S.chat.shift(); io.emit('chat:msg', msg); save(); }
 function endGiveaway(id) {
-  const g = db.giveaways[id];
-  if (!g || g.status !== 'active') return;
-  g.status = 'ended';
-  const host = db.users[g.host.id];
-  if (!g.entries.length) {
-    if (host) { host.inventory.push(unsnap(g.item)); pushMe(host); notify(host, 'info', 'Your giveaway had no entries. Item returned.'); }
-    sysMsg(`Giveaway for ${g.item.name} ended with no entries.`);
-  } else {
-    const wid = g.entries[crypto.randomInt(g.entries.length)];
-    const w = db.users[wid];
-    if (w) {
-      w.inventory.push(unsnap(g.item)); ledger(w, 'Giveaway Win', g.id, g.item.value);
-      g.winner = { id: w.id, username: w.username, avatar: w.avatar };
-      pushMe(w); notify(w, 'win', `You won the giveaway: ${g.item.name}!`);
-    }
-    sysMsg(`🎉 ${g.winner ? g.winner.username : 'Someone'} won the giveaway: ${g.item.tag ? g.item.tag + ' ' : ''}${g.item.name}!`);
+  const g = S.giveaways[id]; if (!g) return; delete S.giveaways[id];
+  const host = S.users[g.host.id];
+  if (!g.entrants.length) { host.inventory.push(...g.items); emitMe(host); pushChat({ id: rid(4), system: true, text: `🎁 ${g.host.username}'s giveaway ended with no entrants.`, ts: now() }); }
+  else {
+    const w = S.users[g.entrants[crypto.randomInt(g.entrants.length)]];
+    w.inventory.push(...g.items); addTx(w, 'Giveaway Win', g.id, g.value); emitMe(w);
+    pushChat({ id: rid(4), system: true, text: `🎉 ${w.username} won ${g.items.length > 1 ? g.items.length + ' items' : g.items[0].name} (💎${g.value}) from ${g.host.username}'s giveaway!`, ts: now() });
   }
-  save(); broadcastGW();
-  setTimeout(() => { delete db.giveaways[id]; save(); broadcastGW(); }, 15000);
+  io.emit('giveaway:remove', { id }); save();
 }
-
-/* ===================== WITHDRAW ===================== */
-app.post('/api/withdraw', auth, actLimiter, (req, res) => {
-  const pend = Object.values(db.withdrawals).filter(w => w.userId === req.user.id && w.status === 'pending').length;
-  if (pend >= 5) throw new HttpError(400, 'Too many pending withdrawals');
-  const picks = pickItems(req.user, (req.body || {}).itemIds, 30);
-  const items = picks.map(snap); removeItems(req.user, picks);
-  const id = rid(6);
-  db.withdrawals[id] = { id, userId: req.user.id, username: req.user.username, items, status: 'pending', at: Date.now() };
-  ledger(req.user, 'Withdraw', id, -sumVal(items));
-  save(); pushMe(req.user);
-  res.json({ ok: true, id, joinLink: BOT.joinLink });
+app.post('/api/giveaway/create', auth, actLimit, (req, res) => {
+  const u = req.user, { mode, duration, uids, minBet } = req.body; const dur = Math.floor(Number(duration));
+  if (mode === 'easy') { if (![30, 120, 300].includes(dur)) return bad(res, 'Invalid time'); }
+  else if (mode === 'advanced') { if (!(dur >= 60 && dur <= 3600)) return bad(res, 'Advanced time must be 1-60 minutes'); }
+  else return bad(res, 'Invalid mode');
+  if (Object.values(S.giveaways).filter(g => g.host.id === u.id).length >= 3) return bad(res, 'Max 3 active giveaways');
+  if (Object.keys(S.giveaways).length >= 20) return bad(res, 'Too many active giveaways');
+  const items = takeItems(u, uids, 5); if (!items) return bad(res, 'Invalid item selection');
+  const g = { id: rid(8), host: pp(u), items, value: vsum(items), endsAt: now() + dur * 1000, minBet: mode === 'advanced' ? Math.max(0, round2(Number(minBet) || 0)) : 0, entrants: [] };
+  S.giveaways[g.id] = g; setTimeout(() => endGiveaway(g.id), dur * 1000);
+  io.emit('giveaway:new', pubGA(g)); emitMe(u); save(); res.json({ ok: true });
+});
+app.post('/api/giveaway/enter', auth, actLimit, (req, res) => {
+  const u = req.user, g = S.giveaways[String(req.body.id)];
+  if (!g || g.endsAt <= now()) return bad(res, 'Giveaway ended');
+  if (g.host.id === u.id) return bad(res, 'You cannot enter your own giveaway');
+  if (g.entrants.includes(u.id)) return bad(res, 'Already entered');
+  if (u.totalBet < g.minBet) return bad(res, `You need ${g.minBet} total bet to enter`);
+  g.entrants.push(u.id); io.emit('giveaway:update', pubGA(g)); save(); res.json({ ok: true });
 });
 
-/* ===================== BOT API (secret korumalı) ===================== */
+/* ================= WITHDRAW + BOT API ================= */
+app.post('/api/withdraw', auth, actLimit, (req, res) => {
+  const items = takeItems(req.user, req.body.uids, 500); if (!items) return bad(res, 'Invalid selection');
+  const w = { id: rid(8), userId: req.user.id, username: req.user.username, items, status: 'pending', ts: now() };
+  S.withdrawals.push(w); emitMe(req.user); save(); res.json({ ok: true, id: w.id });
+});
 function botAuth(req, res, next) {
-  if (!BOT_SECRET) return res.status(503).json({ error: 'Bot API disabled' });
-  const a = Buffer.from(sha(String(req.headers['x-bot-secret'] || ''))), b = Buffer.from(sha(BOT_SECRET));
-  if (!crypto.timingSafeEqual(a, b)) return res.status(401).json({ error: 'Unauthorized' });
+  const k = String(req.headers['x-bot-secret'] || '');
+  if (!BOT_SECRET || k.length !== BOT_SECRET.length || !crypto.timingSafeEqual(Buffer.from(k), Buffer.from(BOT_SECRET))) return bad(res, 'forbidden', 403);
   next();
 }
 app.post('/api/bot/deposit', botAuth, (req, res) => {
-  const { txId, robloxId, itemId } = req.body || {};
-  const qty = Math.floor(Number((req.body || {}).qty) || 1);
-  if (typeof txId !== 'string' || txId.length < 4 || qty < 1 || qty > 50) throw new HttpError(400, 'Bad request');
-  if (db.tx.includes(txId)) return res.json({ ok: true, duplicate: true });
-  const u = db.users[String(robloxId)]; const c = db.catalog[itemId];
-  if (!u || !c) throw new HttpError(404, 'User or item not found');
-  db.tx.push(txId); if (db.tx.length > 5000) db.tx.shift();
-  for (let i = 0; i < qty; i++) u.inventory.push({ uid: rid(8), itemId });
-  ledger(u, 'Deposit', txId.slice(0, 24), c.value * qty);
-  save(); pushMe(u); notify(u, 'ok', `Deposit received: ${qty}x ${c.name}`);
-  res.json({ ok: true });
+  const ref = String(req.body.ref || ''); if (!/^[A-Za-z0-9_-]{1,64}$/.test(ref)) return bad(res, 'bad ref');
+  if (S.refs[ref]) return res.json({ ok: true, duplicate: true });
+  const u = S.users[String(req.body.robloxId)], c = S.catalog.find(x => x.id === req.body.catalogId), qty = Math.min(50, Math.max(1, parseInt(req.body.qty) || 1));
+  if (!u || !c) return bad(res, 'unknown user/item');
+  for (let i = 0; i < qty; i++) u.inventory.push(newItem(c));
+  S.refs[ref] = now(); const ks = Object.keys(S.refs); if (ks.length > 5000) ks.slice(0, 1000).forEach(k => delete S.refs[k]);
+  emitMe(u); save(); res.json({ ok: true });
 });
-app.get('/api/bot/withdrawals', botAuth, (req, res) => res.json({ withdrawals: Object.values(db.withdrawals).filter(w => w.status === 'pending') }));
-app.post('/api/bot/withdrawals/:id/complete', botAuth, (req, res) => {
-  const w = db.withdrawals[req.params.id];
-  if (!w || w.status !== 'pending') throw new HttpError(409, 'Not pending');
-  w.status = 'completed'; w.doneAt = Date.now(); save(); res.json({ ok: true });
+app.get('/api/bot/withdrawals', botAuth, (req, res) => res.json({ withdrawals: S.withdrawals.filter(w => w.status === 'pending') }));
+app.post('/api/bot/withdrawals/done', botAuth, (req, res) => {
+  const w = S.withdrawals.find(x => x.id === req.body.id && x.status === 'pending'); if (!w) return bad(res, 'not found');
+  w.status = 'done'; save(); res.json({ ok: true });
 });
-app.post('/api/bot/withdrawals/:id/reject', botAuth, (req, res) => {
-  const w = db.withdrawals[req.params.id];
-  if (!w || w.status !== 'pending') throw new HttpError(409, 'Not pending');
-  w.status = 'rejected'; w.doneAt = Date.now();
-  const u = db.users[w.userId];
-  if (u) { w.items.forEach(it => u.inventory.push(unsnap(it))); ledger(u, 'Withdraw Refund', w.id, sumVal(w.items)); pushMe(u); }
-  save(); res.json({ ok: true });
+app.post('/api/bot/withdrawals/fail', botAuth, (req, res) => {
+  const w = S.withdrawals.find(x => x.id === req.body.id && x.status === 'pending'); if (!w) return bad(res, 'not found');
+  w.status = 'failed'; const u = S.users[w.userId]; u.inventory.push(...w.items); emitMe(u); save(); res.json({ ok: true });
 });
 
-/* ===================== ADMIN (gizli panel + API) ===================== */
-const admin = express.Router();
-admin.use(auth, adminOnly);
-const alog = (req, a, d) => { db.adminLog.unshift({ at: Date.now(), by: req.user.username, a, d }); if (db.adminLog.length > 300) db.adminLog.length = 300; console.log('[ADMIN]', req.user.username, a, d); };
-
-admin.get('/panel.js', (req, res) => {
-  res.set('Cache-Control', 'no-store').type('application/javascript').send(fs.readFileSync(path.join(__dirname, 'admin-panel.js'), 'utf8'));
-});
+/* ================= ADMIN API ================= */
 function cleanItem(b) {
-  b = b || {};
-  const name = String(b.name || '').trim().slice(0, 40);
-  if (name.length < 2) throw new HttpError(400, 'Name too short');
-  const img = String(b.img || '').trim();
-  if (img && !/^https:\/\/[^\s"'<>]{4,480}$/i.test(img)) throw new HttpError(400, 'Image URL must be a valid https link');
-  const value = Number(b.value);
-  if (!isFinite(value) || value < 0 || value > 1e9) throw new HttpError(400, 'Invalid value');
-  const variant = ['normal', 'neon', 'mega'].includes(b.variant) ? b.variant : 'normal';
-  const fly = !!b.fly, ride = !!b.ride;
-  return { name, img, value: r2(value), variant, fly, ride, tag: makeTag(variant, fly, ride) };
+  const name = String(b.name || '').trim().slice(0, 40), image = String(b.image || '').trim(), value = round2(Number(b.value));
+  if (!name || !/^https:\/\/[^\s"'<>]{4,400}$/.test(image) || !isFinite(value) || value < 0 || value > 1e9) return null;
+  return { name, image, value, age: ['normal', 'neon', 'mega'].includes(b.age) ? b.age : 'normal', fly: !!b.fly, ride: !!b.ride };
 }
-admin.get('/catalog', (req, res) => res.json({ items: Object.values(db.catalog).filter(c => !c.hidden).sort((a, b) => b.value - a.value) }));
-admin.post('/catalog', (req, res) => {
-  const c = cleanItem(req.body); const id = 'c_' + rid(5);
-  db.catalog[id] = { id, ...c, hidden: false, createdAt: Date.now() };
-  alog(req, 'catalog.add', c.name); save(); res.json({ item: db.catalog[id] });
+app.get('/api/admin/ui', adminOnly, (req, res) => res.type('application/javascript').send('(' + adminUI.toString() + ')();'));
+app.get('/api/admin/data', adminOnly, (req, res) => res.json({ catalog: S.catalog, users: Object.values(S.users).map(u => ({ id: u.id, username: u.username, items: u.inventory.length, value: vsum(u.inventory), totalBet: round2(u.totalBet) })) }));
+app.post('/api/admin/catalog', adminOnly, (req, res) => {
+  const c = cleanItem(req.body); if (!c) return bad(res, 'Invalid item (image must be https://)');
+  c.id = rid(5); S.catalog.push(c); audit(req.user, 'catalog_add', c.name + ' ' + c.value); res.json({ ok: true });
 });
-admin.put('/catalog/:id', (req, res) => {
-  const it = db.catalog[req.params.id]; if (!it) throw new HttpError(404, 'Not found');
-  Object.assign(it, cleanItem(req.body)); alog(req, 'catalog.edit', it.name); save(); io.emit('refresh:me'); res.json({ item: it });
+app.post('/api/admin/catalog/update', adminOnly, (req, res) => {
+  const c = S.catalog.find(x => x.id === req.body.id), v = round2(Number(req.body.value));
+  if (!c || !isFinite(v) || v < 0) return bad(res, 'Invalid'); c.value = v; audit(req.user, 'catalog_value', c.name + ' ' + v); res.json({ ok: true });
 });
-admin.delete('/catalog/:id', (req, res) => {
-  const it = db.catalog[req.params.id]; if (!it) throw new HttpError(404, 'Not found');
-  it.hidden = true; alog(req, 'catalog.hide', it.name); save(); res.json({ ok: true });
+app.post('/api/admin/catalog/delete', adminOnly, (req, res) => {
+  S.catalog = S.catalog.filter(x => x.id !== req.body.id); audit(req.user, 'catalog_delete', req.body.id); res.json({ ok: true });
 });
-async function ensureUser(name) {
-  name = String(name || '').trim();
-  if (!/^[A-Za-z0-9_]{3,20}$/.test(name)) throw new HttpError(400, 'Invalid username');
-  const f = Object.values(db.users).find(u => u.username.toLowerCase() === name.toLowerCase());
-  if (f) return f;
-  let info; try { info = await resolveUsername(name); } catch { throw new HttpError(502, 'Roblox not responding'); }
-  if (!info) throw new HttpError(404, 'Roblox user not found');
-  if (db.users[info.id]) return db.users[info.id];
-  const [a, b] = await Promise.all([getThumb(info.id), getThumb(info.id, 'avatar-bust', '420x420')]);
-  return db.users[info.id] || (db.users[info.id] = newUser(info, a, b));
-}
-admin.post('/give', ah(async (req, res) => {
-  const u = await ensureUser((req.body || {}).username);
-  const c = db.catalog[(req.body || {}).itemId];
-  const qty = Math.floor(Number((req.body || {}).qty) || 1);
-  if (!c || c.hidden) throw new HttpError(404, 'Item not found');
-  if (qty < 1 || qty > 50) throw new HttpError(400, 'Qty 1-50');
-  for (let i = 0; i < qty; i++) u.inventory.push({ uid: rid(8), itemId: c.id });
-  ledger(u, 'Deposit', 'admin-' + rid(4), c.value * qty);
-  alog(req, 'give', `${qty}x ${c.name} -> ${u.username}`); save(); pushMe(u);
-  notify(u, 'ok', `${qty}x ${c.name} added to your inventory!`);
-  res.json({ ok: true, user: { id: u.id, username: u.username } });
-}));
-admin.get('/user', ah(async (req, res) => {
-  const u = await ensureUser(req.query.name);
-  res.json({ user: { id: u.id, username: u.username, avatar: u.avatar, banned: !!u.banned, stats: u.stats, inventory: u.inventory.map(snap) } });
-}));
-admin.post('/remove', (req, res) => {
-  const u = db.users[String((req.body || {}).userId)]; if (!u) throw new HttpError(404, 'User not found');
-  const i = u.inventory.findIndex(x => x.uid === (req.body || {}).uid); if (i < 0) throw new HttpError(404, 'Item not found');
-  const [rem] = u.inventory.splice(i, 1); alog(req, 'remove', `${db.catalog[rem.itemId].name} from ${u.username}`);
-  save(); pushMe(u); res.json({ ok: true });
-});
-admin.post('/ban', (req, res) => {
-  const u = db.users[String((req.body || {}).userId)]; if (!u) throw new HttpError(404, 'User not found');
-  if (isAdmin(u)) throw new HttpError(400, 'Cannot ban admin');
-  u.banned = !!(req.body || {}).banned;
-  if (u.banned) for (const [k, s] of Object.entries(db.sessions)) if (s.userId === u.id) delete db.sessions[k];
-  alog(req, 'ban', `${u.username}=${u.banned}`); save(); res.json({ ok: true });
-});
-admin.get('/users', (req, res) => {
-  const q = String(req.query.q || '').toLowerCase();
-  res.json({ users: Object.values(db.users).filter(u => !q || u.username.toLowerCase().includes(q)).slice(0, 100).map(u => ({ id: u.id, username: u.username, banned: !!u.banned, bet: u.stats.bet, items: u.inventory.length })) });
-});
-app.use('/api/admin', admin);
-
-app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
-app.use((err, req, res, next) => {
-  const status = err.status && err.status < 500 ? err.status : 500;
-  if (status === 500) console.error(err);
-  res.status(status).json({ error: status === 500 ? 'Server error' : err.message });
+app.post('/api/admin/grant', adminOnly, (req, res) => {
+  const name = String(req.body.username || '').trim().toLowerCase();
+  const u = Object.values(S.users).find(x => x.username.toLowerCase() === name);
+  const c = S.catalog.find(x => x.id === req.body.catalogId), qty = Math.min(50, Math.max(1, parseInt(req.body.qty) || 1));
+  if (!u) return bad(res, 'User not found (they must log in once)'); if (!c) return bad(res, 'Item not found');
+  for (let i = 0; i < qty; i++) u.inventory.push(newItem(c));
+  emitMe(u); audit(req.user, 'grant', `${qty}x ${c.name} -> ${u.username}`); res.json({ ok: true });
 });
 
-/* ===================== SOCKET.IO ===================== */
-io.use((socket, next) => {
-  const tok = socket.handshake.auth && socket.handshake.auth.token;
-  const u = tok ? userFromToken(String(tok)) : null;
-  socket.user = u && !u.banned ? u : null;
-  socket.th = tok ? sha(String(tok)) : '';
-  next();
-});
-const chatLast = new Map();
-io.on('connection', socket => {
-  if (socket.user) { socket.join('user:' + socket.user.id); socket.emit('me', mePayload(socket.user)); }
-  socket.emit('init', {
-    serverTime: Date.now(), matches: Object.values(db.matches).map(pubMatch),
-    giveaways: Object.values(db.giveaways).map(pubGW), chat: db.chat.slice(-50), online: io.engine.clientsCount
-  });
+/* Admin UI */
+function adminUI() {
+  const { api, esc, toast, fmt, tags } = window.AMP;
+  if (document.getElementById('adm')) return;
+  const o = document.createElement('div'); o.id = 'adm'; o.className = 'overlay show'; o.style.zIndex = 120;
+  o.innerHTML = `<div class="modal" style="max-width:1000px;max-height:92vh;display:flex;flex-direction:column">
+    <div class="mh"><h3>🛠️ Admin Panel</h3><button class="x" id="adm-x">✕</button></div>
+    <div class="p-4 overflow-y-auto">
+      <div class="grid md:grid-cols-2 gap-4 mb-4">
+        <div class="card2 p-3 space-y-2"><h4 class="font-bold">➕ Add New Item</h4>
+          <input id="a-img" class="inp w-full" placeholder="Image URL (https://...)">
+          <div class="flex gap-3 items-start">
+            <div class="ic" style="width:84px;height:84px"><img id="a-prev" style="width:70px;height:70px;object-fit:contain"></div>
+            <div class="flex-1 space-y-2">
+              <input id="a-name" class="inp w-full" placeholder="Item name">
+              <input id="a-val" type="number" min="0" step="0.01" class="inp w-full" placeholder="Value">
+              <div class="flex gap-3 items-center flex-wrap">
+                <select id="a-age" class="inp"><option value="normal">Normal</option><option value="neon">Neon (N)</option><option value="mega">Mega (M)</option></select>
+                <label class="font-bold"><input type="checkbox" id="a-fly"> Fly (F)</label>
+                <label class="font-bold"><input type="checkbox" id="a-ride"> Ride (R)</label>
+              </div>
+            </div>
+          </div>
+          <button id="a-add" class="btn w-full">Add to Catalog</button>
+        </div>
+        <div class="card2 p-3 space-y-2"><h4 class="font-bold">🎁 Give Items To Player</h4>
+          <input id="g-user" list="g-users" class="inp w-full" placeholder="Roblox username (must have logged in once)">
+          <datalist id="g-users"></datalist>
+          <input id="g-qty" type="number" min="1" max="50" value="1" class="inp w-full" placeholder="Quantity">
+          <p class="text-sm" style="color:var(--mut)">Type the username, then press <b>Give</b> on any catalog item below. You can edit values anytime.</p>
+        </div>
+      </div>
+      <h4 class="font-bold mb-2">📦 Catalog</h4><div id="adm-cat" class="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-4"></div>
+      <h4 class="font-bold mb-2">👥 Users</h4><div id="adm-users" class="text-sm"></div>
+    </div></div>`;
+  document.body.appendChild(o);
+  const $ = id => document.getElementById(id);
+  $('adm-x').onclick = () => o.remove();
+  $('a-img').oninput = () => { const v = $('a-img').value.trim(); $('a-prev').src = /^https:\/\//.test(v) ? v : ''; };
+  let data = { catalog: [], users: [] };
+  async function load() {
+    data = await api('/api/admin/data');
+    $('adm-cat').innerHTML = data.catalog.length ? data.catalog.map(c => `<div class="item" style="cursor:default"><div class="tgs-top">${tags(c)}</div><img src="${esc(c.image)}"><b class="nm">${esc(c.name)}</b>
+      <input class="inp w-full" style="padding:.25rem .5rem" type="number" step="0.01" value="${c.value}" data-act="val" data-id="${c.id}">
+      <div class="flex gap-1 w-full mt-1"><button class="btn btn-green btn-sm flex-1" data-act="give" data-id="${c.id}">Give</button><button class="btn btn-red btn-sm" data-act="del" data-id="${c.id}">🗑</button></div></div>`).join('') : '<p style="color:var(--mut)">No items yet. Add your first one above.</p>';
+    $('adm-users').innerHTML = data.users.map(u => `<div class="flex justify-between py-1 border-b" style="border-color:var(--line)"><b>${esc(u.username)}</b><span>${u.items} items · 💎 ${fmt(u.value)} · bet ${fmt(u.totalBet)}</span></div>`).join('') || 'No users yet.';
+    $('g-users').innerHTML = data.users.map(u => `<option value="${esc(u.username)}">`).join('');
+  }
+  $('a-add').onclick = async () => {
+    try {
+      await api('/api/admin/catalog', { method: 'POST', body: { image: $('a-img').value, name: $('a-name').value, value: $('a-val').value, age: $('a-age').value, fly: $('a-fly').checked, ride: $('a-ride').checked } });
+      toast('Item added to catalog'); ['a-img', 'a-name', 'a-val'].forEach(i => $(i).value = ''); $('a-prev').src = ''; load();
+    } catch (e) { toast(e.message, 'err'); }
+  };
+  $('adm-cat').onclick = async e => {
+    const b = e.target.closest('[data-act]'); if (!b) return; const id = b.dataset.id;
+    try {
+      if (b.dataset.act === 'give') { await api('/api/admin/grant', { method: 'POST', body: { username: $('g-user').value, catalogId: id, qty: $('g-qty').value } }); toast('Item given!'); load(); }
+      if (b.dataset.act === 'del' && confirm('Delete from catalog? (existing inventories are not affected)')) { await api('/api/admin/catalog/delete', { method: 'POST', body: { id } }); load(); }
+    } catch (er) { toast(er.message, 'err'); }
+  };
+  $('adm-cat').onchange = async e => {
+    if (e.target.dataset.act !== 'val') return;
+    try { await api('/api/admin/catalog/update', { method: 'POST', body: { id: e.target.dataset.id, value: e.target.value } }); toast('Value updated'); } catch (er) { toast(er.message, 'err'); }
+  };
+  load().catch(e => { toast(e.message, 'err'); o.remove(); });
+}
+
+/* ================= CHAT SOCKET ================= */
+io.use((s, next) => { s.user = userFromToken(s.handshake.auth && s.handshake.auth.token); next(); });
+const lastChat = new Map();
+io.on('connection', s => {
+  if (s.user) s.join('u:' + s.user.id);
   io.emit('online', io.engine.clientsCount);
-  socket.on('chat:send', (text, ack) => {
-    ack = typeof ack === 'function' ? ack : () => {};
-    const u = socket.user && db.users[socket.user.id];
-    if (!u || u.banned || !db.sessions[socket.th]) return ack({ error: 'Login required' });
-    if (typeof text !== 'string') return ack({ error: 'Invalid message' });
-    text = text.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160);
-    if (!text) return ack({ error: 'Empty message' });
-    const last = chatLast.get(u.id) || 0;
-    if (Date.now() - last < 1500) return ack({ error: 'Slow down!' });
-    chatLast.set(u.id, Date.now());
-    if (isAdmin(u) && text === '/clear') { db.chat = []; io.emit('chat:clear'); return ack({ ok: true }); }
-    const msg = { id: rid(6), user: { ...pubUser(u), admin: isAdmin(u) }, text, at: Date.now() };
-    db.chat.push(msg); if (db.chat.length > 60) db.chat.shift();
-    io.emit('chat', msg); save(); ack({ ok: true });
+  s.on('chat:send', (text, ack) => {
+    const cb = typeof ack === 'function' ? ack : () => {};
+    const u = s.user && S.users[s.user.id];
+    if (!u || u.banned) return cb({ error: 'Login to chat' });
+    if (typeof text !== 'string') return cb({ error: 'Invalid' });
+    text = text.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 160); if (!text) return cb({ error: 'Empty' });
+    const t = now(); if (t - (lastChat.get(u.id) || 0) < 1200) return cb({ error: 'Slow down!' }); lastChat.set(u.id, t);
+    const adm = isAdmin(u);
+    if (adm && text === '/clear') { S.chat = []; io.emit('chat:clear'); save(); return cb({ ok: true }); }
+    if (!adm && /(https?:|www\.|discord\.gg|\.gg\/|\.com|\.net|\.xyz|\.ru|\.io)/i.test(text)) return cb({ error: 'Links are not allowed in chat' });
+    pushChat({ id: rid(4), user: pp(u), text, ts: t, admin: adm }); cb({ ok: true });
   });
-  socket.on('disconnect', () => io.emit('online', io.engine.clientsCount));
+  s.on('disconnect', () => io.emit('online', io.engine.clientsCount));
 });
 
-/* ===================== BOOT ===================== */
-for (const m of Object.values(db.matches)) {
-  if (m.state === 'finished') { delete db.matches[m.id]; continue; }
-  if (m.state !== 'waiting') scheduleMatch(m);
-}
-for (const g of Object.values(db.giveaways)) { if (g.status === 'ended') delete db.giveaways[g.id]; else scheduleGW(g); }
-server.listen(PORT, () => console.log('AMP ROLL backend running on :' + PORT));
-const bye = () => { saveNow(); process.exit(0); };
-process.on('SIGTERM', bye); process.on('SIGINT', bye);
+/* ================= BOOT ================= */
+app.get('/', (req, res) => res.send('AMP ROLL API online'));
+(async () => {
+  await initDB();
+  for (const m of Object.values(S.matches)) {
+    if (m.state === 'countdown' || m.state === 'flipping') finishMatch(m);
+    else if (m.state === 'finished') delete S.matches[m.id];
+  }
+  for (const g of Object.values(S.giveaways)) setTimeout(() => endGiveaway(g.id), Math.max(0, g.endsAt - now()));
+  loadBot();
+  server.listen(PORT, () => console.log('AMP ROLL API on :' + PORT));
+})();
