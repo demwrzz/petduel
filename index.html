@@ -6,25 +6,30 @@
   <title>AMP ROLL</title>
 
   <link
-    href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
     rel="stylesheet"
   >
 
-  <!-- Socket.IO istemcisi aynı Render servisinden gelir. -->
   <script src="/socket.io/socket.io.js"></script>
 
   <style>
     :root {
-      --blue: #2f9bff;
-      --blue-dark: #1b7fe0;
-      --yellow: #ffc83d;
-      --pink: #ff7eb6;
-      --mint: #3fcf9f;
-      --red: #ff5c6c;
-      --ink: #23324d;
-      --muted: #6b7a99;
-      --line: #e0edfb;
-      --orange: #ff9f1c;
+      --bg: #101218;
+      --header: #14161e;
+      --panel: #191c25;
+      --panel-2: #151820;
+      --panel-3: #20242e;
+      --border: #292d38;
+      --muted: #8d909a;
+      --text: #f6f7fb;
+      --green: #00efa0;
+      --green-dark: #00bb7b;
+      --orange: #ffb52e;
+      --red: #ff5968;
+      --blue: #82aaff;
+
+      /* Admin panel compatibility */
+      --line: #292d38;
     }
 
     * {
@@ -33,18 +38,15 @@
 
     html,
     body {
-      min-height: 100%;
       margin: 0;
+      min-height: 100%;
     }
 
     body {
-      font-family: "Fredoka", system-ui, sans-serif;
-      color: var(--ink);
-      background:
-        radial-gradient(600px 200px at 10% 0, #fff 0, transparent 70%),
-        radial-gradient(500px 180px at 80% 8%, #fff 0, transparent 70%),
-        linear-gradient(#bfe6ff, #eaf7ff 45%, #fff7e0) fixed;
-      font-size: 15px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, Arial, sans-serif;
+      font-size: 14px;
     }
 
     button,
@@ -54,63 +56,76 @@
     }
 
     button {
-      border: 0;
       cursor: pointer;
+      border: 0;
     }
 
     button:disabled {
-      opacity: .5;
+      opacity: .45;
       cursor: not-allowed;
     }
 
     input,
     select {
-      color: var(--ink);
+      color: var(--text);
+      outline: none;
+    }
+
+    a {
+      color: inherit;
     }
 
     .app {
-      min-height: 100vh;
       display: flex;
+      min-height: 100vh;
       flex-direction: column;
     }
 
-    header {
+    /* HEADER */
+
+    .topbar {
       position: sticky;
       top: 0;
-      z-index: 50;
+      z-index: 40;
       display: flex;
       align-items: center;
-      gap: 18px;
-      padding: 10px 22px;
-      background: #fff;
-      box-shadow: 0 2px 14px rgba(47, 155, 255, .18);
+      gap: 28px;
+      height: 76px;
+      padding: 0 25px;
+      border-bottom: 1px solid var(--border);
+      background: var(--header);
     }
 
     .logo {
       flex: none;
       cursor: pointer;
-      font-size: 26px;
-      font-weight: 700;
-      letter-spacing: 1px;
-      background: linear-gradient(90deg, var(--blue), var(--pink));
-      color: transparent;
-      background-clip: text;
-      -webkit-background-clip: text;
+      color: #fff;
+      font-size: 25px;
+      font-weight: 800;
+      letter-spacing: -1px;
     }
 
-    nav {
+    .logo span {
+      color: var(--green);
+    }
+
+    .nav {
       display: flex;
       flex: 1;
-      gap: 6px;
+      align-items: center;
+      height: 100%;
+      gap: 8px;
     }
 
-    nav a {
+    .nav-item {
+      display: flex;
+      align-items: center;
+      height: 100%;
+      padding: 0 16px;
+      border-bottom: 3px solid var(--green);
+      color: #fff;
       cursor: pointer;
-      padding: 8px 16px;
-      border-radius: 12px;
-      color: var(--blue-dark);
-      background: #e6f3ff;
-      font-weight: 600;
+      font-weight: 700;
     }
 
     .header-right {
@@ -123,178 +138,243 @@
       display: flex;
       align-items: stretch;
       overflow: hidden;
-      border: 2px solid var(--line);
-      border-radius: 14px;
-      background: #f2f9ff;
+      min-height: 43px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: #20232c;
     }
 
-    .wallet-info {
+    .wallet-main {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 9px;
       padding: 6px 12px;
       cursor: pointer;
     }
 
-    .wallet-info small {
+    .wallet-main small {
       display: block;
       color: var(--muted);
-      font-size: 11px;
-      line-height: 1;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
     }
 
-    .wallet-info b {
-      font-size: 16px;
+    .wallet-main b {
+      font-size: 14px;
+    }
+
+    .gem {
+      color: var(--green);
+      font-size: 22px;
     }
 
     .wallet-plus {
-      width: 40px;
-      color: #fff;
-      background: var(--mint);
+      width: 42px;
+      color: #07120d;
+      background: var(--green);
       font-size: 22px;
-      font-weight: 700;
+      font-weight: 800;
     }
 
-    .btn {
-      padding: 9px 18px;
-      border-radius: 12px;
-      background: var(--blue);
-      color: #fff;
-      box-shadow: 0 3px 0 var(--blue-dark);
-      font-size: 14px;
-      font-weight: 600;
-      transition: transform .1s, filter .1s;
-    }
-
-    .btn:hover:not(:disabled) {
-      filter: brightness(1.06);
-    }
-
-    .btn:active:not(:disabled) {
-      transform: translateY(2px);
-      box-shadow: 0 1px 0 var(--blue-dark);
-    }
-
-    .btn.sun {
-      color: #6a4a00;
-      background: var(--yellow);
-      box-shadow: 0 3px 0 #e0a800;
-    }
-
-    .btn.mint {
-      background: var(--mint);
-      box-shadow: 0 3px 0 #2aa57c;
-    }
-
-    .btn.red {
-      background: var(--red);
-      box-shadow: 0 3px 0 #d63d4e;
-    }
-
-    .btn.gray {
-      color: var(--ink);
-      background: #e7eefa;
-      box-shadow: 0 3px 0 #cbd7ec;
-    }
-
-    .btn.sm {
-      padding: 6px 12px;
-      font-size: 13px;
-    }
-
-    .user {
+    .user-menu-wrap {
       position: relative;
     }
 
-    .user > button {
+    .user-button {
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 5px 12px 5px 6px;
-      border: 2px solid var(--line);
-      border-radius: 14px;
-      color: var(--ink);
-      background: #f2f9ff;
-      font-weight: 600;
+      gap: 9px;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      color: var(--text);
+      background: #20232c;
+      font-weight: 700;
     }
 
-    .menu {
+    .user-menu {
       position: absolute;
       top: calc(100% + 8px);
       right: 0;
       z-index: 60;
       display: none;
-      min-width: 190px;
+      min-width: 200px;
       padding: 6px;
-      border-radius: 14px;
-      background: #fff;
-      box-shadow: 0 10px 30px rgba(35, 50, 77, .2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #20232c;
+      box-shadow: 0 12px 30px #0008;
     }
 
-    .menu.open {
+    .user-menu.open {
       display: block;
     }
 
-    .menu a {
+    .user-menu button {
       display: block;
-      padding: 10px 12px;
-      border-radius: 10px;
-      cursor: pointer;
+      width: 100%;
+      padding: 11px;
+      border-radius: 5px;
+      color: var(--text);
+      background: transparent;
+      text-align: left;
     }
 
-    .menu a:hover {
-      background: #eaf5ff;
+    .user-menu button:hover {
+      background: #30343f;
     }
 
     .av {
       display: inline-grid;
       flex: none;
       place-items: center;
-      width: 34px;
-      height: 34px;
+      width: 38px;
+      height: 38px;
+      overflow: hidden;
       border-radius: 50%;
       object-fit: cover;
       color: #fff;
-      background: linear-gradient(135deg, var(--blue), var(--pink));
-      font-weight: 700;
-    }
-
-    .av.lg {
-      width: 64px;
-      height: 64px;
-      font-size: 26px;
+      background: #3a4050;
+      font-weight: 800;
     }
 
     .av.sm {
-      width: 26px;
-      height: 26px;
+      width: 29px;
+      height: 29px;
+      font-size: 11px;
+    }
+
+    .av.lg {
+      width: 72px;
+      height: 72px;
+      font-size: 24px;
+    }
+
+    .av.winner {
+      box-shadow: 0 0 0 3px var(--orange);
+    }
+
+    /* BUTTONS */
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      min-height: 40px;
+      padding: 0 17px;
+      border-radius: 6px;
+      color: #06130d;
+      background: var(--green);
+      font-weight: 800;
+    }
+
+    .btn:hover:not(:disabled) {
+      filter: brightness(1.08);
+    }
+
+    .btn.sm {
+      min-height: 32px;
+      padding: 0 12px;
       font-size: 12px;
     }
 
-    .ring {
-      box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--orange);
+    .btn.gray {
+      border: 1px solid #414650;
+      color: #d7d9e0;
+      background: #292d37;
     }
+
+    .btn.outline {
+      border: 1px solid var(--green);
+      color: var(--green);
+      background: #17312c;
+    }
+
+    .btn.red {
+      color: #fff;
+      background: #d94453;
+    }
+
+    .btn.sun {
+      color: #211500;
+      background: var(--orange);
+    }
+
+    .btn.mint {
+      color: #06130d;
+      background: var(--green);
+    }
+
+    /* PAGE */
 
     .main {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 340px;
-      align-items: start;
+      grid-template-columns: minmax(0, 1fr) 320px;
       gap: 16px;
       width: 100%;
-      max-width: 1500px;
+      max-width: 1700px;
       margin: 0 auto;
-      padding: 16px 22px;
+      padding: 18px;
       flex: 1;
     }
 
-    .card {
-      padding: 16px;
-      border-radius: 20px;
-      background: #fff;
-      box-shadow: 0 6px 22px rgba(47, 155, 255, .14);
+    .content {
+      min-width: 0;
     }
 
-    .bar {
+    .banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 15px;
+      margin-bottom: 14px;
+      padding: 18px 20px;
+      border: 1px solid #8f681d;
+      border-radius: 7px;
+      background: linear-gradient(100deg, #30271d, #211f22);
+    }
+
+    .banner h1 {
+      margin: 0 0 5px;
+      color: var(--orange);
+      font-size: 20px;
+    }
+
+    .banner p {
+      margin: 0;
+      color: #bab4a5;
+      font-size: 13px;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      margin-bottom: 16px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: var(--border);
+    }
+
+    .summary div {
+      padding: 15px;
+      background: var(--panel);
+    }
+
+    .summary b {
+      display: block;
+      font-size: 19px;
+    }
+
+    .summary small {
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .section-head {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
@@ -302,29 +382,239 @@
       margin-bottom: 12px;
     }
 
-    .bar h2 {
+    .section-head h2 {
       flex: 1;
       margin: 0;
-      font-size: 20px;
+      font-size: 17px;
     }
 
     .pill {
-      padding: 3px 10px;
-      border-radius: 99px;
-      color: var(--blue-dark);
-      background: #e6f3ff;
-      font-size: 12px;
-      font-weight: 600;
+      padding: 5px 9px;
+      border-radius: 5px;
+      color: var(--green);
+      background: #15372d;
+      font-size: 11px;
+      font-weight: 800;
     }
 
-    .side {
-      position: sticky;
-      top: 76px;
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: var(--panel);
+    }
+
+    /* MATCHES */
+
+    .match-list {
       display: flex;
       flex-direction: column;
+      gap: 8px;
+    }
+
+    .match {
+      display: grid;
+      grid-template-columns: minmax(125px, 1fr) minmax(130px, 1.4fr)
+        90px minmax(125px, 1fr) auto;
+      align-items: center;
       gap: 12px;
-      height: calc(100vh - 92px);
-      min-height: 0;
+      min-height: 92px;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--panel);
+    }
+
+    .match.finished {
+      border-color: #715322;
+      background: #24221f;
+    }
+
+    .player {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .player-name {
+      overflow: hidden;
+      font-weight: 700;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .player small {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      min-width: 0;
+    }
+
+    .item-thumb {
+      display: grid;
+      place-items: center;
+      width: 48px;
+      height: 48px;
+      overflow: hidden;
+      border: 1px solid #353a45;
+      border-radius: 6px;
+      background: #222630;
+    }
+
+    .item-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .match-middle {
+      text-align: center;
+    }
+
+    .match-middle b {
+      color: var(--green);
+    }
+
+    .match-middle small {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 10px;
+    }
+
+    .match-actions {
+      display: flex;
+      gap: 6px;
+      justify-content: flex-end;
+    }
+
+    .empty {
+      padding: 50px 15px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    /* COIN */
+
+    .coin-wrap {
+      display: inline-block;
+      perspective: 500px;
+    }
+
+    .coin {
+      position: relative;
+      width: 48px;
+      height: 48px;
+      transform-style: preserve-3d;
+    }
+
+    .coin.big {
+      width: 95px;
+      height: 95px;
+    }
+
+    .coin.cat {
+      transform: rotateY(180deg);
+    }
+
+    .coin.spinning {
+      animation: coin-spin .55s linear infinite;
+    }
+
+    .coin-face {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      border: 3px solid #b8811b;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #ffe79a, #eaa821);
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      font-size: 24px;
+    }
+
+    .coin.big .coin-face {
+      font-size: 44px;
+    }
+
+    .coin-face.back {
+      transform: rotateY(180deg);
+    }
+
+    @keyframes coin-spin {
+      to {
+        transform: rotateY(360deg);
+      }
+    }
+
+    .countdown {
+      display: grid;
+      place-items: center;
+      width: 46px;
+      height: 46px;
+      margin: auto;
+      border: 3px solid var(--orange);
+      border-radius: 50%;
+      color: var(--orange);
+      font-size: 19px;
+      font-weight: 800;
+    }
+
+    /* SIDEBAR / CHAT */
+
+    .sidebar {
+      position: sticky;
+      top: 94px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      height: calc(100vh - 112px);
+      min-height: 400px;
+    }
+
+    .giveaways {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 250px;
+      overflow-y: auto;
+    }
+
+    .giveaway-card {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid #6a5528;
+      border-radius: 6px;
+      background: #29251e;
+    }
+
+    .giveaway-card img {
+      width: 44px;
+      height: 44px;
+      object-fit: contain;
+    }
+
+    .giveaway-info {
+      flex: 1;
+      min-width: 0;
+      color: #ddd3be;
+      font-size: 11px;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+
+    .giveaway-info b {
+      color: #fff;
     }
 
     .chat {
@@ -332,268 +622,87 @@
       flex: 1;
       flex-direction: column;
       min-height: 0;
-      padding: 12px;
-    }
-
-    .msgs {
-      display: flex;
-      flex: 1;
-      flex-direction: column;
-      gap: 8px;
-      overflow-y: auto;
-      padding-right: 4px;
-    }
-
-    .msg {
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-      font-size: 13.5px;
-      overflow-wrap: anywhere;
-    }
-
-    .rk {
-      margin-right: 4px;
-      padding: 1px 6px;
-      border-radius: 6px;
-      color: #fff;
-      background: #9fb3d1;
-      font-size: 10px;
-      font-weight: 600;
-    }
-
-    .rk.Roller { background: var(--blue); }
-    .rk.Highroller { background: var(--pink); }
-    .rk.Whale { background: var(--orange); }
-    .rk.ADMIN { background: var(--red); }
-
-    .cin {
-      display: flex;
-      gap: 8px;
-      margin-top: 8px;
-    }
-
-    .cin input,
-    .in,
-    .row input,
-    .row select {
-      min-width: 0;
-      padding: 9px 12px;
-      border: 2px solid var(--line);
-      border-radius: 12px;
-      outline: 0;
-      background: #fff;
-    }
-
-    .cin input {
-      flex: 1;
-    }
-
-    .cin input:focus,
-    .in:focus,
-    .row input:focus {
-      border-color: var(--blue);
-    }
-
-    .gw-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      max-height: 260px;
-      overflow-y: auto;
-    }
-
-    .gw {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px;
-      border: 2px solid #ffe08a;
-      border-radius: 16px;
-      background: linear-gradient(135deg, #fff3c9, #ffe4f1);
-    }
-
-    .gw-images {
-      display: flex;
-      gap: 2px;
-    }
-
-    .gw img {
-      width: 42px;
-      height: 42px;
-      border-radius: 10px;
-      object-fit: contain;
-      background: #fff;
-    }
-
-    .gw-info {
-      flex: 1;
-      font-size: 12.5px;
-      line-height: 1.3;
-    }
-
-    .match {
-      display: grid;
-      grid-template-columns: 150px minmax(0, 1fr) 110px 150px 150px;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 10px;
-      padding: 12px;
-      border: 2px solid var(--line);
-      border-radius: 18px;
-      background: #fbfdff;
-    }
-
-    .match.fin {
-      border-color: #ffd9a0;
-      background: #fffaf0;
-    }
-
-    .pl {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      min-width: 0;
-    }
-
-    .pl .name {
       overflow: hidden;
-      font-weight: 600;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: var(--panel);
     }
 
-    .items {
+    .chat-head {
       display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 15px;
+      border-bottom: 1px solid var(--border);
+      font-weight: 800;
     }
 
-    .it {
-      position: relative;
-      display: grid;
-      place-items: center;
-      width: 46px;
-      height: 46px;
-      border: 2px solid var(--line);
-      border-radius: 12px;
-      background: #fff;
-    }
-
-    .it img {
-      width: 100%;
-      height: 100%;
-      border-radius: 10px;
-      object-fit: contain;
-    }
-
-    .mid {
-      text-align: center;
-    }
-
-    .mid .value {
-      color: var(--blue-dark);
-      font-size: 16px;
-      font-weight: 700;
-    }
-
-    .mid small {
-      color: var(--muted);
+    .online {
+      color: var(--green);
       font-size: 11px;
     }
 
-    .acts {
+    .messages {
       display: flex;
-      justify-content: flex-end;
-      gap: 6px;
+      flex: 1;
+      flex-direction: column;
+      gap: 13px;
+      overflow-y: auto;
+      padding: 14px;
     }
 
-    .coin3d {
+    .message {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      color: #c8cad1;
+      font-size: 12px;
+      line-height: 1.5;
+      overflow-wrap: anywhere;
+    }
+
+    .message b {
+      color: #fff;
+    }
+
+    .rank {
       display: inline-block;
-      perspective: 500px;
+      margin-right: 3px;
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: #dce1e9;
+      background: #444b59;
+      font-size: 9px;
+      font-weight: 800;
     }
 
-    .coin {
-      position: relative;
-      width: 52px;
-      height: 52px;
-      transform-style: preserve-3d;
+    .rank.ADMIN {
+      color: #fff;
+      background: #d94453;
     }
 
-    .coin.big {
-      width: 96px;
-      height: 96px;
+    .rank.Whale {
+      color: #211500;
+      background: var(--orange);
     }
 
-    .coin .face {
-      position: absolute;
-      inset: 0;
-      display: grid;
-      place-items: center;
-      border: 3px solid #e0a800;
-      border-radius: 50%;
-      background: radial-gradient(circle at 35% 30%, #fff1a8, #ffc83d);
-      backface-visibility: hidden;
-      -webkit-backface-visibility: hidden;
-      font-size: 26px;
+    .chat-input {
+      display: flex;
+      gap: 8px;
+      padding: 12px;
+      border-top: 1px solid var(--border);
     }
 
-    .coin.big .face {
-      font-size: 46px;
+    .chat-input input {
+      flex: 1;
+      min-width: 0;
+      padding: 10px;
+      border: 1px solid #373b46;
+      border-radius: 5px;
+      background: #11141b;
     }
 
-    .coin .back {
-      transform: rotateY(180deg);
-    }
-
-    .coin.cat {
-      transform: rotateY(180deg);
-    }
-
-    .coin.spin {
-      animation: coinflip .55s linear infinite;
-    }
-
-    @keyframes coinflip {
-      to { transform: rotateY(360deg); }
-    }
-
-    .countdown {
-      position: relative;
-      display: grid;
-      place-items: center;
-      width: 46px;
-      height: 46px;
-      margin: auto;
-      border-radius: 50%;
-      color: var(--orange);
-      background: conic-gradient(var(--orange) 0 70%, #ffe5bd 0);
-      font-size: 20px;
-      font-weight: 700;
-      animation: pulse 1s infinite;
-    }
-
-    .countdown::before {
-      position: absolute;
-      inset: 5px;
-      border-radius: 50%;
-      background: #fff;
-      content: "";
-    }
-
-    .countdown span {
-      position: relative;
-    }
-
-    @keyframes pulse {
-      50% { transform: scale(1.08); }
-    }
-
-    .empty {
-      padding: 40px 10px;
-      color: var(--muted);
-      text-align: center;
-    }
+    /* MODALS */
 
     .ov {
       position: fixed;
@@ -602,9 +711,8 @@
       display: none;
       align-items: center;
       justify-content: center;
-      padding: 16px;
-      background: rgba(35, 50, 77, .45);
-      backdrop-filter: blur(3px);
+      padding: 18px;
+      background: rgba(0, 0, 0, .76);
     }
 
     .ov.open {
@@ -615,126 +723,44 @@
       width: min(560px, 100%);
       max-height: 92vh;
       overflow: auto;
-      padding: 20px;
-      border-radius: 24px;
-      background: #fff;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, .3);
-      animation: pop .18s;
+      padding: 16px;
+      border: 1px solid #292d37;
+      border-radius: 7px;
+      background: #14171f;
+      box-shadow: 0 20px 70px #000a;
     }
 
     .modal.wide {
-      width: min(820px, 100%);
-    }
-
-    @keyframes pop {
-      from {
-        opacity: 0;
-        transform: scale(.95);
-      }
+      width: min(1024px, 100%);
     }
 
     .mh {
       display: flex;
       align-items: center;
+      gap: 10px;
       margin-bottom: 14px;
     }
 
     .mh h3 {
       flex: 1;
       margin: 0;
-      font-size: 21px;
-    }
-
-    .x {
-      width: 34px;
-      height: 34px;
-      border-radius: 50%;
-      color: var(--muted);
-      background: #eef4fc;
       font-size: 18px;
     }
 
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
-      gap: 10px;
-      max-height: 340px;
-      overflow: auto;
-      padding: 4px;
-    }
-
-    .gi {
-      position: relative;
-      padding: 8px;
-      border: 2px solid var(--line);
-      border-radius: 16px;
-      background: #fbfdff;
-      text-align: center;
-      cursor: pointer;
-      user-select: none;
-    }
-
-    .gi:hover {
-      border-color: var(--blue);
-    }
-
-    .gi.sel {
-      border-color: var(--mint);
-      background: #effcf7;
-    }
-
-    .gi img {
-      width: 64px;
-      height: 64px;
-      object-fit: contain;
-    }
-
-    .gi .nm {
+    .x {
+      width: 28px;
       height: 28px;
-      overflow: hidden;
+      color: #a4a6ae;
+      background: transparent;
+      font-size: 22px;
+    }
+
+    .hint {
+      margin: 7px 0;
+      color: var(--muted);
       font-size: 12px;
-      font-weight: 600;
-      line-height: 1.1;
+      line-height: 1.5;
     }
-
-    .gi .vl {
-      color: var(--blue-dark);
-      font-size: 12px;
-      font-weight: 600;
-    }
-
-    .gi .check {
-      position: absolute;
-      top: 4px;
-      right: 4px;
-      padding: 1px 6px;
-      border-radius: 8px;
-      color: #fff;
-      background: var(--mint);
-      font-size: 11px;
-      font-weight: 700;
-    }
-
-    .tg {
-      display: flex;
-      justify-content: center;
-      gap: 3px;
-      margin-top: 2px;
-    }
-
-    .tg i {
-      padding: 0 5px;
-      border-radius: 5px;
-      color: #fff;
-      font-size: 10px;
-      font-style: normal;
-      font-weight: 700;
-    }
-
-    .tg .M { background: #b05cff; }
-    .tg .N { background: #22c4d6; }
-    .tg .F { background: var(--pink); }
-    .tg .R { background: var(--orange); }
 
     .row {
       display: flex;
@@ -744,65 +770,288 @@
       margin-bottom: 10px;
     }
 
-    .row input[type="text"],
-    .row .in {
+    .in,
+    .row input:not([type="checkbox"]),
+    .row select,
+    .control {
+      min-width: 0;
+      padding: 12px;
+      border: 2px solid #484b54;
+      border-radius: 7px;
+      color: var(--text);
+      background: #14171f;
+    }
+
+    .in:focus,
+    .row input:focus,
+    .control:focus {
+      border-color: var(--green);
+    }
+
+    .row input[type="text"] {
       flex: 1;
-      min-width: 100px;
+    }
+
+    .inventory-tools {
+      display: grid;
+      grid-template-columns: minmax(150px, 2fr) minmax(130px, .9fr)
+        minmax(140px, .9fr);
+      gap: 8px;
+      margin-bottom: 15px;
+    }
+
+    .inventory-box {
+      min-height: 370px;
+      padding: 16px;
+      border-radius: 7px;
+      background: #191c25;
+    }
+
+    .inventory-summary {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      margin-bottom: 15px;
+    }
+
+    .inventory-summary small {
+      display: block;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .inventory-summary b {
+      font-size: 18px;
+    }
+
+    .inventory-plus {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      color: #04120b;
+      background: var(--green);
+      font-size: 19px;
+      font-weight: 800;
+    }
+
+    .inventory-empty {
+      display: flex;
+      min-height: 260px;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+
+    .inventory-empty h2 {
+      margin: 0 0 10px;
+      font-size: 28px;
+    }
+
+    .inventory-empty p {
+      margin: 0 0 24px;
+      color: #bfc1c9;
+      font-weight: 600;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(115px, 1fr));
+      gap: 8px;
+      max-height: 390px;
+      overflow-y: auto;
+    }
+
+    .inventory-item {
+      position: relative;
+      min-height: 150px;
+      padding: 8px;
+      border: 2px solid #30343e;
+      border-radius: 6px;
+      background: #20242e;
+      text-align: center;
+      cursor: pointer;
+    }
+
+    .inventory-item.selected {
+      border-color: var(--green);
+      background: #19372f;
+    }
+
+    .inventory-item img {
+      width: 75px;
+      height: 75px;
+      object-fit: contain;
+    }
+
+    .inventory-item .name {
+      height: 30px;
+      overflow: hidden;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .inventory-item .value {
+      margin-top: 4px;
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .check {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      padding: 2px 5px;
+      border-radius: 4px;
+      color: #07120d;
+      background: var(--green);
+      font-weight: 800;
+    }
+
+    .tg {
+      display: flex;
+      justify-content: center;
+      gap: 3px;
+      margin-top: 3px;
+    }
+
+    .tg i {
+      padding: 1px 4px;
+      border-radius: 3px;
+      color: white;
+      font-size: 9px;
+      font-style: normal;
+      font-weight: 800;
+    }
+
+    .tg .M { background: #a454da; }
+    .tg .N { background: #1caac4; }
+    .tg .F { background: #e56c9e; }
+    .tg .R { background: #d38b22; }
+
+    .modal-footer {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 16px;
     }
 
     .sides {
       display: flex;
-      gap: 10px;
+      gap: 8px;
+      margin-bottom: 14px;
     }
 
-    .sd {
+    .side-choice {
       flex: 1;
-      padding: 10px;
-      border: 3px solid var(--line);
-      border-radius: 16px;
-      background: #fff;
+      padding: 12px;
+      border: 2px solid #343842;
+      border-radius: 6px;
+      background: #20242e;
       text-align: center;
       cursor: pointer;
-      font-weight: 600;
+      font-weight: 800;
     }
 
-    .sd.on {
-      border-color: var(--blue);
-      background: #e9f5ff;
+    .side-choice.selected {
+      border-color: var(--green);
     }
 
-    .sd span {
+    .side-choice span {
       display: block;
+      margin-bottom: 5px;
       font-size: 30px;
+    }
+
+    .vs {
+      display: grid;
+      grid-template-columns: 1fr 120px 1fr;
+      gap: 10px;
+      align-items: start;
+    }
+
+    .vs-col {
+      min-height: 180px;
+      padding: 14px;
+      border: 1px solid #343842;
+      border-radius: 7px;
+      background: #1c2029;
+      text-align: center;
+    }
+
+    .vs-col.won {
+      border-color: var(--orange);
+    }
+
+    .vs-col .items {
+      justify-content: center;
+      margin-top: 12px;
+    }
+
+    .vs-center {
+      padding-top: 25px;
+      text-align: center;
+    }
+
+    .fair {
+      margin-top: 16px;
+      padding: 12px;
+      border-radius: 6px;
+      color: #a6aab5;
+      background: #1b1e27;
+      font-size: 11px;
+      line-height: 1.7;
+      overflow-wrap: anywhere;
+    }
+
+    .fair code {
+      color: #e5e7ec;
+    }
+
+    .seg {
+      display: flex;
+      gap: 5px;
+      margin-bottom: 12px;
+    }
+
+    .seg button {
+      flex: 1;
+      padding: 10px;
+      border-radius: 5px;
+      color: #b6b8c0;
+      background: #242832;
+      font-weight: 700;
+    }
+
+    .seg button.on {
+      color: #07120d;
+      background: var(--green);
     }
 
     .game-card {
       width: 200px;
       overflow: hidden;
-      border: 3px solid var(--line);
-      border-radius: 20px;
-      background: #fff;
+      border: 1px solid #3b404b;
+      border-radius: 7px;
+      background: #20242e;
       cursor: pointer;
-      transition: transform .12s;
-    }
-
-    .game-card:hover {
-      transform: translateY(-4px);
-      border-color: var(--blue);
+      text-align: center;
     }
 
     .game-pic {
       display: grid;
       place-items: center;
       height: 130px;
-      background: linear-gradient(135deg, #8fd3ff, #ffe9a8);
-      font-size: 62px;
+      background: linear-gradient(135deg, #4c6973, #786b52);
+      font-size: 58px;
     }
 
     .game-card b {
       display: block;
-      padding: 10px;
-      text-align: center;
+      padding: 12px;
     }
 
     .bot {
@@ -810,84 +1059,70 @@
       align-items: center;
       gap: 12px;
       padding: 12px;
-      border: 2px solid var(--line);
-      border-radius: 16px;
+      border: 1px solid #363b46;
+      border-radius: 7px;
+      background: #1d212a;
     }
 
     .bot-info {
       flex: 1;
     }
 
-    .vs {
-      display: grid;
-      grid-template-columns: 1fr 120px 1fr;
-      align-items: start;
-      gap: 10px;
-    }
-
-    .vs .col {
-      min-height: 150px;
-      padding: 10px;
-      border: 2px solid var(--line);
-      border-radius: 18px;
-      background: #f6fbff;
+    .code {
+      margin: 14px 0;
+      padding: 16px;
+      border: 1px dashed var(--green);
+      border-radius: 6px;
+      color: var(--green);
+      background: #172a24;
       text-align: center;
+      font-size: 18px;
+      font-weight: 800;
+      user-select: all;
     }
 
-    .vs .col.win {
-      border-color: var(--orange);
-      background: #fff8ea;
+    /* PROFILE */
+
+    .profile-card {
+      padding: 18px;
     }
 
-    .vs .col .items {
-      justify-content: center;
-      margin-top: 8px;
+    .profile-head {
+      display: flex;
+      align-items: center;
+      gap: 15px;
     }
 
-    .vc {
-      padding-top: 20px;
-      text-align: center;
-    }
-
-    .fair {
-      margin-top: 14px;
-      padding: 10px;
-      border-radius: 14px;
-      color: var(--muted);
-      background: #f3f8ff;
-      font-size: 12px;
-      overflow-wrap: anywhere;
-    }
-
-    .fair code {
-      color: var(--ink);
+    .profile-head h2 {
+      margin: 0 0 6px;
     }
 
     .stats {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-      margin: 14px 0;
+      gap: 10px;
+      margin: 18px 0;
     }
 
     .stat {
-      padding: 14px;
-      border-radius: 16px;
-      background: #f2f9ff;
-      text-align: center;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #20242e;
     }
 
     .stat small {
+      display: block;
+      margin-bottom: 8px;
       color: var(--muted);
     }
 
     .stat b {
-      display: block;
-      font-size: 22px;
+      font-size: 20px;
     }
 
-    .pos { color: #18a877; }
-    .neg { color: var(--red); }
+    .positive { color: var(--green); }
+    .negative { color: var(--red); }
 
     .table-wrap {
       overflow-x: auto;
@@ -896,46 +1131,46 @@
     table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 13.5px;
+      font-size: 12px;
     }
 
     th,
     td {
-      padding: 9px 8px;
-      border-bottom: 1px solid var(--line);
+      padding: 11px;
+      border-bottom: 1px solid var(--border);
       text-align: left;
     }
 
     th {
       color: var(--muted);
-      font-weight: 500;
     }
 
-    .pg {
+    .pagination {
       display: flex;
       justify-content: center;
-      gap: 6px;
-      margin-top: 12px;
+      gap: 5px;
+      margin-top: 14px;
     }
 
-    .pg button {
+    .pagination button {
       min-width: 34px;
       height: 34px;
-      border-radius: 10px;
-      color: var(--ink);
-      background: #eef4fc;
-      font-weight: 600;
+      border-radius: 5px;
+      color: #fff;
+      background: #30343e;
     }
 
-    .pg button.on {
-      color: #fff;
-      background: var(--blue);
+    .pagination button.on {
+      color: #06130d;
+      background: var(--green);
     }
+
+    /* TOAST / LOADING */
 
     .toasts {
       position: fixed;
-      top: 78px;
-      right: 18px;
+      top: 88px;
+      right: 16px;
       z-index: 300;
       display: flex;
       flex-direction: column;
@@ -944,16 +1179,22 @@
 
     .toast {
       max-width: 320px;
-      padding: 11px 16px;
-      border-radius: 12px;
+      padding: 12px 15px;
+      border: 1px solid #444;
+      border-radius: 6px;
       color: #fff;
-      background: #23324d;
-      box-shadow: 0 6px 20px rgba(0, 0, 0, .25);
-      animation: pop .15s;
+      background: #252a34;
+      box-shadow: 0 8px 25px #0008;
     }
 
-    .toast.err { background: var(--red); }
-    .toast.ok { background: #18a877; }
+    .toast.err {
+      background: #9e303d;
+    }
+
+    .toast.ok {
+      color: #04120b;
+      background: var(--green);
+    }
 
     #boot {
       position: fixed;
@@ -963,81 +1204,55 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 14px;
+      gap: 15px;
       padding: 20px;
-      background: linear-gradient(#bfe6ff, #fff7e0);
+      background: #11141b;
       text-align: center;
-      font-size: 18px;
-      font-weight: 600;
+      font-weight: 700;
     }
 
     .loader {
-      width: 46px;
-      height: 46px;
-      border: 5px solid #fff;
-      border-top-color: var(--blue);
+      width: 42px;
+      height: 42px;
+      border: 4px solid #323844;
+      border-top-color: var(--green);
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
 
     @keyframes spin {
-      to { transform: rotate(360deg); }
+      to {
+        transform: rotate(360deg);
+      }
     }
 
-    .code {
-      margin: 12px 0;
-      padding: 14px;
-      border: 2px dashed var(--yellow);
-      border-radius: 14px;
-      background: #fff8e0;
-      text-align: center;
-      font-size: 20px;
-      font-weight: 700;
-      user-select: all;
+    /* Admin UI returned by server */
+
+    #adm .modal {
+      color: var(--text);
+      background: #14171f;
     }
 
-    .hint {
-      margin: 6px 0;
-      color: var(--muted);
-      font-size: 13px;
+    #adm [style*="background:#f5faff"] {
+      background: #20242e !important;
     }
 
-    .seg {
-      display: flex;
-      margin-bottom: 12px;
-      padding: 4px;
-      border-radius: 12px;
-      background: #eef4fc;
+    #adm [style*="border:2px solid #e0edfb"] {
+      border-color: #343842 !important;
     }
 
-    .seg button {
-      flex: 1;
-      padding: 8px;
-      border-radius: 9px;
-      color: var(--muted);
-      background: transparent;
-      font-weight: 600;
+    #adm [style*="border-bottom:1px solid #e0edfb"] {
+      border-color: #343842 !important;
     }
 
-    .seg button.on {
-      color: var(--blue-dark);
-      background: #fff;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, .1);
-    }
-
-    @media (max-width: 1000px) {
+    @media (max-width: 1050px) {
       .main {
         grid-template-columns: 1fr;
       }
 
-      .side {
+      .sidebar {
         position: static;
-        height: auto;
-      }
-
-      .chat {
-        flex: none;
-        height: 420px;
+        height: 480px;
       }
 
       .match {
@@ -1045,29 +1260,31 @@
       }
 
       .match .items,
-      .match .mid,
-      .match .acts {
+      .match-middle,
+      .match-actions {
         grid-column: 1 / -1;
       }
 
-      .acts {
+      .match-actions {
         justify-content: flex-start;
-      }
-
-      nav {
-        display: none;
       }
     }
 
-    @media (max-width: 600px) {
-      header {
+    @media (max-width: 650px) {
+      .topbar {
         flex-wrap: wrap;
+        height: auto;
+        min-height: 70px;
         gap: 8px;
-        padding: 10px 12px;
+        padding: 10px;
       }
 
       .logo {
-        font-size: 22px;
+        font-size: 21px;
+      }
+
+      .nav {
+        display: none;
       }
 
       .header-right {
@@ -1075,21 +1292,30 @@
       }
 
       .user-name {
-        max-width: 90px;
+        max-width: 80px;
         overflow: hidden;
         text-overflow: ellipsis;
       }
 
       .main {
-        padding: 12px;
+        padding: 10px;
+      }
+
+      .summary,
+      .stats {
+        grid-template-columns: 1fr;
+      }
+
+      .inventory-tools {
+        grid-template-columns: 1fr;
       }
 
       .vs {
         grid-template-columns: 1fr;
       }
 
-      .stats {
-        grid-template-columns: 1fr;
+      .modal {
+        max-height: 94vh;
       }
     }
   </style>
@@ -1098,59 +1324,83 @@
 <body>
   <div id="boot">
     <div class="loader"></div>
-    <div id="bootmsg">Connecting to AMP ROLL…</div>
+    <div id="bootMessage">Connecting to AMP ROLL…</div>
     <button class="btn gray" onclick="location.reload()">Retry</button>
   </div>
 
   <div class="toasts" id="toasts"></div>
 
-  <div class="ov" id="ov">
+  <div class="ov" id="overlay">
     <div class="modal" id="modal"></div>
   </div>
 
   <div class="app">
-    <header>
-      <div class="logo" data-act="home">AMP ROLL 🐾</div>
+    <header class="topbar">
+      <div class="logo" data-action="home">AMP<span>ROLL</span></div>
 
-      <nav>
-        <a data-act="home">🪙 Coinflip</a>
+      <nav class="nav">
+        <div class="nav-item" data-action="home">🪙 Coinflip</div>
       </nav>
 
       <div class="header-right" id="headerRight"></div>
     </header>
 
-    <main class="main" id="pageHome">
-      <section>
-        <div class="card">
-          <div class="bar">
-            <h2>🪙 Live Coinflips</h2>
-            <span class="pill" id="matchCount">0 games</span>
-            <button class="btn sun" data-act="create">+ Create Match</button>
-            <button class="btn gray" data-act="history">History</button>
+    <main class="main" id="homePage">
+      <section class="content">
+        <div class="banner">
+          <div>
+            <h1>AMP ROLL Coinflip</h1>
+            <p>Create a match, pick a side and watch the coin flip.</p>
           </div>
 
-          <div id="lobby"></div>
+          <span style="font-size:34px">🐶 🐱</span>
         </div>
+
+        <div class="summary">
+          <div>
+            <b id="summaryGames">0</b>
+            <small>Live Games</small>
+          </div>
+
+          <div>
+            <b id="summaryValue">0</b>
+            <small>Total Lobby Value</small>
+          </div>
+
+          <div>
+            <b id="summaryOnline">0</b>
+            <small>Players Online</small>
+          </div>
+        </div>
+
+        <div class="section-head">
+          <h2>COINFLIP GAMES</h2>
+          <span class="pill" id="gameCount">0 GAMES</span>
+          <button class="btn gray" data-action="history">History</button>
+          <button class="btn" data-action="create">+ Create Game</button>
+        </div>
+
+        <div class="match-list" id="lobby"></div>
       </section>
 
-      <aside class="side">
-        <div class="gw-list" id="giveaways"></div>
+      <aside class="sidebar">
+        <div class="giveaways" id="giveaways"></div>
 
-        <div class="card chat">
-          <div class="bar" style="margin-bottom:8px">
-            <h2 style="font-size:17px">💬 Live Chat</h2>
-            <span class="pill" id="online">Connecting</span>
+        <div class="chat">
+          <div class="chat-head">
+            <span>💬 LIVE CHAT</span>
+            <span class="online" id="online">Connecting…</span>
           </div>
 
-          <div class="msgs" id="messages"></div>
+          <div class="messages" id="messages"></div>
 
-          <div class="cin">
+          <div class="chat-input">
             <input
               id="chatInput"
               maxlength="160"
-              placeholder="Say something…"
+              placeholder="Type a message..."
             >
-            <button class="btn sm" data-act="send">Send</button>
+            <button class="btn sm" data-action="send">Send</button>
           </div>
         </div>
       </aside>
@@ -1158,7 +1408,7 @@
 
     <main
       class="main"
-      id="pageProfile"
+      id="profilePage"
       style="display:none;grid-template-columns:1fr"
     >
       <div id="profile"></div>
@@ -1169,8 +1419,8 @@
     "use strict";
 
     /*
-      Site ve backend aynı Render servisinde çalıştığı için
-      adres otomatik olarak mevcut site adresinden alınır.
+      Frontend ve backend aynı Render servisindedir.
+      URL otomatik olarak mevcut siteden alınır.
     */
     const API_BASE = window.location.origin;
 
@@ -1183,13 +1433,13 @@
 
     const esc = value => String(value ?? "").replace(
       /[&<>"']/g,
-      char => ({
+      character => ({
         "&": "&amp;",
         "<": "&lt;",
         ">": "&gt;",
         '"': "&quot;",
         "'": "&#39;"
-      })[char]
+      })[character]
     );
 
     const fmt = value => Number(value || 0).toLocaleString(
@@ -1197,9 +1447,9 @@
       { maximumFractionDigits: 2 }
     );
 
-    const list = value => Array.isArray(value) ? value : [];
+    const asArray = value => Array.isArray(value) ? value : [];
 
-    const username = user => {
+    const getUsername = user => {
       if (!user) return "";
       if (typeof user === "string") return user;
       return user.username || user.name || "";
@@ -1210,17 +1460,21 @@
     let token = localStorage.getItem("amp_token") || "";
     let ME = null;
 
-    let ST = {
+    let STATE = {
       matches: [],
       giveaways: [],
       chat: [],
       bot: null,
-      config: { range: 0.10 }
+      online: 0,
+      config: {
+        range: 0.10
+      }
     };
 
     let socket = null;
     let booted = false;
-    let busy = false;
+    let refreshing = false;
+    let refreshTimer = null;
 
     let selected = new Set();
     let gridContext = null;
@@ -1229,9 +1483,7 @@
     let createSide = "dog";
     let giveawayMode = "easy";
 
-    /* =====================================================
-       API
-       ===================================================== */
+    /* API */
 
     async function api(path, options = {}) {
       const headers = {
@@ -1262,7 +1514,7 @@
 
       if (!response.ok) {
         const error = new Error(
-          data.error || data.message || "HTTP " + response.status
+          data.error || data.message || `HTTP ${response.status}`
         );
 
         error.status = response.status;
@@ -1280,59 +1532,60 @@
 
       $("#toasts").appendChild(element);
 
-      setTimeout(() => element.remove(), 3800);
+      setTimeout(() => element.remove(), 4000);
     }
 
     function fail(error) {
       toast(error.message || String(error), "err");
     }
 
-    /* =====================================================
-       HELPERS
-       ===================================================== */
+    /* HELPERS */
 
-    function avatar(user, cls = "", ring = false) {
-      const name = username(user) || "?";
+    function avatar(user, size = "", winner = false) {
+      const name = getUsername(user) || "?";
       const image = user && (user.avatar || user.avatarUrl);
 
       if (image) {
         return `
           <img
-            class="av ${cls} ${ring ? "ring" : ""}"
+            class="av ${size} ${winner ? "winner" : ""}"
             src="${esc(image)}"
             alt=""
-            onerror="this.style.visibility='hidden'"
           >
         `;
       }
 
       return `
-        <span class="av ${cls} ${ring ? "ring" : ""}">
+        <span class="av ${size} ${winner ? "winner" : ""}">
           ${esc(name.charAt(0).toUpperCase())}
         </span>
       `;
     }
 
     function tags(item) {
-      let html = "";
+      let result = "";
 
       if (item.age === "mega" || item.mega) {
-        html += '<i class="M">M</i>';
+        result += '<i class="M">M</i>';
       }
 
       if (item.age === "neon" || item.neon) {
-        html += '<i class="N">N</i>';
+        result += '<i class="N">N</i>';
       }
 
       if (item.fly) {
-        html += '<i class="F">F</i>';
+        result += '<i class="F">F</i>';
       }
 
       if (item.ride) {
-        html += '<i class="R">R</i>';
+        result += '<i class="R">R</i>';
       }
 
-      return html ? `<div class="tg">${html}</div>` : "";
+      return result ? `<div class="tg">${result}</div>` : "";
+    }
+
+    function itemId(item) {
+      return String(item.uid || item.id || item.catalogId || "");
     }
 
     function itemImage(item) {
@@ -1340,41 +1593,26 @@
     }
 
     function inventory() {
-      return ME ? list(ME.inventory) : [];
+      return ME ? asArray(ME.inventory) : [];
     }
 
-    function itemId(item) {
-      return String(item.uid || item.id || item.catalogId || "");
-    }
-
-    function itemValue(items) {
+    function totalValue(items) {
       return items.reduce(
         (total, item) => total + Number(item.value || 0),
         0
       );
     }
 
-    function thumbs(items, max = 6) {
-      const shown = list(items).slice(0, max);
-
-      let html = shown.map(item => `
-        <div
-          class="it"
-          title="${esc(item.name)} • ${fmt(item.value)}"
-        >
-          <img src="${esc(itemImage(item))}" alt="">
-        </div>
-      `).join("");
-
-      if (items.length > max) {
-        html += `<div class="it"><b>+${items.length - max}</b></div>`;
-      }
-
-      return html;
+    function selectedItems() {
+      return inventory().filter(item => selected.has(itemId(item)));
     }
 
-    function range(value) {
-      const tolerance = Number(ST.config?.range ?? 0.10);
+    function selectedUids() {
+      return selectedItems().map(itemId);
+    }
+
+    function matchRange(value) {
+      const tolerance = Number(STATE.config?.range ?? 0.10);
 
       return [
         value * (1 - tolerance),
@@ -1382,12 +1620,27 @@
       ];
     }
 
-    function mySelectedItems() {
-      return inventory().filter(item => selected.has(itemId(item)));
-    }
+    function thumbs(items, max = 6) {
+      const array = asArray(items);
 
-    function selectedUids() {
-      return mySelectedItems().map(itemId);
+      let result = array.slice(0, max).map(item => `
+        <div
+          class="item-thumb"
+          title="${esc(item.name)} • ${fmt(item.value)}"
+        >
+          <img src="${esc(itemImage(item))}" alt="">
+        </div>
+      `).join("");
+
+      if (array.length > max) {
+        result += `
+          <div class="item-thumb">
+            <b>+${array.length - max}</b>
+          </div>
+        `;
+      }
+
+      return result;
     }
 
     function requireLogin() {
@@ -1397,15 +1650,13 @@
       return false;
     }
 
-    /* =====================================================
-       MODAL
-       ===================================================== */
+    /* MODAL */
 
     function modalHeader(title) {
       return `
         <div class="mh">
           <h3>${title}</h3>
-          <button class="x" data-act="close">✕</button>
+          <button class="x" data-action="close">×</button>
         </div>
       `;
     }
@@ -1416,32 +1667,30 @@
       modal.className = "modal" + (wide ? " wide" : "");
       modal.innerHTML = html;
 
-      $("#ov").classList.add("open");
+      $("#overlay").classList.add("open");
     }
 
     function closeModal() {
-      $("#ov").classList.remove("open");
+      $("#overlay").classList.remove("open");
+      selected.clear();
       gridContext = null;
       viewMatchId = null;
-      selected.clear();
     }
 
-    $("#ov").addEventListener("mousedown", event => {
-      if (event.target.id === "ov") {
+    $("#overlay").addEventListener("mousedown", event => {
+      if (event.target.id === "overlay") {
         closeModal();
       }
     });
 
-    /* =====================================================
-       HEADER
-       ===================================================== */
+    /* HEADER */
 
     function renderHeader() {
       const target = $("#headerRight");
 
       if (!ME) {
         target.innerHTML = `
-          <button class="btn" data-act="login">
+          <button class="btn" data-action="login">
             Login with Roblox
           </button>
         `;
@@ -1449,52 +1698,55 @@
         return;
       }
 
+      const menuWasOpen =
+        $("#userMenu") && $("#userMenu").classList.contains("open");
+
       target.innerHTML = `
         <div class="wallet">
-          <div class="wallet-info" data-act="wallet">
-            <span style="font-size:22px">🐶</span>
+          <div class="wallet-main" data-action="wallet">
+            <span class="gem">💎</span>
             <div>
               <small>Adopt Me</small>
-              <b>${fmt(itemValue(inventory()))}</b>
+              <b>${fmt(totalValue(inventory()))}</b>
             </div>
           </div>
 
-          <button class="wallet-plus" data-act="deposit">+</button>
+          <button class="wallet-plus" data-action="deposit">+</button>
         </div>
 
-        <div class="user">
-          <button data-act="user-menu">
+        <div class="user-menu-wrap">
+          <button class="user-button" data-action="user-menu">
             ${avatar(ME, "sm")}
             <span class="user-name">${esc(ME.username)}</span>
             ▾
           </button>
 
-          <div class="menu" id="userMenu">
-            <a data-act="profile">👤 Profile</a>
-            <a data-act="giveaway">🎁 Create Giveaway</a>
+          <div class="user-menu ${menuWasOpen ? "open" : ""}" id="userMenu">
+            <button data-action="profile">👤 Profile</button>
+            <button data-action="giveaway">🎁 Create Giveaway</button>
+
             ${ME.isAdmin
-              ? '<a data-act="admin">🛠 Admin Panel</a>'
+              ? '<button data-action="admin">🛠 Admin Panel</button>'
               : ""}
-            <a data-act="logout">🚪 Logout</a>
+
+            <button data-action="logout">🚪 Logout</button>
           </div>
         </div>
       `;
     }
 
-    /* =====================================================
-       MATCHES
-       ===================================================== */
+    /* MATCHES */
 
     function findMatch(id) {
-      return list(ST.matches).find(match => match.id === id);
+      return asArray(STATE.matches).find(match => match.id === id);
     }
 
     function coinHTML(side = "dog", spinning = false, big = false) {
       return `
-        <div class="coin3d">
-          <div class="coin ${big ? "big" : ""} ${spinning ? "spin" : side === "cat" ? "cat" : ""}">
-            <div class="face">🐶</div>
-            <div class="face back">🐱</div>
+        <div class="coin-wrap">
+          <div class="coin ${big ? "big" : ""} ${spinning ? "spinning" : side === "cat" ? "cat" : ""}">
+            <div class="coin-face">🐶</div>
+            <div class="coin-face back">🐱</div>
           </div>
         </div>
       `;
@@ -1503,33 +1755,45 @@
     function countdownHTML(end, big = false) {
       return `
         <div
-          class="countdown"
-          ${big ? 'style="width:80px;height:80px;font-size:34px"' : ""}
+          class="countdown ticker-countdown"
+          data-end="${Number(end || 0)}"
+          ${big ? 'style="width:80px;height:80px;font-size:32px"' : ""}
         >
-          <span class="ticker-countdown" data-end="${Number(end || 0)}">3</span>
+          3
         </div>
       `;
     }
 
     function renderLobby() {
-      const matches = list(ST.matches)
+      const matches = asArray(STATE.matches)
         .filter(match => match.state !== "cancelled")
         .slice()
         .sort((a, b) => {
-          const finishedDiff =
+          const completed =
             Number(a.state === "finished") -
             Number(b.state === "finished");
 
-          return finishedDiff || Number(b.hostValue) - Number(a.hostValue);
+          return completed || Number(b.hostValue) - Number(a.hostValue);
         });
 
-      $("#matchCount").textContent = matches.length + " games";
+      $("#summaryGames").textContent = matches.length;
+      $("#gameCount").textContent = matches.length + " GAMES";
+
+      const lobbyValue = matches.reduce(
+        (sum, match) =>
+          sum +
+          Number(match.hostValue || 0) +
+          Number(match.oppValue || 0),
+        0
+      );
+
+      $("#summaryValue").textContent = fmt(lobbyValue);
 
       if (!matches.length) {
         $("#lobby").innerHTML = `
-          <div class="empty">
-            🐾 No games right now.<br>
-            Be the first and create one!
+          <div class="card empty">
+            No games right now.<br>
+            Create the first coinflip!
           </div>
         `;
 
@@ -1537,17 +1801,17 @@
       }
 
       $("#lobby").innerHTML = matches.map(match => {
-        const mine = ME && match.host?.id === ME.id;
         const finished = match.state === "finished";
+        const mine = ME && match.host?.id === ME.id;
         const hostWon = finished && match.winnerId === match.host?.id;
 
-        const [low, high] = range(Number(match.hostValue || 0));
+        const [low, high] = matchRange(Number(match.hostValue || 0));
 
         let middle = "";
 
         if (match.state === "waiting") {
           middle = `
-            <div class="value">${fmt(match.hostValue)}</div>
+            <b>💎 ${fmt(match.hostValue)}</b>
             <small>${fmt(low)} – ${fmt(high)}</small>
           `;
         } else if (match.state === "countdown") {
@@ -1557,22 +1821,32 @@
         } else {
           middle = `
             ${coinHTML(match.winnerSide)}
-            <small>${fmt(
-              Number(match.hostValue || 0) +
-              Number(match.oppValue || 0)
-            )}</small>
+            <small>
+              💎 ${fmt(
+                Number(match.hostValue || 0) +
+                Number(match.oppValue || 0)
+              )}
+            </small>
           `;
         }
 
         const opponent = match.joiner
           ? `
-            <div class="pl">
+            <div class="player">
               ${avatar(match.joiner, "", finished && !hostWon)}
-              <span class="name">${esc(username(match.joiner))}</span>
-              <span>${sideIcon(match.joinSide)}</span>
+              <div style="min-width:0">
+                <div class="player-name">
+                  ${esc(getUsername(match.joiner))}
+                </div>
+                <small>${sideIcon(match.joinSide)} ${esc(match.joinSide)}</small>
+              </div>
             </div>
           `
-          : '<div class="pl" style="color:var(--muted)">Waiting…</div>';
+          : `
+            <div class="player" style="color:var(--muted)">
+              Waiting for player…
+            </div>
+          `;
 
         let action = "";
 
@@ -1581,7 +1855,7 @@
             ? `
               <button
                 class="btn red sm"
-                data-act="cancel"
+                data-action="cancel"
                 data-id="${esc(match.id)}"
               >
                 Cancel
@@ -1589,8 +1863,8 @@
             `
             : `
               <button
-                class="btn mint sm"
-                data-act="join"
+                class="btn sm"
+                data-action="join"
                 data-id="${esc(match.id)}"
               >
                 Join
@@ -1599,26 +1873,30 @@
         }
 
         return `
-          <div class="match ${finished ? "fin" : ""}">
-            <div class="pl">
+          <div class="match ${finished ? "finished" : ""}">
+            <div class="player">
               ${avatar(match.host, "", finished && hostWon)}
-              <span class="name">${esc(username(match.host))}</span>
-              <span>${sideIcon(match.hostSide)}</span>
+              <div style="min-width:0">
+                <div class="player-name">
+                  ${esc(getUsername(match.host))}
+                </div>
+                <small>${sideIcon(match.hostSide)} ${esc(match.hostSide)}</small>
+              </div>
             </div>
 
             <div class="items">
-              ${thumbs(list(match.hostItems))}
+              ${thumbs(match.hostItems)}
             </div>
 
-            <div class="mid">${middle}</div>
+            <div class="match-middle">${middle}</div>
 
             ${opponent}
 
-            <div class="acts">
+            <div class="match-actions">
               ${action}
               <button
-                class="btn sm"
-                data-act="view"
+                class="btn gray sm"
+                data-action="view"
                 data-id="${esc(match.id)}"
               >
                 View
@@ -1630,15 +1908,15 @@
     }
 
     function showView(id) {
-      viewMatchId = id;
       gridContext = null;
+      viewMatchId = id;
 
       openModal("", true);
       renderView();
     }
 
     function renderView() {
-      if (!viewMatchId || !$("#ov").classList.contains("open")) {
+      if (!viewMatchId || !$("#overlay").classList.contains("open")) {
         return;
       }
 
@@ -1657,7 +1935,7 @@
       const hostWon = finished && match.winnerId === match.host?.id;
       const mine = ME && match.host?.id === ME.id;
 
-      let middle = "";
+      let middle;
 
       if (match.state === "countdown") {
         middle = countdownHTML(match.countdownEnd, true);
@@ -1667,29 +1945,28 @@
         middle = coinHTML(match.winnerSide, false, true);
       } else {
         middle = `
-          <div style="font-size:30px;font-weight:700;color:var(--muted)">
-            VS
-          </div>
+          <b style="font-size:28px;color:var(--muted)">VS</b>
         `;
       }
 
-      function column(user, items, side, won) {
+      function playerColumn(user, items, side, won) {
         if (!user) {
           return `
-            <div class="col">
+            <div class="vs-col">
               <div class="empty">Waiting for opponent…</div>
             </div>
           `;
         }
 
         return `
-          <div class="col ${won ? "win" : ""}">
+          <div class="vs-col ${won ? "won" : ""}">
             ${avatar(user, "lg", won)}
-            <div>
-              <b>${esc(username(user))}</b> ${sideIcon(side)}
+            <div style="margin-top:10px">
+              <b>${esc(getUsername(user))}</b>
+              ${sideIcon(side)}
             </div>
-            <div class="hint">${fmt(itemValue(list(items)))}</div>
-            <div class="items">${thumbs(list(items), 10)}</div>
+            <div class="hint">💎 ${fmt(totalValue(asArray(items)))}</div>
+            <div class="items">${thumbs(items, 10)}</div>
           </div>
         `;
       }
@@ -1701,7 +1978,7 @@
           ? `
             <button
               class="btn red"
-              data-act="cancel"
+              data-action="cancel"
               data-id="${esc(match.id)}"
             >
               Cancel Match
@@ -1709,37 +1986,34 @@
           `
           : `
             <button
-              class="btn mint"
-              data-act="join"
+              class="btn"
+              data-action="join"
               data-id="${esc(match.id)}"
             >
-              Join
+              Join Match
             </button>
           `;
       }
 
       $("#modal").innerHTML = `
-        ${modalHeader("Match • " + fmt(
-          Number(match.hostValue || 0) +
-          Number(match.oppValue || 0)
-        ))}
+        ${modalHeader("Coinflip Match")}
 
         <div class="vs">
-          ${column(
+          ${playerColumn(
             match.host,
             match.hostItems,
             match.hostSide,
             finished && hostWon
           )}
 
-          <div class="vc">
+          <div class="vs-center">
             ${middle}
             ${finished
-              ? `<div class="hint"><b>${esc(username(match.winner))}</b> wins!</div>`
+              ? `<div class="hint"><b>${esc(getUsername(match.winner))}</b> wins!</div>`
               : ""}
           </div>
 
-          ${column(
+          ${playerColumn(
             match.joiner,
             match.joinerItems,
             match.joinSide,
@@ -1747,9 +2021,7 @@
           )}
         </div>
 
-        <div class="row" style="margin-top:14px;justify-content:flex-end">
-          ${action}
-        </div>
+        <div class="modal-footer">${action}</div>
 
         <div class="fair">
           <b>Result verification</b><br>
@@ -1760,8 +2032,8 @@
               Seed: <code>${esc(match.seed)}</code><br>
               <button
                 class="btn gray sm"
-                style="margin-top:6px"
-                data-act="verify"
+                style="margin-top:8px"
+                data-action="verify"
                 data-id="${esc(match.id)}"
               >
                 Verify
@@ -1818,12 +2090,12 @@
           hash === match.hash &&
           result === match.winnerSide;
 
-        const output = $("#verifyResult");
+        const target = $("#verifyResult");
 
-        if (output) {
-          output.innerHTML = valid
-            ? `<b class="pos">✔ Hash and result match: ${sideIcon(result)} ${result}</b>`
-            : '<b class="neg">✘ Hash or result mismatch</b>';
+        if (target) {
+          target.innerHTML = valid
+            ? `<b class="positive"> ✔ Hash and result match: ${sideIcon(result)} ${result}</b>`
+            : '<b class="negative"> ✘ Hash or result mismatch</b>';
         }
       } catch (error) {
         fail(error);
@@ -1831,9 +2103,7 @@
     }
 
     async function cancelMatch(id) {
-      if (!confirm("Cancel this match and refund the items?")) {
-        return;
-      }
+      if (!confirm("Cancel this match and return the items?")) return;
 
       try {
         await api("/api/match/cancel", {
@@ -1848,29 +2118,25 @@
       }
     }
 
-    /* =====================================================
-       GIVEAWAYS
-       ===================================================== */
+    /* GIVEAWAYS */
 
     function renderGiveaways() {
-      $("#giveaways").innerHTML = list(ST.giveaways).map(g => `
-        <div class="gw">
-          <div class="gw-images">
-            ${list(g.items).slice(0, 2).map(item => `
-              <img src="${esc(itemImage(item))}" alt="">
-            `).join("")}
-          </div>
+      $("#giveaways").innerHTML = asArray(STATE.giveaways).map(g => `
+        <div class="giveaway-card">
+          ${asArray(g.items).slice(0, 1).map(item => `
+            <img src="${esc(itemImage(item))}" alt="">
+          `).join("")}
 
-          <div class="gw-info">
-            <b>🎁 Giveaway</b> by ${esc(username(g.host))}<br>
-            Value: <b>${fmt(g.value)}</b> ·
-            ${Number(g.entrantCount || 0)} entered ·
+          <div class="giveaway-info">
+            <b>🎁 ${esc(getUsername(g.host))}'s Giveaway</b><br>
+            💎 ${fmt(g.value)} · ${Number(g.entrantCount || 0)} entered<br>
+            Ends in
             <span class="ticker-giveaway" data-end="${Number(g.endsAt || 0)}"></span>
           </div>
 
           <button
-            class="btn sun sm"
-            data-act="enter-giveaway"
+            class="btn sm"
+            data-action="enter-giveaway"
             data-id="${esc(g.id)}"
           >
             Enter
@@ -1889,30 +2155,30 @@
       gridContext = {
         max: 5,
         info() {
-          const items = mySelectedItems();
           const target = $("#giveawayInfo");
+          const items = selectedItems();
 
           if (target) {
             target.textContent =
-              `${items.length}/5 selected · ${fmt(itemValue(items))}`;
+              `${items.length}/5 selected · 💎 ${fmt(totalValue(items))}`;
           }
         }
       };
 
       openModal(`
-        ${modalHeader("🎁 Create Giveaway")}
+        ${modalHeader("Create Giveaway")}
 
         <div class="seg">
           <button
             class="on"
-            data-act="giveaway-mode"
+            data-action="giveaway-mode"
             data-mode="easy"
           >
             Easy
           </button>
 
           <button
-            data-act="giveaway-mode"
+            data-action="giveaway-mode"
             data-mode="advanced"
           >
             Advanced
@@ -1921,11 +2187,11 @@
 
         <div id="giveawayOptions"></div>
 
-        ${gridHTML()}
+        ${selectionGridHTML()}
 
-        <div class="row" style="margin-top:10px">
-          <b id="giveawayInfo" style="flex:1"></b>
-          <button class="btn sun" data-act="submit-giveaway">
+        <div class="modal-footer">
+          <span id="giveawayInfo" style="margin-right:auto;align-self:center"></span>
+          <button class="btn" data-action="submit-giveaway">
             Create Giveaway
           </button>
         </div>
@@ -1956,8 +2222,8 @@
           <div class="row">
             <label>Duration (minutes)</label>
             <input
-              type="number"
               id="giveawayMinutes"
+              type="number"
               min="1"
               max="60"
               value="10"
@@ -1966,8 +2232,8 @@
 
             <label>Min total bet</label>
             <input
-              type="number"
               id="giveawayMinBet"
+              type="number"
               min="0"
               value="0"
               style="width:120px"
@@ -1984,10 +2250,6 @@
         return toast("Select at least one item", "err");
       }
 
-      if (uids.length > 5) {
-        return toast("Maximum 5 items", "err");
-      }
-
       let duration;
       let minBet = 0;
 
@@ -1995,17 +2257,17 @@
         duration = Number($("#giveawayDuration").value);
       } else {
         const minutes = Number($("#giveawayMinutes").value);
+        minBet = Number($("#giveawayMinBet").value);
 
         if (!Number.isInteger(minutes) || minutes < 1 || minutes > 60) {
           return toast("Duration must be 1–60 minutes", "err");
         }
 
-        duration = minutes * 60;
-        minBet = Number($("#giveawayMinBet").value);
-
         if (!Number.isFinite(minBet) || minBet < 0) {
           return toast("Invalid minimum bet", "err");
         }
+
+        duration = minutes * 60;
       }
 
       try {
@@ -2041,25 +2303,24 @@
       }
     }
 
-    /* =====================================================
-       CHAT
-       ===================================================== */
+    /* CHAT */
 
     function chatMessage(message) {
       const user = message.user || {};
+
       const rank = message.admin
         ? "ADMIN"
         : (message.rank || user.rank || "");
 
       return `
-        <div class="msg">
+        <div class="message">
           ${avatar(user, "sm")}
 
           <div>
             ${rank
-              ? `<span class="rk ${esc(rank)}">${esc(rank)}</span>`
+              ? `<span class="rank ${esc(rank)}">${esc(rank)}</span>`
               : ""}
-            <b>${esc(username(user) || "System")}</b>
+            <b>${esc(getUsername(user) || "System")}</b><br>
             ${esc(message.text || "")}
           </div>
         </div>
@@ -2067,15 +2328,18 @@
     }
 
     function renderChat() {
-      const box = $("#messages");
+      const target = $("#messages");
 
       const nearBottom =
-        box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+        target.scrollHeight - target.scrollTop - target.clientHeight < 80;
 
-      box.innerHTML = list(ST.chat).slice(-60).map(chatMessage).join("");
+      target.innerHTML = asArray(STATE.chat)
+        .slice(-60)
+        .map(chatMessage)
+        .join("");
 
       if (nearBottom) {
-        box.scrollTop = box.scrollHeight;
+        target.scrollTop = target.scrollHeight;
       }
     }
 
@@ -2107,11 +2371,7 @@
       }
     });
 
-    /* =====================================================
-       LIVE DATA
-       ===================================================== */
-
-    let refreshTimer = null;
+    /* LIVE DATA */
 
     function scheduleRefresh() {
       clearTimeout(refreshTimer);
@@ -2120,7 +2380,7 @@
 
     function connectSocket() {
       if (typeof io !== "function") {
-        toast("Live connection unavailable; retrying with polling.", "err");
+        toast("Live connection unavailable", "err");
         return;
       }
 
@@ -2132,28 +2392,27 @@
         auth: { token }
       });
 
-      socket.on("connect", () => {
-        scheduleRefresh();
-      });
+      socket.on("connect", scheduleRefresh);
 
       socket.on("disconnect", () => {
-        $("#online").textContent = "Connecting";
+        $("#online").textContent = "Connecting…";
       });
 
       socket.on("online", count => {
         $("#online").textContent = count + " online";
+        $("#summaryOnline").textContent = count;
       });
 
       socket.on("chat:msg", message => {
-        if (!ST.chat.some(item => item.id === message.id)) {
-          ST.chat.push(message);
-          ST.chat = ST.chat.slice(-60);
+        if (!STATE.chat.some(item => item.id === message.id)) {
+          STATE.chat.push(message);
+          STATE.chat = STATE.chat.slice(-60);
           renderChat();
         }
       });
 
       socket.on("chat:clear", () => {
-        ST.chat = [];
+        STATE.chat = [];
         renderChat();
       });
 
@@ -2171,15 +2430,15 @@
     }
 
     async function refresh() {
-      if (busy) return;
+      if (refreshing) return;
 
-      busy = true;
+      refreshing = true;
 
       try {
         const state = await api("/api/state");
 
-        ST = {
-          ...ST,
+        STATE = {
+          ...STATE,
           ...state
         };
 
@@ -2215,9 +2474,8 @@
         renderGiveaways();
         renderChat();
 
-        if (Number.isFinite(Number(ST.online))) {
-          $("#online").textContent = Number(ST.online) + " online";
-        }
+        $("#online").textContent = Number(STATE.online || 0) + " online";
+        $("#summaryOnline").textContent = Number(STATE.online || 0);
 
         if (viewMatchId) {
           renderView();
@@ -2228,11 +2486,11 @@
         }
       } catch (error) {
         if (!booted) {
-          $("#bootmsg").textContent =
+          $("#bootMessage").textContent =
             "Server connecting… Render may take some time to wake up.";
         }
       } finally {
-        busy = false;
+        refreshing = false;
       }
     }
 
@@ -2266,13 +2524,11 @@
       });
     }, 250);
 
-    /* =====================================================
-       LOGIN
-       ===================================================== */
+    /* LOGIN */
 
     function showLogin() {
-      viewMatchId = null;
       gridContext = null;
+      viewMatchId = null;
 
       openModal(`
         ${modalHeader("Login with Roblox")}
@@ -2287,11 +2543,11 @@
             class="in"
             id="loginUsername"
             type="text"
-            placeholder="Roblox username"
             maxlength="20"
+            placeholder="Roblox username"
           >
 
-          <button class="btn" data-act="login-start">
+          <button class="btn" data-action="login-start">
             Get code
           </button>
         </div>
@@ -2303,38 +2559,38 @@
     }
 
     async function loginStart() {
-      const name = $("#loginUsername").value.trim();
+      const username = $("#loginUsername").value.trim();
 
-      if (!name) {
+      if (!username) {
         return toast("Enter your username", "err");
       }
 
       try {
         const result = await api("/api/auth/start", {
-          body: { username: name }
+          body: { username }
         });
 
         loginData = result;
 
-        const step = $("#loginStep");
+        const target = $("#loginStep");
 
-        if (!step) return;
+        if (!target) return;
 
-        step.innerHTML = `
-          <div class="hint">
+        target.innerHTML = `
+          <p class="hint">
             Put this code in your Roblox profile About section:
-          </div>
+          </p>
 
           <div class="code">${esc(result.code)}</div>
 
-          <div class="hint">
+          <p class="hint">
             Save the profile, then press Verify.
-          </div>
+          </p>
 
           <button
-            class="btn mint"
+            class="btn"
             style="width:100%"
-            data-act="login-verify"
+            data-action="login-verify"
           >
             Verify
           </button>
@@ -2379,7 +2635,7 @@
           });
         }
       } catch {
-        // Local logout still proceeds if the server is unavailable.
+        // Local logout continues if the server is unavailable.
       }
 
       token = "";
@@ -2395,35 +2651,49 @@
       toast("Logged out");
     }
 
-    /* =====================================================
-       INVENTORY GRID
-       ===================================================== */
+    /* INVENTORY GRID */
 
-    function gridHTML() {
+    function selectionGridHTML() {
       return `
-        <div class="row">
+        <div class="inventory-tools">
           <input
-            type="text"
+            class="control"
             id="gridSearch"
-            placeholder="Search items…"
+            type="text"
+            placeholder="Search for an item..."
           >
 
-          <select id="gridSort">
-            <option value="value-desc">Value ↓</option>
-            <option value="value-asc">Value ↑</option>
+          <select class="control" id="gridSort">
+            <option value="value-desc">High - Low</option>
+            <option value="value-asc">Low - High</option>
             <option value="name">Name</option>
           </select>
 
-          <button class="btn gray sm" data-act="select-all">
-            Select All
-          </button>
-
-          <button class="btn gray sm" data-act="select-none">
-            Clear
-          </button>
+          <select class="control" disabled>
+            <option>Adopt Me</option>
+          </select>
         </div>
 
-        <div class="grid" id="grid"></div>
+        <div class="inventory-box">
+          <div class="inventory-summary">
+            <span class="gem">💎</span>
+
+            <div>
+              <small>WORTH</small>
+              <b id="inventoryWorth">0</b>
+            </div>
+
+            <div>
+              <small>ITEMS</small>
+              <b id="inventoryCount">0</b>
+            </div>
+
+            <button class="inventory-plus" data-action="deposit">+</button>
+          </div>
+
+          <div class="grid" id="grid"></div>
+          <div id="inventoryEmpty"></div>
+        </div>
       `;
     }
 
@@ -2433,7 +2703,9 @@
       const query = ($("#gridSearch")?.value || "").toLowerCase();
       const sort = $("#gridSort")?.value || "value-desc";
 
-      const items = inventory().filter(item =>
+      const allItems = inventory();
+
+      const items = allItems.filter(item =>
         String(item.name || "").toLowerCase().includes(query)
       );
 
@@ -2449,30 +2721,45 @@
         return Number(b.value || 0) - Number(a.value || 0);
       });
 
-      $("#grid").innerHTML = items.length
-        ? items.map(item => {
-          const id = itemId(item);
-          const checked = selected.has(id);
+      $("#inventoryWorth").textContent = fmt(totalValue(allItems));
+      $("#inventoryCount").textContent = allItems.length;
 
-          return `
-            <div
-              class="gi ${checked ? "sel" : ""}"
-              data-act="pick"
-              data-id="${esc(id)}"
-            >
-              ${checked ? '<span class="check">✓</span>' : ""}
-              <img src="${esc(itemImage(item))}" alt="">
-              <div class="nm">${esc(item.name)}</div>
-              <div class="vl">${fmt(item.value)}</div>
-              ${tags(item)}
-            </div>
-          `;
-        }).join("")
-        : `
-          <div class="empty" style="grid-column:1/-1">
-            Nothing here
+      $("#grid").innerHTML = items.map(item => {
+        const id = itemId(item);
+        const checked = selected.has(id);
+
+        return `
+          <div
+            class="inventory-item ${checked ? "selected" : ""}"
+            data-action="pick"
+            data-id="${esc(id)}"
+          >
+            ${checked ? '<span class="check">✓</span>' : ""}
+            <img src="${esc(itemImage(item))}" alt="">
+            <div class="name">${esc(item.name)}</div>
+            <div class="value">💎 ${fmt(item.value)}</div>
+            ${tags(item)}
           </div>
         `;
+      }).join("");
+
+      if (!allItems.length) {
+        $("#inventoryEmpty").innerHTML = `
+          <div class="inventory-empty">
+            <h2>No Items!</h2>
+            <p>Your inventory seems to be empty...</p>
+            <button class="btn" data-action="deposit">
+              Deposit Items
+            </button>
+          </div>
+        `;
+      } else if (!items.length) {
+        $("#inventoryEmpty").innerHTML = `
+          <div class="empty">No items match your search.</div>
+        `;
+      } else {
+        $("#inventoryEmpty").innerHTML = "";
+      }
 
       gridContext.info();
     }
@@ -2515,9 +2802,7 @@
       renderGrid();
     }
 
-    /* =====================================================
-       WALLET / DEPOSIT
-       ===================================================== */
+    /* WALLET / DEPOSIT */
 
     function showWallet() {
       if (!requireLogin()) return;
@@ -2528,31 +2813,51 @@
       gridContext = {
         max: 500,
         info() {
-          const items = mySelectedItems();
-          const output = $("#walletInfo");
+          const items = selectedItems();
+          const target = $("#walletSelection");
 
-          if (output) {
-            output.textContent = items.length
-              ? `${items.length} selected · ${fmt(itemValue(items))}`
-              : `Inventory: ${fmt(itemValue(inventory()))}`;
+          if (target) {
+            target.textContent =
+              `${items.length} selected · 💎 ${fmt(totalValue(items))}`;
+          }
+
+          const button = $("#withdrawButton");
+
+          if (button) {
+            button.textContent = `Withdraw ${fmt(totalValue(items))}`;
           }
         }
       };
 
       openModal(`
-        ${modalHeader("🎒 My Adopt Me Inventory")}
+        ${modalHeader("Inventory")}
 
-        ${gridHTML()}
+        <div class="hint" style="margin-bottom:7px">
+          Select Item
+        </div>
 
-        <div class="row" style="margin-top:10px">
-          <b id="walletInfo" style="flex:1"></b>
+        ${selectionGridHTML()}
 
-          <button class="btn gray" data-act="deposit">
-            + Deposit
+        <div class="modal-footer">
+          <span
+            id="walletSelection"
+            style="margin-right:auto;align-self:center;color:var(--muted)"
+          ></span>
+
+          <button class="btn outline" data-action="select-all">
+            Select All
           </button>
 
-          <button class="btn red" data-act="withdraw">
-            Withdraw
+          <button class="btn gray" data-action="select-none">
+            Clear
+          </button>
+
+          <button
+            class="btn"
+            id="withdrawButton"
+            data-action="withdraw"
+          >
+            Withdraw 0
           </button>
         </div>
       `, true);
@@ -2592,19 +2897,19 @@
 
         <p class="hint">Choose a game</p>
 
-        <div class="game-card" data-act="bots">
+        <div class="game-card" data-action="bots">
           <div class="game-pic">🐶🐝</div>
           <b>Adopt Me</b>
         </div>
 
-        <p class="hint" style="margin-top:14px">
+        <p class="hint" style="margin-top:16px">
           Test mode: no trade bot is connected. Deposits are not active.
         </p>
       `);
     }
 
     function showBots() {
-      const bot = ST.bot || {};
+      const bot = STATE.bot || {};
 
       openModal(`
         ${modalHeader("Adopt Me — Bot")}
@@ -2621,22 +2926,16 @@
           }, "lg")}
 
           <div class="bot-info">
-            <b style="font-size:18px">
-              ${esc(bot.username || BOT_NAME)}
-            </b>
+            <b>${esc(bot.username || BOT_NAME)}</b>
             <div class="hint">Trade bot integration not connected</div>
           </div>
 
-          <button class="btn mint" data-act="bot-join">
-            Join
-          </button>
+          <button class="btn" data-action="bot-join">Join</button>
         </div>
       `);
     }
 
-    /* =====================================================
-       CREATE / JOIN MATCH
-       ===================================================== */
+    /* CREATE / JOIN */
 
     function showCreate() {
       if (!requireLogin()) return;
@@ -2648,41 +2947,47 @@
       gridContext = {
         max: 8,
         info() {
-          const items = mySelectedItems();
-          const value = itemValue(items);
-          const [low, high] = range(value);
+          const items = selectedItems();
+          const value = totalValue(items);
+          const [low, high] = matchRange(value);
           const target = $("#createInfo");
 
           if (target) {
             target.textContent = items.length
-              ? `${items.length}/8 · Value ${fmt(value)} · Join: ${fmt(low)} – ${fmt(high)}`
+              ? `${items.length}/8 · 💎 ${fmt(value)} · Join ${fmt(low)} – ${fmt(high)}`
               : "Select up to 8 items";
           }
         }
       };
 
       openModal(`
-        ${modalHeader("Create Match")}
+        ${modalHeader("Create Coinflip")}
 
         <div class="sides" id="sides">
-          <div class="sd on" data-act="side" data-side="dog">
+          <div
+            class="side-choice selected"
+            data-action="side"
+            data-side="dog"
+          >
             <span>🐶</span>Dog
           </div>
 
-          <div class="sd" data-act="side" data-side="cat">
+          <div
+            class="side-choice"
+            data-action="side"
+            data-side="cat"
+          >
             <span>🐱</span>Cat
           </div>
         </div>
 
-        <div style="height:12px"></div>
+        ${selectionGridHTML()}
 
-        ${gridHTML()}
-
-        <div class="row" style="margin-top:10px">
-          <b id="createInfo" style="flex:1"></b>
-          <button class="btn sun" data-act="submit-create">
-            Create
-          </button>
+        <div class="modal-footer">
+          <span id="createInfo" style="margin-right:auto;align-self:center"></span>
+          <button class="btn outline" data-action="select-all">Select All</button>
+          <button class="btn gray" data-action="select-none">Clear</button>
+          <button class="btn" data-action="submit-create">Create Game</button>
         </div>
       `, true);
 
@@ -2724,12 +3029,12 @@
       selected = new Set();
       viewMatchId = null;
 
-      const [low, high] = range(Number(match.hostValue || 0));
+      const [low, high] = matchRange(Number(match.hostValue || 0));
 
       gridContext = {
         max: 8,
         info() {
-          const value = itemValue(mySelectedItems());
+          const value = totalValue(selectedItems());
           const valid = value >= low - 0.001 && value <= high + 0.001;
           const target = $("#joinInfo");
 
@@ -2737,27 +3042,28 @@
             target.textContent =
               `Your bet ${fmt(value)} · Need ${fmt(low)} – ${fmt(high)}`;
 
-            target.style.color = valid ? "#18a877" : "var(--red)";
+            target.style.color = valid ? "var(--green)" : "var(--red)";
           }
         }
       };
 
       openModal(`
-        ${modalHeader("Join " + esc(username(match.host)) + "'s Match")}
+        ${modalHeader("Join " + esc(getUsername(match.host)) + "'s Match")}
 
         <p class="hint">
-          Your side: ${sideIcon(match.joinSide)}
-          ${esc(match.joinSide)}
+          Your side: ${sideIcon(match.joinSide)} ${esc(match.joinSide)}
         </p>
 
-        ${gridHTML()}
+        ${selectionGridHTML()}
 
-        <div class="row" style="margin-top:10px">
-          <b id="joinInfo" style="flex:1"></b>
+        <div class="modal-footer">
+          <span id="joinInfo" style="margin-right:auto;align-self:center"></span>
+          <button class="btn outline" data-action="select-all">Select All</button>
+          <button class="btn gray" data-action="select-none">Clear</button>
 
           <button
-            class="btn mint"
-            data-act="submit-join"
+            class="btn"
+            data-action="submit-join"
             data-id="${esc(match.id)}"
           >
             Join
@@ -2788,9 +3094,7 @@
       }
     }
 
-    /* =====================================================
-       HISTORY / PROFILE
-       ===================================================== */
+    /* HISTORY / PROFILE */
 
     async function showHistory() {
       if (!requireLogin()) return;
@@ -2805,41 +3109,41 @@
 
       try {
         const result = await api("/api/history/me");
-        const matches = list(result.history);
+        const matches = asArray(result.history);
 
         const content = matches.length
           ? matches.map(match => {
             const won = match.winnerId === ME.id;
+
             const opponent = match.host?.id === ME.id
               ? match.joiner
               : match.host;
 
             return `
-              <div
-                class="match"
-                style="grid-template-columns:1fr 1fr 1fr 80px"
-              >
-                <div class="pl">
+              <div class="match">
+                <div class="player">
                   ${avatar(opponent)}
-                  <span class="name">
-                    vs ${esc(username(opponent) || "—")}
-                  </span>
-                </div>
-
-                <div class="items">
-                  ${thumbs(list(match.hostItems), 4)}
-                </div>
-
-                <div class="mid">
-                  <div class="value">
-                    ${fmt(
-                      Number(match.hostValue || 0) +
-                      Number(match.oppValue || 0)
-                    )}
+                  <div class="player-name">
+                    vs ${esc(getUsername(opponent) || "—")}
                   </div>
                 </div>
 
-                <b class="${won ? "pos" : "neg"}">
+                <div class="items">
+                  ${thumbs(match.hostItems, 4)}
+                </div>
+
+                <div class="match-middle">
+                  <b>
+                    💎 ${fmt(
+                      Number(match.hostValue || 0) +
+                      Number(match.oppValue || 0)
+                    )}
+                  </b>
+                </div>
+
+                <div></div>
+
+                <b class="${won ? "positive" : "negative"}">
                   ${won ? "WON" : "LOST"}
                 </b>
               </div>
@@ -2855,8 +3159,8 @@
     }
 
     function showPage(page) {
-      $("#pageHome").style.display = page === "home" ? "grid" : "none";
-      $("#pageProfile").style.display =
+      $("#homePage").style.display = page === "home" ? "grid" : "none";
+      $("#profilePage").style.display =
         page === "profile" ? "grid" : "none";
 
       window.scrollTo(0, 0);
@@ -2877,22 +3181,20 @@
         );
 
         const stats = result.stats || {};
-        const rows = list(result.rows);
+        const rows = asArray(result.rows);
         const pages = Number(result.pages || 1);
 
         $("#profile").innerHTML = `
-          <div class="card">
-            <div class="bar" style="gap:16px">
+          <div class="card profile-card">
+            <div class="profile-head">
               ${avatar(ME, "lg")}
 
               <div style="flex:1">
-                <h2 style="margin:0;font-size:26px">
-                  ${esc(ME.username)}
-                </h2>
+                <h2>${esc(ME.username)}</h2>
                 <span class="pill">${esc(ME.rank || "Rookie")}</span>
               </div>
 
-              <button class="btn gray" data-act="home">
+              <button class="btn gray" data-action="home">
                 ← Back
               </button>
             </div>
@@ -2900,26 +3202,27 @@
             <div class="stats">
               <div class="stat">
                 <small>Total Bet</small>
-                <b>${fmt(stats.totalBet)}</b>
+                <b>💎 ${fmt(stats.totalBet)}</b>
               </div>
 
               <div class="stat">
                 <small>Won</small>
-                <b>${fmt(stats.totalWon)}</b>
+                <b>💎 ${fmt(stats.totalWon)}</b>
               </div>
 
               <div class="stat">
                 <small>Profit</small>
-                <b class="${Number(stats.profit || 0) >= 0 ? "pos" : "neg"}">
+                <b class="${Number(stats.profit || 0) >= 0 ? "positive" : "negative"}">
                   ${Number(stats.profit || 0) >= 0 ? "+" : ""}
                   ${fmt(stats.profit)}
                 </b>
               </div>
             </div>
 
-            <div class="bar">
-              <h2 style="font-size:18px">Transactions</h2>
-              <button class="btn gray sm" data-act="history">
+            <div class="section-head">
+              <h2>Transactions</h2>
+
+              <button class="btn gray sm" data-action="history">
                 Match History
               </button>
             </div>
@@ -2942,7 +3245,7 @@
                         <tr>
                           <td><b>${esc(row.type)}</b></td>
                           <td>${esc(row.id || "")}</td>
-                          <td class="${Number(row.amount) < 0 ? "neg" : "pos"}">
+                          <td class="${Number(row.amount) < 0 ? "negative" : "positive"}">
                             ${fmt(row.amount)}
                           </td>
                           <td>
@@ -2959,11 +3262,11 @@
               : '<div class="empty">No transactions yet</div>'
             }
 
-            <div class="pg">
+            <div class="pagination">
               ${Array.from({ length: pages }, (_, index) => `
                 <button
                   class="${index + 1 === Number(result.page) ? "on" : ""}"
-                  data-act="profile-page"
+                  data-action="profile-page"
                   data-page="${index + 1}"
                 >
                   ${index + 1}
@@ -2978,12 +3281,7 @@
       }
     }
 
-    /* =====================================================
-       ADMIN
-
-       Admin panel code is fetched from the backend after
-       server-side authorization.
-       ===================================================== */
+    /* ADMIN */
 
     async function openAdmin() {
       if (!requireLogin()) return;
@@ -3009,19 +3307,13 @@
           tags
         };
 
-        /*
-          The trusted backend returns the admin panel function.
-          Authorization is still enforced on every admin API call.
-        */
         new Function(script)();
       } catch (error) {
         fail(error);
       }
     }
 
-    /* =====================================================
-       CLICK ROUTER
-       ===================================================== */
+    /* CLICK ROUTER */
 
     const actions = {
       home() {
@@ -3065,8 +3357,8 @@
       side(element) {
         createSide = element.dataset.side;
 
-        document.querySelectorAll("#sides .sd").forEach(side => {
-          side.classList.toggle("on", side === element);
+        document.querySelectorAll("#sides .side-choice").forEach(choice => {
+          choice.classList.toggle("selected", choice === element);
         });
       },
 
@@ -3125,18 +3417,18 @@
     };
 
     document.addEventListener("click", event => {
-      const element = event.target.closest("[data-act]");
+      const element = event.target.closest("[data-action]");
 
-      if (!event.target.closest(".user")) {
+      if (!event.target.closest(".user-menu-wrap")) {
         $("#userMenu")?.classList.remove("open");
       }
 
       if (!element) return;
 
-      const action = actions[element.dataset.act];
+      const action = actions[element.dataset.action];
 
       if (action) {
-        if (element.dataset.act !== "user-menu") {
+        if (element.dataset.action !== "user-menu") {
           $("#userMenu")?.classList.remove("open");
         }
 
