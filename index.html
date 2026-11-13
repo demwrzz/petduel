@@ -1,579 +1,3158 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>AMP ROLL</title>
-<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-<style>
-:root{--blue:#2f9bff;--blue2:#1b7fe0;--sun:#ffc83d;--pink:#ff7eb6;--mint:#3fcf9f;--red:#ff5c6c;--ink:#23324d;--mut:#6b7a99;--line:#e0edfb;--card:#fff;--orange:#ff9f1c}
-*{box-sizing:border-box;margin:0;padding:0}
-html,body{min-height:100%}
-body{font-family:'Fredoka',system-ui,sans-serif;color:var(--ink);background:
-radial-gradient(600px 200px at 10% 0,#fff 0,transparent 70%),radial-gradient(500px 180px at 80% 8%,#fff 0,transparent 70%),
-linear-gradient(#bfe6ff,#eaf7ff 45%,#fff7e0) fixed;font-size:15px}
-button{font-family:inherit;cursor:pointer;border:0}
-input,select{font-family:inherit;font-size:14px;color:var(--ink)}
-.app{display:flex;flex-direction:column;min-height:100vh}
-header{display:flex;align-items:center;gap:18px;padding:10px 22px;background:#fff;position:sticky;top:0;z-index:50;box-shadow:0 2px 14px rgba(47,155,255,.18)}
-.logo{font-weight:700;font-size:26px;letter-spacing:1px;cursor:pointer;background:linear-gradient(90deg,var(--blue),var(--pink));-webkit-background-clip:text;background-clip:text;color:transparent}
-.logo small{font-size:20px}
-nav{display:flex;gap:6px;flex:1}
-nav a{padding:8px 16px;border-radius:12px;font-weight:600;color:var(--mut);cursor:pointer}
-nav a.on{background:#e6f3ff;color:var(--blue2)}
-.right{display:flex;align-items:center;gap:12px}
-.wallet{display:flex;align-items:center;background:#f2f9ff;border:2px solid var(--line);border-radius:14px;overflow:hidden}
-.wallet .w{display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer}
-.wallet small{display:block;font-size:11px;color:var(--mut);line-height:1}
-.wallet b{font-size:16px;line-height:1.1}
-.wallet .plus{background:var(--mint);color:#fff;font-size:22px;font-weight:700;width:40px;align-self:stretch}
-.btn{padding:9px 18px;border-radius:12px;font-weight:600;font-size:14px;color:#fff;background:var(--blue);box-shadow:0 3px 0 var(--blue2);transition:.1s}
-.btn:hover{filter:brightness(1.07)}.btn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--blue2)}
-.btn.sun{background:var(--sun);color:#6a4a00;box-shadow:0 3px 0 #e0a800}
-.btn.mint{background:var(--mint);box-shadow:0 3px 0 #2aa57c}
-.btn.red{background:var(--red);box-shadow:0 3px 0 #d63d4e}
-.btn.gray{background:#e7eefa;color:var(--ink);box-shadow:0 3px 0 #cbd7ec}
-.btn.sm{padding:6px 12px;font-size:13px}
-.btn[disabled]{opacity:.5;pointer-events:none}
-.user{position:relative}
-.user>button{display:flex;align-items:center;gap:8px;background:#f2f9ff;border:2px solid var(--line);border-radius:14px;padding:5px 12px 5px 6px;font-weight:600;color:var(--ink)}
-.menu{position:absolute;right:0;top:calc(100% + 8px);background:#fff;border-radius:14px;box-shadow:0 10px 30px rgba(35,50,77,.2);min-width:190px;padding:6px;display:none;z-index:60}
-.menu.open{display:block}
-.menu a{display:block;padding:10px 12px;border-radius:10px;font-weight:500;cursor:pointer}
-.menu a:hover{background:#eaf5ff}
-.av{width:34px;height:34px;border-radius:50%;object-fit:cover;background:linear-gradient(135deg,var(--blue),var(--pink));color:#fff;display:inline-grid;place-items:center;font-weight:700;flex:none}
-.av.lg{width:64px;height:64px;font-size:26px}.av.sm{width:26px;height:26px;font-size:12px}
-.ring{box-shadow:0 0 0 3px #fff,0 0 0 6px var(--orange);}
-.main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;padding:16px 22px;max-width:1500px;margin:0 auto;width:100%;flex:1;align-items:start}
-.card{background:var(--card);border-radius:20px;box-shadow:0 6px 22px rgba(47,155,255,.14);padding:16px}
-.bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
-.bar h2{font-size:20px;flex:1}
-.pill{font-size:12px;font-weight:600;padding:3px 10px;border-radius:99px;background:#e6f3ff;color:var(--blue2)}
-.side{position:sticky;top:76px;height:calc(100vh - 92px);display:flex;flex-direction:column;gap:12px;min-height:0}
-.chat{flex:1;min-height:0;display:flex;flex-direction:column;padding:12px}
-.msgs{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding-right:4px}
-.msg{display:flex;gap:8px;align-items:flex-start;font-size:13.5px;word-break:break-word}
-.msg b{font-weight:600}
-.rk{font-size:10px;padding:1px 6px;border-radius:6px;color:#fff;margin-right:4px;font-weight:600;background:#9fb3d1}
-.rk.Roller{background:var(--blue)}.rk.Highroller{background:var(--pink)}.rk.Whale{background:var(--orange)}.rk.ADMIN{background:var(--red)}
-.cin{display:flex;gap:8px;margin-top:8px}
-.cin input{flex:1;border:2px solid var(--line);border-radius:12px;padding:9px 12px;outline:0}
-.cin input:focus{border-color:var(--blue)}
-.gw{display:flex;gap:10px;align-items:center;padding:10px;border-radius:16px;background:linear-gradient(135deg,#fff3c9,#ffe4f1);border:2px solid #ffe08a}
-.gw .im{display:flex;gap:2px}
-.gw img{width:42px;height:42px;object-fit:contain;background:#fff;border-radius:10px}
-.gw .inf{flex:1;font-size:12.5px;line-height:1.3}
-.match{display:grid;grid-template-columns:150px minmax(0,1fr) 110px 150px 150px;gap:10px;align-items:center;padding:12px;border-radius:18px;border:2px solid var(--line);background:#fbfdff;margin-bottom:10px}
-.match.fin{border-color:#ffd9a0;background:#fffaf0}
-.pl{display:flex;align-items:center;gap:8px;min-width:0}
-.pl span.n{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.side-ico{font-size:18px}
-.items{display:flex;gap:4px;flex-wrap:wrap}
-.it{position:relative;width:46px;height:46px;border-radius:12px;background:#fff;border:2px solid var(--line);display:grid;place-items:center}
-.it img{width:100%;height:100%;object-fit:contain;border-radius:10px}
-.it .q{position:absolute;right:-4px;bottom:-4px;background:var(--blue);color:#fff;font-size:10px;border-radius:8px;padding:0 5px;font-weight:600}
-.mid{text-align:center}
-.mid .v{font-weight:700;font-size:16px;color:var(--blue2)}
-.mid small{color:var(--mut);font-size:11px}
-.acts{display:flex;gap:6px;justify-content:flex-end}
-.coin3d{perspective:500px;display:inline-block}
-.coin{width:52px;height:52px;position:relative;transform-style:preserve-3d}
-.coin .f{position:absolute;inset:0;border-radius:50%;display:grid;place-items:center;backface-visibility:hidden;-webkit-backface-visibility:hidden;font-size:26px;border:3px solid #e0a800;background:radial-gradient(circle at 35% 30%,#fff1a8,#ffc83d)}
-.coin .b{transform:rotateY(180deg)}
-.coin.spin{animation:cf .55s linear infinite}
-.coin.cat{transform:rotateY(180deg)}
-.coin.big{width:96px;height:96px}.coin.big .f{font-size:46px}
-@keyframes cf{to{transform:rotateY(360deg)}}
-.cd{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:20px;color:var(--orange);background:conic-gradient(var(--orange) 0 70%,#ffe5bd 0);position:relative;margin:auto;animation:pulse 1s infinite}
-.cd::before{content:'';position:absolute;inset:5px;background:#fff;border-radius:50%}
-.cd i{position:relative;font-style:normal}
-@keyframes pulse{50%{transform:scale(1.08)}}
-.empty{text-align:center;color:var(--mut);padding:40px 10px}
-.ov{position:fixed;inset:0;background:rgba(35,50,77,.45);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;z-index:100;padding:16px}
-.ov.open{display:flex}
-.modal{background:#fff;border-radius:24px;width:min(560px,100%);max-height:92vh;overflow:auto;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.3);animation:pop .18s}
-.modal.wide{width:min(820px,100%)}
-@keyframes pop{from{transform:scale(.92);opacity:0}}
-.mh{display:flex;align-items:center;margin-bottom:14px}
-.mh h3{flex:1;font-size:21px}
-.x{background:#eef4fc;width:34px;height:34px;border-radius:50%;font-size:18px;color:var(--mut)}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:10px;max-height:340px;overflow:auto;padding:4px}
-.gi{position:relative;border:2px solid var(--line);border-radius:16px;padding:8px;text-align:center;cursor:pointer;background:#fbfdff;transition:.1s;user-select:none}
-.gi:hover{border-color:var(--blue)}
-.gi.sel{border-color:var(--mint);background:#effcf7}
-.gi img{width:64px;height:64px;object-fit:contain}
-.gi .nm{font-size:12px;font-weight:600;line-height:1.1;height:27px;overflow:hidden}
-.gi .vl{font-size:12px;color:var(--blue2);font-weight:600}
-.gi .cnt{position:absolute;top:4px;right:4px;background:var(--mint);color:#fff;border-radius:9px;font-size:11px;font-weight:700;padding:1px 7px}
-.tg{display:flex;gap:3px;justify-content:center;margin-top:2px}
-.tg i{font-style:normal;font-size:10px;font-weight:700;color:#fff;border-radius:5px;padding:0 5px}
-.tg .M{background:#b05cff}.tg .N{background:#22d3ee;color:#033}.tg .F{background:var(--pink)}.tg .R{background:var(--orange)}
-.row{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
-.row input,.row select,.in{border:2px solid var(--line);border-radius:12px;padding:9px 12px;outline:0;background:#fff}
-.row input[type=text],.in{flex:1;min-width:100px}
-.in:focus,.row input:focus{border-color:var(--blue)}
-.sides{display:flex;gap:10px}
-.sd{flex:1;border:3px solid var(--line);border-radius:16px;padding:10px;text-align:center;background:#fff;font-weight:600;font-size:15px}
-.sd.on{border-color:var(--blue);background:#e9f5ff}
-.sd span{font-size:30px;display:block}
-.game{display:flex;gap:14px;flex-wrap:wrap}
-.gc{width:200px;border-radius:20px;overflow:hidden;border:3px solid var(--line);cursor:pointer;transition:.12s;background:#fff}
-.gc:hover{transform:translateY(-4px);border-color:var(--blue)}
-.gc .pic{height:130px;display:grid;place-items:center;font-size:62px;background:linear-gradient(135deg,#8fd3ff,#ffe9a8)}
-.gc b{display:block;text-align:center;padding:10px}
-.bot{display:flex;align-items:center;gap:12px;padding:12px;border:2px solid var(--line);border-radius:16px}
-.bot .inf{flex:1}.bot .inf small{color:var(--mut)}
-.on-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--mint);margin-right:5px}
-.vs{display:grid;grid-template-columns:1fr 120px 1fr;gap:10px;align-items:start}
-.vs .col{text-align:center;padding:10px;border-radius:18px;background:#f6fbff;border:2px solid var(--line);min-height:150px}
-.vs .col.win{border-color:var(--orange);background:#fff8ea}
-.vs .col .items{justify-content:center;margin-top:8px}
-.vc{text-align:center;padding-top:20px}
-.fair{margin-top:14px;padding:10px;border-radius:14px;background:#f3f8ff;font-size:12px;word-break:break-all;color:var(--mut)}
-.fair code{color:var(--ink)}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:14px 0}
-.stat{background:#f2f9ff;border-radius:16px;padding:14px;text-align:center}
-.stat small{color:var(--mut)}.stat b{display:block;font-size:22px}
-.pos{color:#18a877}.neg{color:var(--red)}
-table{width:100%;border-collapse:collapse;font-size:13.5px}
-th{color:var(--mut);text-align:left;font-weight:500;padding:8px;border-bottom:2px solid var(--line)}
-td{padding:9px 8px;border-bottom:1px solid var(--line)}
-.pg{display:flex;gap:6px;justify-content:center;margin-top:12px}
-.pg button{min-width:34px;height:34px;border-radius:10px;background:#eef4fc;font-weight:600;color:var(--ink)}
-.pg button.on{background:var(--blue);color:#fff}
-.toasts{position:fixed;top:78px;right:18px;z-index:300;display:flex;flex-direction:column;gap:8px}
-.toast{background:#23324d;color:#fff;padding:11px 16px;border-radius:12px;font-weight:500;box-shadow:0 6px 20px rgba(0,0,0,.25);animation:pop .15s;max-width:320px}
-.toast.err{background:var(--red)}.toast.ok{background:#18a877}
-#boot{position:fixed;inset:0;background:linear-gradient(#bfe6ff,#fff7e0);z-index:500;display:flex;flex-direction:column;gap:14px;align-items:center;justify-content:center;font-weight:600;font-size:18px}
-.spin2{width:46px;height:46px;border:5px solid #fff;border-top-color:var(--blue);border-radius:50%;animation:sp 1s linear infinite}
-@keyframes sp{to{transform:rotate(360deg)}}
-.code{font-size:20px;font-weight:700;background:#fff8e0;border:2px dashed var(--sun);border-radius:14px;padding:14px;text-align:center;margin:12px 0;user-select:all}
-.hint{color:var(--mut);font-size:13px;margin:6px 0}
-canvas#cf{position:fixed;inset:0;pointer-events:none;z-index:400}
-.seg{display:flex;background:#eef4fc;border-radius:12px;padding:4px;margin-bottom:12px}
-.seg button{flex:1;padding:8px;border-radius:9px;background:transparent;font-weight:600;color:var(--mut)}
-.seg button.on{background:#fff;color:var(--blue2);box-shadow:0 2px 6px rgba(0,0,0,.1)}
-@media(max-width:1000px){.main{grid-template-columns:1fr}.side{position:static;height:auto}.chat{height:420px;flex:none}
-.match{grid-template-columns:1fr 1fr}.match .items,.match .mid,.match .acts{grid-column:1/-1}.acts{justify-content:flex-start}
-.vs{grid-template-columns:1fr}.stats{grid-template-columns:1fr}nav{display:none}}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AMP ROLL</title>
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  >
+
+  <!-- Socket.IO istemcisi aynı Render servisinden gelir. -->
+  <script src="/socket.io/socket.io.js"></script>
+
+  <style>
+    :root {
+      --blue: #2f9bff;
+      --blue-dark: #1b7fe0;
+      --yellow: #ffc83d;
+      --pink: #ff7eb6;
+      --mint: #3fcf9f;
+      --red: #ff5c6c;
+      --ink: #23324d;
+      --muted: #6b7a99;
+      --line: #e0edfb;
+      --orange: #ff9f1c;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      min-height: 100%;
+      margin: 0;
+    }
+
+    body {
+      font-family: "Fredoka", system-ui, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(600px 200px at 10% 0, #fff 0, transparent 70%),
+        radial-gradient(500px 180px at 80% 8%, #fff 0, transparent 70%),
+        linear-gradient(#bfe6ff, #eaf7ff 45%, #fff7e0) fixed;
+      font-size: 15px;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    button {
+      border: 0;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+    }
+
+    input,
+    select {
+      color: var(--ink);
+    }
+
+    .app {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      padding: 10px 22px;
+      background: #fff;
+      box-shadow: 0 2px 14px rgba(47, 155, 255, .18);
+    }
+
+    .logo {
+      flex: none;
+      cursor: pointer;
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      background: linear-gradient(90deg, var(--blue), var(--pink));
+      color: transparent;
+      background-clip: text;
+      -webkit-background-clip: text;
+    }
+
+    nav {
+      display: flex;
+      flex: 1;
+      gap: 6px;
+    }
+
+    nav a {
+      cursor: pointer;
+      padding: 8px 16px;
+      border-radius: 12px;
+      color: var(--blue-dark);
+      background: #e6f3ff;
+      font-weight: 600;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .wallet {
+      display: flex;
+      align-items: stretch;
+      overflow: hidden;
+      border: 2px solid var(--line);
+      border-radius: 14px;
+      background: #f2f9ff;
+    }
+
+    .wallet-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      cursor: pointer;
+    }
+
+    .wallet-info small {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1;
+    }
+
+    .wallet-info b {
+      font-size: 16px;
+    }
+
+    .wallet-plus {
+      width: 40px;
+      color: #fff;
+      background: var(--mint);
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    .btn {
+      padding: 9px 18px;
+      border-radius: 12px;
+      background: var(--blue);
+      color: #fff;
+      box-shadow: 0 3px 0 var(--blue-dark);
+      font-size: 14px;
+      font-weight: 600;
+      transition: transform .1s, filter .1s;
+    }
+
+    .btn:hover:not(:disabled) {
+      filter: brightness(1.06);
+    }
+
+    .btn:active:not(:disabled) {
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 var(--blue-dark);
+    }
+
+    .btn.sun {
+      color: #6a4a00;
+      background: var(--yellow);
+      box-shadow: 0 3px 0 #e0a800;
+    }
+
+    .btn.mint {
+      background: var(--mint);
+      box-shadow: 0 3px 0 #2aa57c;
+    }
+
+    .btn.red {
+      background: var(--red);
+      box-shadow: 0 3px 0 #d63d4e;
+    }
+
+    .btn.gray {
+      color: var(--ink);
+      background: #e7eefa;
+      box-shadow: 0 3px 0 #cbd7ec;
+    }
+
+    .btn.sm {
+      padding: 6px 12px;
+      font-size: 13px;
+    }
+
+    .user {
+      position: relative;
+    }
+
+    .user > button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 12px 5px 6px;
+      border: 2px solid var(--line);
+      border-radius: 14px;
+      color: var(--ink);
+      background: #f2f9ff;
+      font-weight: 600;
+    }
+
+    .menu {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      z-index: 60;
+      display: none;
+      min-width: 190px;
+      padding: 6px;
+      border-radius: 14px;
+      background: #fff;
+      box-shadow: 0 10px 30px rgba(35, 50, 77, .2);
+    }
+
+    .menu.open {
+      display: block;
+    }
+
+    .menu a {
+      display: block;
+      padding: 10px 12px;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+
+    .menu a:hover {
+      background: #eaf5ff;
+    }
+
+    .av {
+      display: inline-grid;
+      flex: none;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      object-fit: cover;
+      color: #fff;
+      background: linear-gradient(135deg, var(--blue), var(--pink));
+      font-weight: 700;
+    }
+
+    .av.lg {
+      width: 64px;
+      height: 64px;
+      font-size: 26px;
+    }
+
+    .av.sm {
+      width: 26px;
+      height: 26px;
+      font-size: 12px;
+    }
+
+    .ring {
+      box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--orange);
+    }
+
+    .main {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 340px;
+      align-items: start;
+      gap: 16px;
+      width: 100%;
+      max-width: 1500px;
+      margin: 0 auto;
+      padding: 16px 22px;
+      flex: 1;
+    }
+
+    .card {
+      padding: 16px;
+      border-radius: 20px;
+      background: #fff;
+      box-shadow: 0 6px 22px rgba(47, 155, 255, .14);
+    }
+
+    .bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .bar h2 {
+      flex: 1;
+      margin: 0;
+      font-size: 20px;
+    }
+
+    .pill {
+      padding: 3px 10px;
+      border-radius: 99px;
+      color: var(--blue-dark);
+      background: #e6f3ff;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .side {
+      position: sticky;
+      top: 76px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      height: calc(100vh - 92px);
+      min-height: 0;
+    }
+
+    .chat {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      min-height: 0;
+      padding: 12px;
+    }
+
+    .msgs {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      gap: 8px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .msg {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 13.5px;
+      overflow-wrap: anywhere;
+    }
+
+    .rk {
+      margin-right: 4px;
+      padding: 1px 6px;
+      border-radius: 6px;
+      color: #fff;
+      background: #9fb3d1;
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    .rk.Roller { background: var(--blue); }
+    .rk.Highroller { background: var(--pink); }
+    .rk.Whale { background: var(--orange); }
+    .rk.ADMIN { background: var(--red); }
+
+    .cin {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .cin input,
+    .in,
+    .row input,
+    .row select {
+      min-width: 0;
+      padding: 9px 12px;
+      border: 2px solid var(--line);
+      border-radius: 12px;
+      outline: 0;
+      background: #fff;
+    }
+
+    .cin input {
+      flex: 1;
+    }
+
+    .cin input:focus,
+    .in:focus,
+    .row input:focus {
+      border-color: var(--blue);
+    }
+
+    .gw-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 260px;
+      overflow-y: auto;
+    }
+
+    .gw {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      border: 2px solid #ffe08a;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #fff3c9, #ffe4f1);
+    }
+
+    .gw-images {
+      display: flex;
+      gap: 2px;
+    }
+
+    .gw img {
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
+      object-fit: contain;
+      background: #fff;
+    }
+
+    .gw-info {
+      flex: 1;
+      font-size: 12.5px;
+      line-height: 1.3;
+    }
+
+    .match {
+      display: grid;
+      grid-template-columns: 150px minmax(0, 1fr) 110px 150px 150px;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      padding: 12px;
+      border: 2px solid var(--line);
+      border-radius: 18px;
+      background: #fbfdff;
+    }
+
+    .match.fin {
+      border-color: #ffd9a0;
+      background: #fffaf0;
+    }
+
+    .pl {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .pl .name {
+      overflow: hidden;
+      font-weight: 600;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .it {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: 46px;
+      height: 46px;
+      border: 2px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+    }
+
+    .it img {
+      width: 100%;
+      height: 100%;
+      border-radius: 10px;
+      object-fit: contain;
+    }
+
+    .mid {
+      text-align: center;
+    }
+
+    .mid .value {
+      color: var(--blue-dark);
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .mid small {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .acts {
+      display: flex;
+      justify-content: flex-end;
+      gap: 6px;
+    }
+
+    .coin3d {
+      display: inline-block;
+      perspective: 500px;
+    }
+
+    .coin {
+      position: relative;
+      width: 52px;
+      height: 52px;
+      transform-style: preserve-3d;
+    }
+
+    .coin.big {
+      width: 96px;
+      height: 96px;
+    }
+
+    .coin .face {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      border: 3px solid #e0a800;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #fff1a8, #ffc83d);
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      font-size: 26px;
+    }
+
+    .coin.big .face {
+      font-size: 46px;
+    }
+
+    .coin .back {
+      transform: rotateY(180deg);
+    }
+
+    .coin.cat {
+      transform: rotateY(180deg);
+    }
+
+    .coin.spin {
+      animation: coinflip .55s linear infinite;
+    }
+
+    @keyframes coinflip {
+      to { transform: rotateY(360deg); }
+    }
+
+    .countdown {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: 46px;
+      height: 46px;
+      margin: auto;
+      border-radius: 50%;
+      color: var(--orange);
+      background: conic-gradient(var(--orange) 0 70%, #ffe5bd 0);
+      font-size: 20px;
+      font-weight: 700;
+      animation: pulse 1s infinite;
+    }
+
+    .countdown::before {
+      position: absolute;
+      inset: 5px;
+      border-radius: 50%;
+      background: #fff;
+      content: "";
+    }
+
+    .countdown span {
+      position: relative;
+    }
+
+    @keyframes pulse {
+      50% { transform: scale(1.08); }
+    }
+
+    .empty {
+      padding: 40px 10px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .ov {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: rgba(35, 50, 77, .45);
+      backdrop-filter: blur(3px);
+    }
+
+    .ov.open {
+      display: flex;
+    }
+
+    .modal {
+      width: min(560px, 100%);
+      max-height: 92vh;
+      overflow: auto;
+      padding: 20px;
+      border-radius: 24px;
+      background: #fff;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, .3);
+      animation: pop .18s;
+    }
+
+    .modal.wide {
+      width: min(820px, 100%);
+    }
+
+    @keyframes pop {
+      from {
+        opacity: 0;
+        transform: scale(.95);
+      }
+    }
+
+    .mh {
+      display: flex;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    .mh h3 {
+      flex: 1;
+      margin: 0;
+      font-size: 21px;
+    }
+
+    .x {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      color: var(--muted);
+      background: #eef4fc;
+      font-size: 18px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+      gap: 10px;
+      max-height: 340px;
+      overflow: auto;
+      padding: 4px;
+    }
+
+    .gi {
+      position: relative;
+      padding: 8px;
+      border: 2px solid var(--line);
+      border-radius: 16px;
+      background: #fbfdff;
+      text-align: center;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .gi:hover {
+      border-color: var(--blue);
+    }
+
+    .gi.sel {
+      border-color: var(--mint);
+      background: #effcf7;
+    }
+
+    .gi img {
+      width: 64px;
+      height: 64px;
+      object-fit: contain;
+    }
+
+    .gi .nm {
+      height: 28px;
+      overflow: hidden;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.1;
+    }
+
+    .gi .vl {
+      color: var(--blue-dark);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .gi .check {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      padding: 1px 6px;
+      border-radius: 8px;
+      color: #fff;
+      background: var(--mint);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .tg {
+      display: flex;
+      justify-content: center;
+      gap: 3px;
+      margin-top: 2px;
+    }
+
+    .tg i {
+      padding: 0 5px;
+      border-radius: 5px;
+      color: #fff;
+      font-size: 10px;
+      font-style: normal;
+      font-weight: 700;
+    }
+
+    .tg .M { background: #b05cff; }
+    .tg .N { background: #22c4d6; }
+    .tg .F { background: var(--pink); }
+    .tg .R { background: var(--orange); }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .row input[type="text"],
+    .row .in {
+      flex: 1;
+      min-width: 100px;
+    }
+
+    .sides {
+      display: flex;
+      gap: 10px;
+    }
+
+    .sd {
+      flex: 1;
+      padding: 10px;
+      border: 3px solid var(--line);
+      border-radius: 16px;
+      background: #fff;
+      text-align: center;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .sd.on {
+      border-color: var(--blue);
+      background: #e9f5ff;
+    }
+
+    .sd span {
+      display: block;
+      font-size: 30px;
+    }
+
+    .game-card {
+      width: 200px;
+      overflow: hidden;
+      border: 3px solid var(--line);
+      border-radius: 20px;
+      background: #fff;
+      cursor: pointer;
+      transition: transform .12s;
+    }
+
+    .game-card:hover {
+      transform: translateY(-4px);
+      border-color: var(--blue);
+    }
+
+    .game-pic {
+      display: grid;
+      place-items: center;
+      height: 130px;
+      background: linear-gradient(135deg, #8fd3ff, #ffe9a8);
+      font-size: 62px;
+    }
+
+    .game-card b {
+      display: block;
+      padding: 10px;
+      text-align: center;
+    }
+
+    .bot {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      border: 2px solid var(--line);
+      border-radius: 16px;
+    }
+
+    .bot-info {
+      flex: 1;
+    }
+
+    .vs {
+      display: grid;
+      grid-template-columns: 1fr 120px 1fr;
+      align-items: start;
+      gap: 10px;
+    }
+
+    .vs .col {
+      min-height: 150px;
+      padding: 10px;
+      border: 2px solid var(--line);
+      border-radius: 18px;
+      background: #f6fbff;
+      text-align: center;
+    }
+
+    .vs .col.win {
+      border-color: var(--orange);
+      background: #fff8ea;
+    }
+
+    .vs .col .items {
+      justify-content: center;
+      margin-top: 8px;
+    }
+
+    .vc {
+      padding-top: 20px;
+      text-align: center;
+    }
+
+    .fair {
+      margin-top: 14px;
+      padding: 10px;
+      border-radius: 14px;
+      color: var(--muted);
+      background: #f3f8ff;
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    .fair code {
+      color: var(--ink);
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin: 14px 0;
+    }
+
+    .stat {
+      padding: 14px;
+      border-radius: 16px;
+      background: #f2f9ff;
+      text-align: center;
+    }
+
+    .stat small {
+      color: var(--muted);
+    }
+
+    .stat b {
+      display: block;
+      font-size: 22px;
+    }
+
+    .pos { color: #18a877; }
+    .neg { color: var(--red); }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+    }
+
+    th,
+    td {
+      padding: 9px 8px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .pg {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 12px;
+    }
+
+    .pg button {
+      min-width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      color: var(--ink);
+      background: #eef4fc;
+      font-weight: 600;
+    }
+
+    .pg button.on {
+      color: #fff;
+      background: var(--blue);
+    }
+
+    .toasts {
+      position: fixed;
+      top: 78px;
+      right: 18px;
+      z-index: 300;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .toast {
+      max-width: 320px;
+      padding: 11px 16px;
+      border-radius: 12px;
+      color: #fff;
+      background: #23324d;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, .25);
+      animation: pop .15s;
+    }
+
+    .toast.err { background: var(--red); }
+    .toast.ok { background: #18a877; }
+
+    #boot {
+      position: fixed;
+      inset: 0;
+      z-index: 500;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      padding: 20px;
+      background: linear-gradient(#bfe6ff, #fff7e0);
+      text-align: center;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .loader {
+      width: 46px;
+      height: 46px;
+      border: 5px solid #fff;
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .code {
+      margin: 12px 0;
+      padding: 14px;
+      border: 2px dashed var(--yellow);
+      border-radius: 14px;
+      background: #fff8e0;
+      text-align: center;
+      font-size: 20px;
+      font-weight: 700;
+      user-select: all;
+    }
+
+    .hint {
+      margin: 6px 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .seg {
+      display: flex;
+      margin-bottom: 12px;
+      padding: 4px;
+      border-radius: 12px;
+      background: #eef4fc;
+    }
+
+    .seg button {
+      flex: 1;
+      padding: 8px;
+      border-radius: 9px;
+      color: var(--muted);
+      background: transparent;
+      font-weight: 600;
+    }
+
+    .seg button.on {
+      color: var(--blue-dark);
+      background: #fff;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, .1);
+    }
+
+    @media (max-width: 1000px) {
+      .main {
+        grid-template-columns: 1fr;
+      }
+
+      .side {
+        position: static;
+        height: auto;
+      }
+
+      .chat {
+        flex: none;
+        height: 420px;
+      }
+
+      .match {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .match .items,
+      .match .mid,
+      .match .acts {
+        grid-column: 1 / -1;
+      }
+
+      .acts {
+        justify-content: flex-start;
+      }
+
+      nav {
+        display: none;
+      }
+    }
+
+    @media (max-width: 600px) {
+      header {
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 10px 12px;
+      }
+
+      .logo {
+        font-size: 22px;
+      }
+
+      .header-right {
+        margin-left: auto;
+      }
+
+      .user-name {
+        max-width: 90px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .main {
+        padding: 12px;
+      }
+
+      .vs {
+        grid-template-columns: 1fr;
+      }
+
+      .stats {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
 </head>
+
 <body>
-<div id="boot"><div class="spin2"></div><div id="bootmsg">Connecting…</div></div>
-<canvas id="cf"></canvas>
-<div class="toasts" id="toasts"></div>
-<div class="ov" id="ov"><div class="modal" id="modal"></div></div>
+  <div id="boot">
+    <div class="loader"></div>
+    <div id="bootmsg">Connecting to AMP ROLL…</div>
+    <button class="btn gray" onclick="location.reload()">Retry</button>
+  </div>
 
-<div class="app">
-<header>
-  <div class="logo" data-act="home">AMP ROLL <small>🐾</small></div>
-  <nav><a class="on" data-act="home">🪙 Coinflip</a></nav>
-  <div class="right" id="hright"></div>
-</header>
+  <div class="toasts" id="toasts"></div>
 
-<div class="main" id="pgHome">
-  <section>
-    <div class="card">
-      <div class="bar">
-        <h2>🪙 Live Coinflips</h2>
-        <span class="pill" id="cnt">0 games</span>
-        <button class="btn sun" data-act="create">+ Create Match</button>
-        <button class="btn gray" data-act="history">History</button>
-      </div>
-      <div id="lobby"></div>
-    </div>
-  </section>
-  <aside class="side">
-    <div id="gws" style="display:flex;flex-direction:column;gap:8px"></div>
-    <div class="card chat">
-      <div class="bar" style="margin-bottom:8px"><h2 style="font-size:17px">💬 Live Chat</h2><span class="pill" id="online">live</span></div>
-      <div class="msgs" id="msgs"></div>
-      <div class="cin"><input id="cin" maxlength="200" placeholder="Say something…"><button class="btn sm" data-act="send">Send</button></div>
-    </div>
-  </aside>
-</div>
+  <div class="ov" id="ov">
+    <div class="modal" id="modal"></div>
+  </div>
 
-<div class="main" id="pgProfile" style="display:none;grid-template-columns:1fr"><div id="profile"></div></div>
-</div>
+  <div class="app">
+    <header>
+      <div class="logo" data-act="home">AMP ROLL 🐾</div>
 
-<script>
-/* ====== AYAR: Render URL'ni yaz (sonunda / olmasın) ====== */
-const API_BASE = "https://YOUR-APP.onrender.com";
-/* ========================================================= */
-const BOT_NAME="DedokAmp";
-const BOT_LINK="https://www.roblox.com/share?code=a0dd8a7bc68f034b99e078f454d4e903&type=Server";
+      <nav>
+        <a data-act="home">🪙 Coinflip</a>
+      </nav>
 
-const $=s=>document.querySelector(s);
-const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const fmt=n=>Number(n||0).toLocaleString('en-US',{maximumFractionDigits:2});
-const arr=x=>Array.isArray(x)?x:(x&&typeof x==='object'?Object.values(x):[]);
-const uname=u=>!u?'':(typeof u==='string'?u:(u.username||u.name||u.displayName||''));
-const tsn=x=>typeof x==='number'?x:(Date.parse(x)||0);
-let token=localStorage.getItem('amp_token')||'';
-let ME=null, ST={matches:[],giveaways:[],chat:[],catalog:[]}, booted=false, socket=null;
-let SEL={}, GC=null, VIEW=null, PH={}, CELEB={}, PAGE=1;
+      <div class="header-right" id="headerRight"></div>
+    </header>
 
-/* ---------- API ---------- */
-async function api(path,opt={}){
-  const h={'Content-Type':'application/json'};
-  if(token){h.Authorization='Bearer '+token;h['x-token']=token;}
-  const r=await fetch(API_BASE+path,{method:opt.method||(opt.body?'POST':'GET'),headers:h,body:opt.body?JSON.stringify(opt.body):undefined});
-  let d={};const t=await r.text();try{d=JSON.parse(t)}catch{d={_text:t}}
-  if(!r.ok)throw new Error(d.error||d.message||('HTTP '+r.status));
-  return d;
-}
-function toast(m,t=''){const e=document.createElement('div');e.className='toast '+t;e.textContent=m;$('#toasts').appendChild(e);setTimeout(()=>e.remove(),3800)}
-const fail=e=>toast(e.message||String(e),'err');
+    <main class="main" id="pageHome">
+      <section>
+        <div class="card">
+          <div class="bar">
+            <h2>🪙 Live Coinflips</h2>
+            <span class="pill" id="matchCount">0 games</span>
+            <button class="btn sun" data-act="create">+ Create Match</button>
+            <button class="btn gray" data-act="history">History</button>
+          </div>
 
-/* ---------- Item helpers ---------- */
-function catMap(){const m={};arr(ST.catalog).forEach(c=>{m[c.id||c._id]=c});return m}
-function resolve(e){const id=e.catalogId||e.id||e._id;const c=catMap()[id]||{};return {...c,...e,id,qty:e.qty||e.count||1}}
-function inv(){return ME?arr(ME.inventory).map(resolve).filter(i=>i.qty>0):[]}
-function itemImg(i){return i.image||i.img||i.imageUrl||i.url||''}
-function tags(i){let s='';if(i.age==='mega'||i.mega)s+='<i class="M">M</i>';if(i.age==='neon'||i.neon)s+='<i class="N">N</i>';if(i.fly)s+='<i class="F">F</i>';if(i.ride)s+='<i class="R">R</i>';return s?`<div class="tg">${s}</div>`:''}
-function thumb(i,max){return `<div class="it" title="${esc(i.name)} • ${fmt(i.value)}"><img src="${esc(itemImg(i))}" alt="" onerror="this.style.opacity=.2">${i.qty>1?`<span class="q">x${i.qty}</span>`:''}</div>`}
-function thumbs(list,max=6){return list.slice(0,max).map(thumb).join('')+(list.length>max?`<div class="it"><b>+${list.length-max}</b></div>`:'')}
-const sumV=l=>l.reduce((a,i)=>a+(Number(i.value)||0)*(i.qty||1),0);
-function av(u,cls='',ring=false){const n=uname(u)||'?';const url=u&&(u.avatar||u.avatarUrl||u.avatar_url||u.headshot);
-  return url?`<img class="av ${cls} ${ring?'ring':''}" src="${esc(url)}" alt="">`:`<span class="av ${cls} ${ring?'ring':''}">${esc(n[0]||'?').toUpperCase()}</span>`}
-const sideIco=s=>s==='cat'?'🐱':'🐶';
+          <div id="lobby"></div>
+        </div>
+      </section>
 
-/* ---------- Match normalize ---------- */
-function nm(m){
-  const s=String(m.status||m.state||'waiting').toLowerCase();
-  const status=/cancel/.test(s)?'cancelled':/count|start/.test(s)?'countdown':/flip/.test(s)?'flipping':/fin|done|complet|end/.test(s)?'finished':'waiting';
-  const host=m.host||m.creator||{};const joiner=m.joiner||m.opponent||m.guest||null;
-  const hostItems=arr(m.hostItems||m.items||m.creatorItems).map(resolve);
-  const joinItems=arr(m.joinerItems||m.joinItems||m.opponentItems||m.guestItems).map(resolve);
-  const hostSide=m.hostSide||m.side||'dog';
-  const o={raw:m,id:m.id||m._id,status,host,joiner,hostItems,joinItems,hostSide,joinSide:hostSide==='dog'?'cat':'dog',
-    value:m.value||m.hostValue||sumV(hostItems),hash:m.hash||m.seedHash||m.commit,seed:m.seed||m.serverSeed,
-    result:m.result||m.winnerSide||m.coin,finishedAt:tsn(m.finishedAt||m.endedAt)};
-  let w=m.winner;let wn=uname(w);
-  if(!wn&&(w==='host'||w==='joiner'))wn=uname(w==='host'?host:joiner);
-  if(!wn&&o.result)wn=uname(o.result===hostSide?host:joiner);
-  o.winnerName=wn;o.hostWon=!!wn&&wn===uname(host);
-  o.joinValue=sumV(joinItems);
-  return o;
-}
-function range(v){const r=Number((ST.config&&ST.config.range)||ST.range||0.10);return [v*(1-r),v*(1+r)]}
-function phase(m,key,ms){const t=m.raw.countdownEnd||m.raw.startsAt;if(key==='countdown'&&t)return tsn(t);
-  const k=m.id+key;if(!PH[k])PH[k]=Date.now();return PH[k]+ms}
+      <aside class="side">
+        <div class="gw-list" id="giveaways"></div>
 
-/* ---------- Modal ---------- */
-function openModal(html,wide){const m=$('#modal');m.className='modal'+(wide?' wide':'');m.innerHTML=html;$('#ov').classList.add('open')}
-function closeModal(){$('#ov').classList.remove('open');GC=null;VIEW=null;SEL={}}
-$('#ov').addEventListener('mousedown',e=>{if(e.target.id==='ov')closeModal()});
-const mh=t=>`<div class="mh"><h3>${t}</h3><button class="x" data-act="close">✕</button></div>`;
+        <div class="card chat">
+          <div class="bar" style="margin-bottom:8px">
+            <h2 style="font-size:17px">💬 Live Chat</h2>
+            <span class="pill" id="online">Connecting</span>
+          </div>
 
-/* ---------- Header ---------- */
-function renderHeader(){
-  const h=$('#hright');
-  if(!ME){h.innerHTML=`<button class="btn" data-act="login">Login with Roblox</button>`;return}
-  const bal=sumV(inv());
-  h.innerHTML=`<div class="wallet"><div class="w" data-act="wallet"><span style="font-size:22px">🐶</span><div><small>Adopt Me</small><b>${fmt(bal)}</b></div></div><button class="plus" data-act="deposit">+</button></div>
-  <div class="user"><button data-act="umenu">${av(ME,'sm')}<span>${esc(ME.username||ME.name)}</span> ▾</button>
-  <div class="menu" id="umenu"><a data-act="profile">👤 Profile</a><a data-act="giveaway">🎁 Create Giveaway</a>${isAdmin()?'<a data-act="admin">🛠 Admin Panel</a>':''}<a data-act="logout">🚪 Logout</a></div></div>`;
-}
-const isAdmin=()=>!!(ME&&(ME.isAdmin||ME.admin||ME.role==='admin'));
+          <div class="msgs" id="messages"></div>
 
-/* ---------- Lobby ---------- */
-function renderLobby(){
-  const list=arr(ST.matches).map(nm).filter(m=>m.status!=='cancelled').sort((a,b)=>(a.status==='finished')-(b.status==='finished')||b.value-a.value);
-  $('#cnt').textContent=list.length+' games';
-  if(!list.length){$('#lobby').innerHTML='<div class="empty">🐾 No games right now.<br>Be the first and create one!</div>';return}
-  $('#lobby').innerHTML=list.map(m=>{
-    const mine=ME&&uname(m.host)===ME.username;
-    const [lo,hi]=range(m.value);
-    let mid;
-    if(m.status==='waiting')mid=`<div class="v">${fmt(m.value)}</div><small>${fmt(lo)} – ${fmt(hi)}</small>`;
-    else if(m.status==='countdown')mid=`<div class="cd"><i class="cdn" data-end="${phase(m,'countdown',3000)}">3</i></div>`;
-    else if(m.status==='flipping')mid=`<div class="coin3d"><div class="coin spin"><div class="f">🐶</div><div class="f b">🐱</div></div></div>`;
-    else mid=`<div class="coin3d"><div class="coin ${m.result&&(m.result==='cat')?'cat':(m.hostWon===(m.hostSide==='dog')?'':'cat')}"><div class="f">🐶</div><div class="f b">🐱</div></div></div><small>${fmt(m.value+m.joinValue)}</small>`;
-    const jn=m.joiner?`<div class="pl">${av(m.joiner,'',m.status==='finished'&&!m.hostWon)}<span class="n">${esc(uname(m.joiner))}</span><span class="side-ico">${sideIco(m.joinSide)}</span></div>`
-      :`<div class="pl" style="color:var(--mut)">Waiting…</div>`;
-    const act=m.status==='waiting'?(mine?`<button class="btn red sm" data-act="cancel" data-id="${esc(m.id)}">Cancel</button>`:`<button class="btn mint sm" data-act="join" data-id="${esc(m.id)}">Join</button>`):'';
-    return `<div class="match ${m.status==='finished'?'fin':''}">
-      <div class="pl">${av(m.host,'',m.status==='finished'&&m.hostWon)}<span class="n">${esc(uname(m.host))}</span><span class="side-ico">${sideIco(m.hostSide)}</span></div>
-      <div class="items">${thumbs(m.hostItems)}</div>
-      <div class="mid">${mid}</div>${jn}
-      <div class="acts">${act}<button class="btn sm" data-act="view" data-id="${esc(m.id)}">View</button></div></div>`}).join('');
-  list.forEach(m=>{if(m.status==='finished'&&ME&&m.winnerName===ME.username&&!CELEB[m.id]){CELEB[m.id]=1;confetti()}});
-}
+          <div class="cin">
+            <input
+              id="chatInput"
+              maxlength="160"
+              placeholder="Say something…"
+            >
+            <button class="btn sm" data-act="send">Send</button>
+          </div>
+        </div>
+      </aside>
+    </main>
 
-/* ---------- Giveaways ---------- */
-function renderGW(){
-  $('#gws').innerHTML=arr(ST.giveaways).map(g=>{
-    const items=arr(g.items).map(resolve);const end=tsn(g.endsAt||g.endTime);
-    const ent=Array.isArray(g.entrants)?g.entrants:null;const n=ent?ent.length:(g.entrants||g.entrantCount||0);
-    const entered=ME&&ent&&ent.some(e=>(e.username||e)===ME.username);
-    return `<div class="gw"><div class="im">${items.slice(0,2).map(i=>`<img src="${esc(itemImg(i))}" alt="">`).join('')}</div>
-      <div class="inf"><b>🎁 Giveaway</b> by ${esc(uname(g.host||g.creator))}<br>Value: <b>${fmt(g.value||sumV(items))}</b> • ${n} in • <span class="gt" data-end="${end}"></span></div>
-      <button class="btn sun sm" data-act="genter" data-id="${esc(g.id||g._id)}" ${entered?'disabled':''}>${entered?'Entered':'Enter'}</button></div>`}).join('');
-}
+    <main
+      class="main"
+      id="pageProfile"
+      style="display:none;grid-template-columns:1fr"
+    >
+      <div id="profile"></div>
+    </main>
+  </div>
 
-/* ---------- Chat ---------- */
-function chatHTML(m){const u=m.user||{};const n=m.username||uname(u)||m.name||'?';const rk=m.admin||u.admin?'ADMIN':(m.rank||u.rank||'');
-  return `<div class="msg">${av({username:n,avatar:m.avatar||u.avatar},'sm')}<div><span class="rk ${esc(rk)}" ${rk?'':'style="display:none"'}>${esc(rk)}</span><b>${esc(n)}</b> ${esc(m.text||m.message||'')}</div></div>`}
-function renderChat(){const b=$('#msgs');const near=b.scrollHeight-b.scrollTop-b.clientHeight<80;
-  b.innerHTML=arr(ST.chat).slice(-100).map(chatHTML).join('');if(near)b.scrollTop=b.scrollHeight}
-function sendChat(){const i=$('#cin');const t=i.value.trim();if(!t)return;if(!ME)return showLogin();
-  if(socket)socket.emit('chat:send',{text:t});i.value=''}
-$('#cin').addEventListener('keydown',e=>{if(e.key==='Enter')sendChat()});
+  <script>
+    "use strict";
 
-/* ---------- Data loop ---------- */
-let busy=false;
-async function refresh(){
-  if(busy)return;busy=true;
-  try{
-    const d=await api('/api/state');ST={...ST,...d};
-    if(d.bot)ST.bot=d.bot;
-    if(token){try{const m=await api('/api/me');ME=m.user||m.me||m;if(!ME.username)ME=null}catch(e){if(/401|auth|token|session|login/i.test(e.message)){token='';localStorage.removeItem('amp_token');ME=null}}}
-    else ME=null;
-    if(!booted){booted=true;$('#boot').remove();connectSocket()}
-    renderHeader();renderLobby();renderGW();renderChat();
-    if(VIEW)renderView();
-  }catch(e){if(!booted)$('#bootmsg').textContent='Server uyanıyor… (free plan ~30sn sürebilir)'}
-  busy=false;
-}
-let rt=null;const sched=()=>{clearTimeout(rt);rt=setTimeout(refresh,150)};
-setInterval(()=>{if(!document.hidden)refresh()},2000);
-setInterval(()=>{ // tickers
-  const now=Date.now();
-  document.querySelectorAll('.cdn').forEach(e=>{const n=Math.ceil((+e.dataset.end-now)/1000);e.textContent=n>0?n:'…'});
-  document.querySelectorAll('.gt').forEach(e=>{const s=Math.max(0,Math.ceil((+e.dataset.end-now)/1000));e.textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0')});
-},250);
+    /*
+      Site ve backend aynı Render servisinde çalıştığı için
+      adres otomatik olarak mevcut site adresinden alınır.
+    */
+    const API_BASE = window.location.origin;
 
-function connectSocket(){
-  if(socket){socket.disconnect()}
-  socket=io(API_BASE,{auth:{token},transports:['websocket','polling']});
-  socket.onAny((ev,...a)=>{
-    const p=a[0];
-    if(/err/i.test(ev)){const m=typeof p==='string'?p:(p&&(p.message||p.error));if(m)toast(m,'err');return}
-    if(/^chat/i.test(ev)){
-      if(Array.isArray(p)){ST.chat=p;renderChat()}
-      else if(p&&(p.text||p.message)){ST.chat=arr(ST.chat);if(!p.id||!ST.chat.some(c=>c.id===p.id)){ST.chat.push(p)}renderChat()}
-      else sched();return}
-    if(/online|count/i.test(ev)&&typeof p==='number'){$('#online').textContent=p+' online';return}
-    sched();
-  });
-}
+    const BOT_NAME = "DedokAmp";
 
-/* ---------- Login ---------- */
-function showLogin(){
-  openModal(`${mh('Login with Roblox')}
-  <p class="hint">Roblox kullanıcı adını yaz. Sana bir kod vereceğiz; onu Roblox profilindeki <b>About / Description</b> kısmına yapıştır, sonra Verify'a bas.</p>
-  <div class="row"><input class="in" id="lu" type="text" placeholder="Roblox username" maxlength="30"><button class="btn" id="lgo" data-act="lstart">Get code</button></div><div id="lstep"></div>`);
-  setTimeout(()=>$('#lu')&&$('#lu').focus(),50);
-}
-let LOGIN={};
-async function loginStart(){
-  const username=$('#lu').value.trim();if(!username)return;
-  try{const d=await api('/api/auth/start',{body:{username}});LOGIN={username,...d};
-    $('#lstep').innerHTML=`<div class="hint">Bu kodu Roblox profil açıklamana (About) yapıştır:</div><div class="code">${esc(d.code)}</div>
-    <div class="hint">Roblox → Profile → pencil/edit → About → kaydet. Sonra:</div><button class="btn mint" style="width:100%" data-act="lverify">Verify</button>`;
-  }catch(e){fail(e)}
-}
-async function loginVerify(){
-  try{const d=await api('/api/auth/verify',{body:{username:LOGIN.username,robloxId:LOGIN.robloxId,code:LOGIN.code}});
-    token=d.token;localStorage.setItem('amp_token',token);closeModal();toast('Welcome!','ok');
-    if(socket){socket.auth={token};socket.disconnect().connect()}refresh();
-  }catch(e){fail(e)}
-}
+    const BOT_LINK =
+      "https://www.roblox.com/share?code=a0dd8a7bc68f034b99e078f454d4e903&type=Server";
 
-/* ---------- Item grid (shared) ---------- */
-function gridUI(){return `<div class="row"><input type="text" id="gq" placeholder="Search items…"><select id="gs"><option value="vd">Value ↓</option><option value="va">Value ↑</option><option value="nm">Name</option></select><button class="btn gray sm" data-act="selall">Select All</button><button class="btn gray sm" data-act="selnone">Clear</button></div><div class="grid" id="grid"></div>`}
-function renderGrid(){
-  if(!GC)return;const q=($('#gq')&&$('#gq').value||'').toLowerCase();const s=$('#gs')?$('#gs').value:'vd';
-  let l=GC.list().filter(i=>(i.name||'').toLowerCase().includes(q));
-  l.sort((a,b)=>s==='va'?a.value-b.value:s==='nm'?(a.name||'').localeCompare(b.name||''):b.value-a.value);
-  $('#grid').innerHTML=l.length?l.map(i=>{const c=SEL[i.id]||0;return `<div class="gi ${c?'sel':''}" data-act="pick" data-id="${esc(i.id)}">${c?`<span class="cnt">${c}/${i.qty}</span>`:(i.qty>1?`<span class="cnt" style="background:var(--blue)">x${i.qty}</span>`:'')}<img src="${esc(itemImg(i))}" alt="" onerror="this.style.opacity=.2"><div class="nm">${esc(i.name)}</div><div class="vl">${fmt(i.value)}</div>${tags(i)}</div>`}).join(''):'<div class="empty" style="grid-column:1/-1">Nothing here</div>';
-  if(GC.info)GC.info();
-}
-function selList(){const m={};GC.list().forEach(i=>m[i.id]=i);return Object.keys(SEL).filter(k=>SEL[k]>0&&m[k]).map(k=>({...m[k],qty:SEL[k]}))}
-const selPayload=()=>Object.keys(SEL).filter(k=>SEL[k]>0).map(k=>({catalogId:k,qty:SEL[k]}));
-function bindGrid(){['gq','gs'].forEach(id=>{const e=$('#'+id);e&&e.addEventListener('input',renderGrid)});renderGrid()}
+    const $ = selector => document.querySelector(selector);
 
-/* ---------- Wallet ---------- */
-function showWallet(){
-  if(!ME)return showLogin();SEL={};
-  GC={list:inv,info(){const l=selList();$('#winfo').textContent=l.length?`${l.reduce((a,i)=>a+i.qty,0)} selected • ${fmt(sumV(l))}`:'Inventory: '+fmt(sumV(inv()))}};
-  openModal(`${mh('🎒 My Adopt Me Inventory')}${gridUI()}<div class="row" style="margin-top:10px"><b id="winfo" style="flex:1"></b><button class="btn gray" data-act="deposit">+ Deposit</button><button class="btn red" data-act="withdraw">Withdraw</button></div>`,true);
-  bindGrid();
-}
-async function withdraw(){
-  const p=selPayload();if(!p.length)return toast('Select items first','err');
-  if(!confirm('Withdraw selected items? The bot will send them to you.'))return;
-  try{await api('/api/withdraw',{body:{items:p}});toast('Withdraw queued! Bot will trade you.','ok');SEL={};refresh();renderGrid()}catch(e){fail(e)}
-}
+    const esc = value => String(value ?? "").replace(
+      /[&<>"']/g,
+      char => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      })[char]
+    );
 
-/* ---------- Deposit / Bots ---------- */
-function showDeposit(){
-  if(!ME)return showLogin();
-  openModal(`${mh('Deposit')}<p class="hint">Choose a game</p><div class="game"><div class="gc" data-act="bots"><div class="pic">🐶🐝</div><b>Adopt Me</b></div></div>`);
-}
-function showBots(){
-  const b=ST.bot||{};const link=b.joinLink||b.link||BOT_LINK;
-  openModal(`${mh('Adopt Me — Bots')}<p class="hint">Join the bot's server, then trade your pets/items to it. They appear in your inventory automatically.</p>
-  <div class="bot"><span class="av lg">🤖</span><div class="inf"><b style="font-size:18px">${esc(b.username||BOT_NAME)}</b><br><small><span class="on-dot"></span>Online</small></div><button class="btn mint" data-act="botjoin">Join</button></div>`);
-}
+    const fmt = value => Number(value || 0).toLocaleString(
+      "en-US",
+      { maximumFractionDigits: 2 }
+    );
 
-/* ---------- Create / Join ---------- */
-let CSIDE='dog';
-function showCreate(){
-  if(!ME)return showLogin();SEL={};CSIDE='dog';
-  GC={list:inv,info(){const l=selList();const v=sumV(l);const [lo,hi]=range(v);$('#cinf').textContent=l.length?`Value ${fmt(v)} • joiners: ${fmt(lo)} – ${fmt(hi)}`:'Select items to wager (max 8 slots)'}};
-  openModal(`${mh('Create Match')}
-  <div class="sides" id="sides"><div class="sd on" data-act="side" data-s="dog"><span>🐶</span>Dog</div><div class="sd" data-act="side" data-s="cat"><span>🐱</span>Cat</div></div>
-  <div style="height:12px"></div>${gridUI()}
-  <div class="row" style="margin-top:10px"><b id="cinf" style="flex:1"></b><button class="btn sun" data-act="docreate">Create</button></div>`,true);
-  bindGrid();
-}
-async function doCreate(){
-  const p=selPayload();if(!p.length)return toast('Select items','err');
-  try{await api('/api/match/create',{body:{items:p,side:CSIDE}});toast('Match created!','ok');closeModal();refresh()}catch(e){fail(e)}
-}
-function showJoin(id){
-  if(!ME)return showLogin();
-  const m=arr(ST.matches).map(nm).find(x=>x.id===id);if(!m)return;SEL={};const [lo,hi]=range(m.value);
-  GC={list:inv,info(){const v=sumV(selList());const ok=v>=lo-1e-9&&v<=hi+1e-9;const e=$('#jinf');e.textContent=`Your bet ${fmt(v)} • need ${fmt(lo)} – ${fmt(hi)}`;e.style.color=ok?'#18a877':'var(--red)'}};
-  openModal(`${mh('Join '+esc(uname(m.host))+"'s match")}
-  <div class="hint">You'll be on ${sideIco(m.joinSide)} ${m.joinSide}. Match value: <b>${fmt(m.value)}</b></div>${gridUI()}
-  <div class="row" style="margin-top:10px"><b id="jinf" style="flex:1"></b><button class="btn mint" data-act="dojoin" data-id="${esc(id)}">Join</button></div>`,true);
-  bindGrid();
-}
-async function doJoin(id){
-  const p=selPayload();if(!p.length)return toast('Select items','err');
-  try{await api('/api/match/join',{body:{id,items:p}});closeModal();refresh();setTimeout(()=>showView(id),300)}catch(e){fail(e)}
-}
-async function cancelMatch(id){
-  if(!confirm('Cancel this match and get your items back?'))return;
-  try{await api('/api/match/cancel',{body:{id}});toast('Match cancelled — items refunded','ok');if(VIEW)closeModal();refresh()}catch(e){fail(e)}
-}
+    const list = value => Array.isArray(value) ? value : [];
 
-/* ---------- View / VS ---------- */
-function showView(id){VIEW=id;openModal('',true);renderView()}
-function renderView(){
-  const m=arr(ST.matches).map(nm).find(x=>x.id===VIEW);
-  if(!m){$('#modal').innerHTML=mh('Match')+'<div class="empty">This match is gone.</div>';return}
-  const mine=ME&&uname(m.host)===ME.username;const fin=m.status==='finished';
-  let coin;
-  if(m.status==='flipping'||m.status==='countdown'&&false)coin='<div class="coin3d"><div class="coin big spin"><div class="f">🐶</div><div class="f b">🐱</div></div></div>';
-  else if(fin){const face=m.result?(m.result==='cat'?'cat':''):((m.hostWon===(m.hostSide==='dog'))?'':'cat');coin=`<div class="coin3d"><div class="coin big ${face}"><div class="f">🐶</div><div class="f b">🐱</div></div></div>`}
-  else if(m.status==='countdown')coin=`<div class="cd" style="width:80px;height:80px;font-size:34px"><i class="cdn" data-end="${phase(m,'countdown',3000)}">3</i></div>`;
-  else coin=`<div style="font-size:30px;font-weight:700;color:var(--mut)">VS</div>`;
-  const col=(u,items,side,win)=>u?`<div class="col ${win?'win':''}">${av(u,'lg',win)}<div><b>${esc(uname(u))}</b> ${sideIco(side)}</div><div class="hint">${fmt(sumV(items))}</div><div class="items">${thumbs(items,10)}</div></div>`
-    :`<div class="col"><div class="empty">Waiting for opponent…</div></div>`;
-  $('#modal').innerHTML=`${mh('Match • '+fmt(m.value+m.joinValue||m.value))}
-  <div class="vs">${col(m.host,m.hostItems,m.hostSide,fin&&m.hostWon)}<div class="vc">${coin}${fin?`<div class="hint"><b>${esc(m.winnerName)}</b> wins!</div>`:''}</div>${col(m.joiner,m.joinItems,m.joinSide,fin&&!m.hostWon)}</div>
-  <div class="row" style="margin-top:14px;justify-content:flex-end">${m.status==='waiting'?(mine?`<button class="btn red" data-act="cancel" data-id="${esc(m.id)}">Cancel Match</button>`:`<button class="btn mint" data-act="join" data-id="${esc(m.id)}">Join</button>`):''}</div>
-  <div class="fair"><b>Provably fair</b><br>Hash: <code>${esc(m.hash||'—')}</code><br>${fin&&m.seed?`Seed: <code>${esc(m.seed)}</code><br><button class="btn gray sm" style="margin-top:6px" data-act="verify" data-id="${esc(m.id)}">Verify</button> <span id="vres"></span>`:'Seed is revealed when the match ends.'}</div>`;
-}
-async function hex(buf){return [...new Uint8Array(buf)].map(x=>x.toString(16).padStart(2,'0')).join('')}
-async function verify(id){
-  const m=arr(ST.matches).map(nm).find(x=>x.id===id);if(!m)return;const te=new TextEncoder();
-  try{const h=await hex(await crypto.subtle.digest('SHA-256',te.encode(m.seed)));
-    const k=await crypto.subtle.importKey('raw',te.encode(m.seed),{name:'HMAC',hash:'SHA-256'},false,['sign']);
-    const s=await hex(await crypto.subtle.sign('HMAC',k,te.encode(String(id))));
-    const r=parseInt(s.slice(0,8),16)/4294967296;const side=r<0.5?'dog':'cat';
-    $('#vres').innerHTML=h===m.hash?`<b class="pos">✔ Hash matches. Result: ${sideIco(side)} ${side} (${r.toFixed(6)})</b>`:`<b class="neg">✘ Hash mismatch!</b>`;
-  }catch(e){fail(e)}
-}
+    const username = user => {
+      if (!user) return "";
+      if (typeof user === "string") return user;
+      return user.username || user.name || "";
+    };
 
-/* ---------- History ---------- */
-async function showHistory(){
-  if(!ME)return showLogin();openModal(mh('My History')+'<div class="empty">Loading…</div>',true);
-  try{const d=await api('/api/history/me');const l=arr(d.history||d.matches||d).map(nm);
-    $('#modal').innerHTML=mh('My History')+(l.length?l.map(m=>{const won=m.winnerName===ME.username;const opp=uname(m.host)===ME.username?m.joiner:m.host;
-      return `<div class="match" style="grid-template-columns:1fr 1fr 1fr 90px"><div class="pl">${av(opp)}<span class="n">vs ${esc(uname(opp)||'—')}</span></div><div class="items">${thumbs(m.hostItems,4)}</div><div class="mid"><div class="v">${fmt(m.value+m.joinValue)}</div></div><b class="${won?'pos':'neg'}">${m.status==='cancelled'?'Cancelled':won?'WON':'LOST'}</b></div>`}).join(''):'<div class="empty">No matches yet</div>');
-  }catch(e){fail(e)}
-}
+    const sideIcon = side => side === "cat" ? "🐱" : "🐶";
 
-/* ---------- Giveaway ---------- */
-let GMODE='easy';
-function showGiveaway(){
-  if(!ME)return showLogin();SEL={};GMODE='easy';
-  GC={list:inv,info(){const l=selList();$('#ginf').textContent=l.length?`${l.reduce((a,i)=>a+i.qty,0)} items • ${fmt(sumV(l))}`:'Select up to 5 items'}};
-  openModal(`${mh('🎁 Create Giveaway')}
-  <div class="seg"><button class="on" data-act="gmode" data-m="easy">Easy</button><button data-act="gmode" data-m="adv">Advanced</button></div>
-  <div id="gopts"></div>${gridUI()}
-  <div class="row" style="margin-top:10px"><b id="ginf" style="flex:1"></b><button class="btn sun" data-act="gcreate">Create Giveaway</button></div>`,true);
-  gOpts();bindGrid();
-}
-function gOpts(){
-  $('#gopts').innerHTML=GMODE==='easy'?`<div class="row"><label>Duration</label><select id="gdur"><option value="30">30 seconds</option><option value="120">2 minutes</option><option value="300">5 minutes</option></select></div>`
-   :`<div class="row"><label>Duration (min)</label><input type="number" id="gdurm" min="1" max="60" value="10" style="width:90px"><label>Min total bet</label><input type="number" id="gmin" min="0" value="0" style="width:120px"></div>`;
-}
-async function gCreate(){
-  const p=selPayload();if(!p.length)return toast('Select items','err');
-  if(p.reduce((a,i)=>a+1,0)>5)return toast('Max 5 items','err');
-  const body={items:p,mode:GMODE==='easy'?'easy':'advanced'};
-  if(GMODE==='easy')body.duration=+$('#gdur').value;else{body.duration=Math.min(60,Math.max(1,+$('#gdurm').value||10))*60;body.minBet=+$('#gmin').value||0}
-  try{await api('/api/giveaway/create',{body});toast('Giveaway started!','ok');closeModal();refresh()}catch(e){fail(e)}
-}
-async function gEnter(id){try{await api('/api/giveaway/enter',{body:{id}});toast('Entered!','ok');refresh()}catch(e){fail(e)}}
+    let token = localStorage.getItem("amp_token") || "";
+    let ME = null;
 
-/* ---------- Profile page ---------- */
-function show(p){$('#pgHome').style.display=p==='home'?'grid':'none';$('#pgProfile').style.display=p==='profile'?'grid':'none';window.scrollTo(0,0)}
-async function showProfile(p=1){
-  if(!ME)return showLogin();PAGE=p;show('profile');
-  $('#profile').innerHTML='<div class="card empty">Loading…</div>';
-  try{
-    const d=await api('/api/profile?page='+p);const s=d.stats||d;
-    const tot=s.totalBet??s.total_bet??0,won=s.won??s.totalWon??0,pr=s.profit??(won-tot);
-    const rows=arr(d.transactions||d.rows||d.history);const pages=d.pages||d.totalPages||1;
-    const hist=arr(d.matches||[]).slice(0,6);
-    $('#profile').innerHTML=`<div class="card"><div class="bar" style="gap:16px">${av(ME,'lg')}<div style="flex:1"><h2 style="font-size:26px">${esc(ME.username)}</h2><span class="pill">${esc(ME.rank||'Rookie')}</span></div><button class="btn gray" data-act="home">← Back</button></div>
-    <div class="stats"><div class="stat"><small>Total Bet</small><b>${fmt(tot)}</b></div><div class="stat"><small>Won</small><b>${fmt(won)}</b></div><div class="stat"><small>Profit</small><b class="${pr>=0?'pos':'neg'}">${pr>=0?'+':''}${fmt(pr)}</b></div></div>
-    <h3 style="margin:10px 0">Transactions</h3>
-    ${rows.length?`<table><tr><th>Type</th><th>Details</th><th>Value</th><th>Date</th></tr>${rows.map(r=>`<tr><td><b>${esc(r.type||r.kind||'match')}</b></td><td>${esc(r.details||r.note||r.opponent||r.status||'')}</td><td class="${(r.profit??r.amount??0)<0?'neg':'pos'}">${fmt(r.value??r.amount??r.profit??0)}</td><td>${r.date||r.createdAt||r.ts?new Date(tsn(r.date||r.createdAt||r.ts)).toLocaleString():''}</td></tr>`).join('')}</table>`:'<div class="empty">No transactions yet</div>'}
-    <div class="pg">${Array.from({length:pages},(_,i)=>`<button class="${i+1===p?'on':''}" data-act="ppage" data-p="${i+1}">${i+1}</button>`).join('')}</div></div>`;
-  }catch(e){fail(e);show('home')}
-}
+    let ST = {
+      matches: [],
+      giveaways: [],
+      chat: [],
+      bot: null,
+      config: { range: 0.10 }
+    };
 
-/* ---------- Admin (kod sadece admin'e sunucudan gelir) ---------- */
-async function openAdmin(){
-  try{
-    const h={};if(token){h.Authorization='Bearer '+token;h['x-token']=token}
-    const r=await fetch(API_BASE+'/api/admin/ui',{headers:h});if(!r.ok)throw new Error('Not allowed');
-    let js=await r.text();try{const j=JSON.parse(js);js=j.js||j.code||js}catch{}
-    window.AMP={api,esc,toast,fmt,tags};
-    if(!window.__ampAdminLoaded){new Function(js)();window.__ampAdminLoaded=true}
-    const f=window.AMP.openAdmin||window.AMP.open||window.openAdmin||window.AMP_ADMIN&&window.AMP_ADMIN.open;if(typeof f==='function')f();
-  }catch(e){fail(e)}
-}
+    let socket = null;
+    let booted = false;
+    let busy = false;
 
-/* ---------- Confetti ---------- */
-function confetti(){
-  const c=$('#cf');const x=c.getContext('2d');c.width=innerWidth;c.height=innerHeight;
-  const P=Array.from({length:120},()=>({x:innerWidth/2,y:innerHeight/3,vx:(Math.random()-.5)*14,vy:Math.random()*-12-3,s:4+Math.random()*6,c:['#2f9bff','#ffc83d','#ff7eb6','#3fcf9f','#ff9f1c'][Math.random()*5|0]}));
-  let f=0;(function t(){x.clearRect(0,0,c.width,c.height);P.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=.35;x.fillStyle=p.c;x.fillRect(p.x,p.y,p.s,p.s)});if(++f<110)requestAnimationFrame(t);else x.clearRect(0,0,c.width,c.height)})();
-}
+    let selected = new Set();
+    let gridContext = null;
+    let viewMatchId = null;
+    let loginData = null;
+    let createSide = "dog";
+    let giveawayMode = "easy";
 
-/* ---------- Click router ---------- */
-const ACT={
-  home(){closeModal();show('home')},close:closeModal,login:showLogin,lstart:loginStart,lverify:loginVerify,
-  umenu(){$('#umenu').classList.toggle('open')},
-  profile(){showProfile(1)},ppage(t){showProfile(+t.dataset.p)},giveaway:showGiveaway,admin:openAdmin,
-  logout(){token='';localStorage.removeItem('amp_token');ME=null;if(socket){socket.auth={};socket.disconnect().connect()}renderHeader();show('home');toast('Logged out')},
-  wallet:showWallet,deposit:showDeposit,bots:showBots,botjoin(){window.open((ST.bot&&(ST.bot.joinLink||ST.bot.link))||BOT_LINK,'_blank','noopener')},
-  withdraw,create:showCreate,docreate:doCreate,join(t){showJoin(t.dataset.id)},dojoin(t){doJoin(t.dataset.id)},
-  cancel(t){cancelMatch(t.dataset.id)},view(t){showView(t.dataset.id)},verify(t){verify(t.dataset.id)},history:showHistory,
-  side(t){CSIDE=t.dataset.s;document.querySelectorAll('#sides .sd').forEach(e=>e.classList.toggle('on',e===t))},
-  pick(t){const i=GC.list().find(x=>String(x.id)===t.dataset.id);if(!i)return;const c=(SEL[i.id]||0)+1;SEL[i.id]=c>i.qty?0:c;renderGrid()},
-  selall(){GC.list().forEach(i=>SEL[i.id]=i.qty);renderGrid()},selnone(){SEL={};renderGrid()},
-  gmode(t){GMODE=t.dataset.m;document.querySelectorAll('.seg button').forEach(b=>b.classList.toggle('on',b===t));gOpts()},
-  gcreate:gCreate,genter(t){gEnter(t.dataset.id)},send:sendChat
-};
-document.addEventListener('click',e=>{
-  const t=e.target.closest('[data-act]');
-  if(!e.target.closest('.user')){const m=$('#umenu');m&&m.classList.remove('open')}
-  if(!t)return;const f=ACT[t.dataset.act];if(f){if(t.dataset.act!=='umenu'){const m=$('#umenu');m&&m.classList.remove('open')}f(t,e)}
-});
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+    /* =====================================================
+       API
+       ===================================================== */
 
-renderHeader();renderLobby();refresh();
-</script>
+    async function api(path, options = {}) {
+      const headers = {
+        "Content-Type": "application/json"
+      };
+
+      if (token) {
+        headers.Authorization = "Bearer " + token;
+      }
+
+      const response = await fetch(API_BASE + path, {
+        method: options.method || (options.body ? "POST" : "GET"),
+        headers,
+        body: options.body
+          ? JSON.stringify(options.body)
+          : undefined
+      });
+
+      const text = await response.text();
+
+      let data = {};
+
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        data = { message: text };
+      }
+
+      if (!response.ok) {
+        const error = new Error(
+          data.error || data.message || "HTTP " + response.status
+        );
+
+        error.status = response.status;
+        throw error;
+      }
+
+      return data;
+    }
+
+    function toast(message, type = "") {
+      const element = document.createElement("div");
+
+      element.className = "toast " + type;
+      element.textContent = message;
+
+      $("#toasts").appendChild(element);
+
+      setTimeout(() => element.remove(), 3800);
+    }
+
+    function fail(error) {
+      toast(error.message || String(error), "err");
+    }
+
+    /* =====================================================
+       HELPERS
+       ===================================================== */
+
+    function avatar(user, cls = "", ring = false) {
+      const name = username(user) || "?";
+      const image = user && (user.avatar || user.avatarUrl);
+
+      if (image) {
+        return `
+          <img
+            class="av ${cls} ${ring ? "ring" : ""}"
+            src="${esc(image)}"
+            alt=""
+            onerror="this.style.visibility='hidden'"
+          >
+        `;
+      }
+
+      return `
+        <span class="av ${cls} ${ring ? "ring" : ""}">
+          ${esc(name.charAt(0).toUpperCase())}
+        </span>
+      `;
+    }
+
+    function tags(item) {
+      let html = "";
+
+      if (item.age === "mega" || item.mega) {
+        html += '<i class="M">M</i>';
+      }
+
+      if (item.age === "neon" || item.neon) {
+        html += '<i class="N">N</i>';
+      }
+
+      if (item.fly) {
+        html += '<i class="F">F</i>';
+      }
+
+      if (item.ride) {
+        html += '<i class="R">R</i>';
+      }
+
+      return html ? `<div class="tg">${html}</div>` : "";
+    }
+
+    function itemImage(item) {
+      return item.image || item.imageUrl || "";
+    }
+
+    function inventory() {
+      return ME ? list(ME.inventory) : [];
+    }
+
+    function itemId(item) {
+      return String(item.uid || item.id || item.catalogId || "");
+    }
+
+    function itemValue(items) {
+      return items.reduce(
+        (total, item) => total + Number(item.value || 0),
+        0
+      );
+    }
+
+    function thumbs(items, max = 6) {
+      const shown = list(items).slice(0, max);
+
+      let html = shown.map(item => `
+        <div
+          class="it"
+          title="${esc(item.name)} • ${fmt(item.value)}"
+        >
+          <img src="${esc(itemImage(item))}" alt="">
+        </div>
+      `).join("");
+
+      if (items.length > max) {
+        html += `<div class="it"><b>+${items.length - max}</b></div>`;
+      }
+
+      return html;
+    }
+
+    function range(value) {
+      const tolerance = Number(ST.config?.range ?? 0.10);
+
+      return [
+        value * (1 - tolerance),
+        value * (1 + tolerance)
+      ];
+    }
+
+    function mySelectedItems() {
+      return inventory().filter(item => selected.has(itemId(item)));
+    }
+
+    function selectedUids() {
+      return mySelectedItems().map(itemId);
+    }
+
+    function requireLogin() {
+      if (ME) return true;
+
+      showLogin();
+      return false;
+    }
+
+    /* =====================================================
+       MODAL
+       ===================================================== */
+
+    function modalHeader(title) {
+      return `
+        <div class="mh">
+          <h3>${title}</h3>
+          <button class="x" data-act="close">✕</button>
+        </div>
+      `;
+    }
+
+    function openModal(html, wide = false) {
+      const modal = $("#modal");
+
+      modal.className = "modal" + (wide ? " wide" : "");
+      modal.innerHTML = html;
+
+      $("#ov").classList.add("open");
+    }
+
+    function closeModal() {
+      $("#ov").classList.remove("open");
+      gridContext = null;
+      viewMatchId = null;
+      selected.clear();
+    }
+
+    $("#ov").addEventListener("mousedown", event => {
+      if (event.target.id === "ov") {
+        closeModal();
+      }
+    });
+
+    /* =====================================================
+       HEADER
+       ===================================================== */
+
+    function renderHeader() {
+      const target = $("#headerRight");
+
+      if (!ME) {
+        target.innerHTML = `
+          <button class="btn" data-act="login">
+            Login with Roblox
+          </button>
+        `;
+
+        return;
+      }
+
+      target.innerHTML = `
+        <div class="wallet">
+          <div class="wallet-info" data-act="wallet">
+            <span style="font-size:22px">🐶</span>
+            <div>
+              <small>Adopt Me</small>
+              <b>${fmt(itemValue(inventory()))}</b>
+            </div>
+          </div>
+
+          <button class="wallet-plus" data-act="deposit">+</button>
+        </div>
+
+        <div class="user">
+          <button data-act="user-menu">
+            ${avatar(ME, "sm")}
+            <span class="user-name">${esc(ME.username)}</span>
+            ▾
+          </button>
+
+          <div class="menu" id="userMenu">
+            <a data-act="profile">👤 Profile</a>
+            <a data-act="giveaway">🎁 Create Giveaway</a>
+            ${ME.isAdmin
+              ? '<a data-act="admin">🛠 Admin Panel</a>'
+              : ""}
+            <a data-act="logout">🚪 Logout</a>
+          </div>
+        </div>
+      `;
+    }
+
+    /* =====================================================
+       MATCHES
+       ===================================================== */
+
+    function findMatch(id) {
+      return list(ST.matches).find(match => match.id === id);
+    }
+
+    function coinHTML(side = "dog", spinning = false, big = false) {
+      return `
+        <div class="coin3d">
+          <div class="coin ${big ? "big" : ""} ${spinning ? "spin" : side === "cat" ? "cat" : ""}">
+            <div class="face">🐶</div>
+            <div class="face back">🐱</div>
+          </div>
+        </div>
+      `;
+    }
+
+    function countdownHTML(end, big = false) {
+      return `
+        <div
+          class="countdown"
+          ${big ? 'style="width:80px;height:80px;font-size:34px"' : ""}
+        >
+          <span class="ticker-countdown" data-end="${Number(end || 0)}">3</span>
+        </div>
+      `;
+    }
+
+    function renderLobby() {
+      const matches = list(ST.matches)
+        .filter(match => match.state !== "cancelled")
+        .slice()
+        .sort((a, b) => {
+          const finishedDiff =
+            Number(a.state === "finished") -
+            Number(b.state === "finished");
+
+          return finishedDiff || Number(b.hostValue) - Number(a.hostValue);
+        });
+
+      $("#matchCount").textContent = matches.length + " games";
+
+      if (!matches.length) {
+        $("#lobby").innerHTML = `
+          <div class="empty">
+            🐾 No games right now.<br>
+            Be the first and create one!
+          </div>
+        `;
+
+        return;
+      }
+
+      $("#lobby").innerHTML = matches.map(match => {
+        const mine = ME && match.host?.id === ME.id;
+        const finished = match.state === "finished";
+        const hostWon = finished && match.winnerId === match.host?.id;
+
+        const [low, high] = range(Number(match.hostValue || 0));
+
+        let middle = "";
+
+        if (match.state === "waiting") {
+          middle = `
+            <div class="value">${fmt(match.hostValue)}</div>
+            <small>${fmt(low)} – ${fmt(high)}</small>
+          `;
+        } else if (match.state === "countdown") {
+          middle = countdownHTML(match.countdownEnd);
+        } else if (match.state === "flipping") {
+          middle = coinHTML("dog", true);
+        } else {
+          middle = `
+            ${coinHTML(match.winnerSide)}
+            <small>${fmt(
+              Number(match.hostValue || 0) +
+              Number(match.oppValue || 0)
+            )}</small>
+          `;
+        }
+
+        const opponent = match.joiner
+          ? `
+            <div class="pl">
+              ${avatar(match.joiner, "", finished && !hostWon)}
+              <span class="name">${esc(username(match.joiner))}</span>
+              <span>${sideIcon(match.joinSide)}</span>
+            </div>
+          `
+          : '<div class="pl" style="color:var(--muted)">Waiting…</div>';
+
+        let action = "";
+
+        if (match.state === "waiting") {
+          action = mine
+            ? `
+              <button
+                class="btn red sm"
+                data-act="cancel"
+                data-id="${esc(match.id)}"
+              >
+                Cancel
+              </button>
+            `
+            : `
+              <button
+                class="btn mint sm"
+                data-act="join"
+                data-id="${esc(match.id)}"
+              >
+                Join
+              </button>
+            `;
+        }
+
+        return `
+          <div class="match ${finished ? "fin" : ""}">
+            <div class="pl">
+              ${avatar(match.host, "", finished && hostWon)}
+              <span class="name">${esc(username(match.host))}</span>
+              <span>${sideIcon(match.hostSide)}</span>
+            </div>
+
+            <div class="items">
+              ${thumbs(list(match.hostItems))}
+            </div>
+
+            <div class="mid">${middle}</div>
+
+            ${opponent}
+
+            <div class="acts">
+              ${action}
+              <button
+                class="btn sm"
+                data-act="view"
+                data-id="${esc(match.id)}"
+              >
+                View
+              </button>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function showView(id) {
+      viewMatchId = id;
+      gridContext = null;
+
+      openModal("", true);
+      renderView();
+    }
+
+    function renderView() {
+      if (!viewMatchId || !$("#ov").classList.contains("open")) {
+        return;
+      }
+
+      const match = findMatch(viewMatchId);
+
+      if (!match) {
+        $("#modal").innerHTML = `
+          ${modalHeader("Match")}
+          <div class="empty">This match is no longer in the lobby.</div>
+        `;
+
+        return;
+      }
+
+      const finished = match.state === "finished";
+      const hostWon = finished && match.winnerId === match.host?.id;
+      const mine = ME && match.host?.id === ME.id;
+
+      let middle = "";
+
+      if (match.state === "countdown") {
+        middle = countdownHTML(match.countdownEnd, true);
+      } else if (match.state === "flipping") {
+        middle = coinHTML("dog", true, true);
+      } else if (finished) {
+        middle = coinHTML(match.winnerSide, false, true);
+      } else {
+        middle = `
+          <div style="font-size:30px;font-weight:700;color:var(--muted)">
+            VS
+          </div>
+        `;
+      }
+
+      function column(user, items, side, won) {
+        if (!user) {
+          return `
+            <div class="col">
+              <div class="empty">Waiting for opponent…</div>
+            </div>
+          `;
+        }
+
+        return `
+          <div class="col ${won ? "win" : ""}">
+            ${avatar(user, "lg", won)}
+            <div>
+              <b>${esc(username(user))}</b> ${sideIcon(side)}
+            </div>
+            <div class="hint">${fmt(itemValue(list(items)))}</div>
+            <div class="items">${thumbs(list(items), 10)}</div>
+          </div>
+        `;
+      }
+
+      let action = "";
+
+      if (match.state === "waiting") {
+        action = mine
+          ? `
+            <button
+              class="btn red"
+              data-act="cancel"
+              data-id="${esc(match.id)}"
+            >
+              Cancel Match
+            </button>
+          `
+          : `
+            <button
+              class="btn mint"
+              data-act="join"
+              data-id="${esc(match.id)}"
+            >
+              Join
+            </button>
+          `;
+      }
+
+      $("#modal").innerHTML = `
+        ${modalHeader("Match • " + fmt(
+          Number(match.hostValue || 0) +
+          Number(match.oppValue || 0)
+        ))}
+
+        <div class="vs">
+          ${column(
+            match.host,
+            match.hostItems,
+            match.hostSide,
+            finished && hostWon
+          )}
+
+          <div class="vc">
+            ${middle}
+            ${finished
+              ? `<div class="hint"><b>${esc(username(match.winner))}</b> wins!</div>`
+              : ""}
+          </div>
+
+          ${column(
+            match.joiner,
+            match.joinerItems,
+            match.joinSide,
+            finished && !hostWon
+          )}
+        </div>
+
+        <div class="row" style="margin-top:14px;justify-content:flex-end">
+          ${action}
+        </div>
+
+        <div class="fair">
+          <b>Result verification</b><br>
+          Hash: <code>${esc(match.hash || "—")}</code><br>
+
+          ${finished && match.seed
+            ? `
+              Seed: <code>${esc(match.seed)}</code><br>
+              <button
+                class="btn gray sm"
+                style="margin-top:6px"
+                data-act="verify"
+                data-id="${esc(match.id)}"
+              >
+                Verify
+              </button>
+              <span id="verifyResult"></span>
+            `
+            : "Seed is revealed when the match ends."
+          }
+        </div>
+      `;
+    }
+
+    async function verifyMatch(id) {
+      const match = findMatch(id);
+
+      if (!match || !match.seed) return;
+
+      try {
+        const encoder = new TextEncoder();
+
+        const toHex = buffer => Array.from(new Uint8Array(buffer))
+          .map(byte => byte.toString(16).padStart(2, "0"))
+          .join("");
+
+        const hash = toHex(
+          await crypto.subtle.digest(
+            "SHA-256",
+            encoder.encode(match.seed)
+          )
+        );
+
+        const key = await crypto.subtle.importKey(
+          "raw",
+          encoder.encode(match.seed),
+          { name: "HMAC", hash: "SHA-256" },
+          false,
+          ["sign"]
+        );
+
+        const signature = toHex(
+          await crypto.subtle.sign(
+            "HMAC",
+            key,
+            encoder.encode(String(match.id))
+          )
+        );
+
+        const roll =
+          parseInt(signature.slice(0, 8), 16) / 4294967296;
+
+        const result = roll < 0.5 ? "dog" : "cat";
+
+        const valid =
+          hash === match.hash &&
+          result === match.winnerSide;
+
+        const output = $("#verifyResult");
+
+        if (output) {
+          output.innerHTML = valid
+            ? `<b class="pos">✔ Hash and result match: ${sideIcon(result)} ${result}</b>`
+            : '<b class="neg">✘ Hash or result mismatch</b>';
+        }
+      } catch (error) {
+        fail(error);
+      }
+    }
+
+    async function cancelMatch(id) {
+      if (!confirm("Cancel this match and refund the items?")) {
+        return;
+      }
+
+      try {
+        await api("/api/match/cancel", {
+          body: { id }
+        });
+
+        closeModal();
+        toast("Match cancelled. Items returned.", "ok");
+        await refresh();
+      } catch (error) {
+        fail(error);
+      }
+    }
+
+    /* =====================================================
+       GIVEAWAYS
+       ===================================================== */
+
+    function renderGiveaways() {
+      $("#giveaways").innerHTML = list(ST.giveaways).map(g => `
+        <div class="gw">
+          <div class="gw-images">
+            ${list(g.items).slice(0, 2).map(item => `
+              <img src="${esc(itemImage(item))}" alt="">
+            `).join("")}
+          </div>
+
+          <div class="gw-info">
+            <b>🎁 Giveaway</b> by ${esc(username(g.host))}<br>
+            Value: <b>${fmt(g.value)}</b> ·
+            ${Number(g.entrantCount || 0)} entered ·
+            <span class="ticker-giveaway" data-end="${Number(g.endsAt || 0)}"></span>
+          </div>
+
+          <button
+            class="btn sun sm"
+            data-act="enter-giveaway"
+            data-id="${esc(g.id)}"
+          >
+            Enter
+          </button>
+        </div>
+      `).join("");
+    }
+
+    function showGiveaway() {
+      if (!requireLogin()) return;
+
+      selected = new Set();
+      giveawayMode = "easy";
+      viewMatchId = null;
+
+      gridContext = {
+        max: 5,
+        info() {
+          const items = mySelectedItems();
+          const target = $("#giveawayInfo");
+
+          if (target) {
+            target.textContent =
+              `${items.length}/5 selected · ${fmt(itemValue(items))}`;
+          }
+        }
+      };
+
+      openModal(`
+        ${modalHeader("🎁 Create Giveaway")}
+
+        <div class="seg">
+          <button
+            class="on"
+            data-act="giveaway-mode"
+            data-mode="easy"
+          >
+            Easy
+          </button>
+
+          <button
+            data-act="giveaway-mode"
+            data-mode="advanced"
+          >
+            Advanced
+          </button>
+        </div>
+
+        <div id="giveawayOptions"></div>
+
+        ${gridHTML()}
+
+        <div class="row" style="margin-top:10px">
+          <b id="giveawayInfo" style="flex:1"></b>
+          <button class="btn sun" data-act="submit-giveaway">
+            Create Giveaway
+          </button>
+        </div>
+      `, true);
+
+      renderGiveawayOptions();
+      bindGrid();
+    }
+
+    function renderGiveawayOptions() {
+      const target = $("#giveawayOptions");
+
+      if (!target) return;
+
+      if (giveawayMode === "easy") {
+        target.innerHTML = `
+          <div class="row">
+            <label>Duration</label>
+            <select id="giveawayDuration">
+              <option value="30">30 seconds</option>
+              <option value="120">2 minutes</option>
+              <option value="300">5 minutes</option>
+            </select>
+          </div>
+        `;
+      } else {
+        target.innerHTML = `
+          <div class="row">
+            <label>Duration (minutes)</label>
+            <input
+              type="number"
+              id="giveawayMinutes"
+              min="1"
+              max="60"
+              value="10"
+              style="width:90px"
+            >
+
+            <label>Min total bet</label>
+            <input
+              type="number"
+              id="giveawayMinBet"
+              min="0"
+              value="0"
+              style="width:120px"
+            >
+          </div>
+        `;
+      }
+    }
+
+    async function submitGiveaway() {
+      const uids = selectedUids();
+
+      if (!uids.length) {
+        return toast("Select at least one item", "err");
+      }
+
+      if (uids.length > 5) {
+        return toast("Maximum 5 items", "err");
+      }
+
+      let duration;
+      let minBet = 0;
+
+      if (giveawayMode === "easy") {
+        duration = Number($("#giveawayDuration").value);
+      } else {
+        const minutes = Number($("#giveawayMinutes").value);
+
+        if (!Number.isInteger(minutes) || minutes < 1 || minutes > 60) {
+          return toast("Duration must be 1–60 minutes", "err");
+        }
+
+        duration = minutes * 60;
+        minBet = Number($("#giveawayMinBet").value);
+
+        if (!Number.isFinite(minBet) || minBet < 0) {
+          return toast("Invalid minimum bet", "err");
+        }
+      }
+
+      try {
+        await api("/api/giveaway/create", {
+          body: {
+            mode: giveawayMode,
+            duration,
+            minBet,
+            uids
+          }
+        });
+
+        closeModal();
+        toast("Giveaway started!", "ok");
+        await refresh();
+      } catch (error) {
+        fail(error);
+      }
+    }
+
+    async function enterGiveaway(id) {
+      if (!requireLogin()) return;
+
+      try {
+        await api("/api/giveaway/enter", {
+          body: { id }
+        });
+
+        toast("You entered the giveaway!", "ok");
+        await refresh();
+      } catch (error) {
+        fail(error);
+      }
+    }
+
+    /* =====================================================
+       CHAT
+       ===================================================== */
+
+    function chatMessage(message) {
+      const user = message.user || {};
+      const rank = message.admin
+        ? "ADMIN"
+        : (message.rank || user.rank || "");
+
+      return `
+        <div class="msg">
+          ${avatar(user, "sm")}
+
+          <div>
+            ${rank
+              ? `<span class="rk ${esc(rank)}">${esc(rank)}</span>`
+              : ""}
+            <b>${esc(username(user) || "System")}</b>
+            ${esc(message.text || "")}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderChat() {
+      const box = $("#messages");
+
+      const nearBottom =
+        box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+
+      box.innerHTML = list(ST.chat).slice(-60).map(chatMessage).join("");
+
+      if (nearBottom) {
+        box.scrollTop = box.scrollHeight;
+      }
+    }
+
+    function sendChat() {
+      if (!requireLogin()) return;
+
+      const input = $("#chatInput");
+      const text = input.value.trim();
+
+      if (!text) return;
+
+      if (!socket || !socket.connected) {
+        return toast("Chat is connecting", "err");
+      }
+
+      socket.emit("chat:send", { text }, response => {
+        if (response && response.error) {
+          toast(response.error, "err");
+          return;
+        }
+
+        input.value = "";
+      });
+    }
+
+    $("#chatInput").addEventListener("keydown", event => {
+      if (event.key === "Enter") {
+        sendChat();
+      }
+    });
+
+    /* =====================================================
+       LIVE DATA
+       ===================================================== */
+
+    let refreshTimer = null;
+
+    function scheduleRefresh() {
+      clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(refresh, 150);
+    }
+
+    function connectSocket() {
+      if (typeof io !== "function") {
+        toast("Live connection unavailable; retrying with polling.", "err");
+        return;
+      }
+
+      if (socket) {
+        socket.disconnect();
+      }
+
+      socket = io(API_BASE, {
+        auth: { token }
+      });
+
+      socket.on("connect", () => {
+        scheduleRefresh();
+      });
+
+      socket.on("disconnect", () => {
+        $("#online").textContent = "Connecting";
+      });
+
+      socket.on("online", count => {
+        $("#online").textContent = count + " online";
+      });
+
+      socket.on("chat:msg", message => {
+        if (!ST.chat.some(item => item.id === message.id)) {
+          ST.chat.push(message);
+          ST.chat = ST.chat.slice(-60);
+          renderChat();
+        }
+      });
+
+      socket.on("chat:clear", () => {
+        ST.chat = [];
+        renderChat();
+      });
+
+      [
+        "match:new",
+        "match:update",
+        "match:remove",
+        "giveaway:new",
+        "giveaway:update",
+        "giveaway:remove",
+        "me:update"
+      ].forEach(event => {
+        socket.on(event, scheduleRefresh);
+      });
+    }
+
+    async function refresh() {
+      if (busy) return;
+
+      busy = true;
+
+      try {
+        const state = await api("/api/state");
+
+        ST = {
+          ...ST,
+          ...state
+        };
+
+        if (token) {
+          try {
+            const result = await api("/api/me");
+            ME = result.user;
+          } catch (error) {
+            if (error.status === 401) {
+              token = "";
+              ME = null;
+              localStorage.removeItem("amp_token");
+
+              if (socket) {
+                connectSocket();
+              }
+            } else {
+              throw error;
+            }
+          }
+        } else {
+          ME = null;
+        }
+
+        if (!booted) {
+          booted = true;
+          $("#boot").style.display = "none";
+          connectSocket();
+        }
+
+        renderHeader();
+        renderLobby();
+        renderGiveaways();
+        renderChat();
+
+        if (Number.isFinite(Number(ST.online))) {
+          $("#online").textContent = Number(ST.online) + " online";
+        }
+
+        if (viewMatchId) {
+          renderView();
+        }
+
+        if (gridContext && $("#grid")) {
+          renderGrid();
+        }
+      } catch (error) {
+        if (!booted) {
+          $("#bootmsg").textContent =
+            "Server connecting… Render may take some time to wake up.";
+        }
+      } finally {
+        busy = false;
+      }
+    }
+
+    setInterval(() => {
+      if (!document.hidden) {
+        refresh();
+      }
+    }, 3000);
+
+    setInterval(() => {
+      const time = Date.now();
+
+      document.querySelectorAll(".ticker-countdown").forEach(element => {
+        const seconds = Math.ceil(
+          (Number(element.dataset.end) - time) / 1000
+        );
+
+        element.textContent = seconds > 0 ? seconds : "…";
+      });
+
+      document.querySelectorAll(".ticker-giveaway").forEach(element => {
+        const seconds = Math.max(
+          0,
+          Math.ceil((Number(element.dataset.end) - time) / 1000)
+        );
+
+        element.textContent =
+          Math.floor(seconds / 60) +
+          ":" +
+          String(seconds % 60).padStart(2, "0");
+      });
+    }, 250);
+
+    /* =====================================================
+       LOGIN
+       ===================================================== */
+
+    function showLogin() {
+      viewMatchId = null;
+      gridContext = null;
+
+      openModal(`
+        ${modalHeader("Login with Roblox")}
+
+        <p class="hint">
+          Enter your Roblox username. Put the code in your Roblox
+          profile's About section, save it, then press Verify.
+        </p>
+
+        <div class="row">
+          <input
+            class="in"
+            id="loginUsername"
+            type="text"
+            placeholder="Roblox username"
+            maxlength="20"
+          >
+
+          <button class="btn" data-act="login-start">
+            Get code
+          </button>
+        </div>
+
+        <div id="loginStep"></div>
+      `);
+
+      setTimeout(() => $("#loginUsername")?.focus(), 50);
+    }
+
+    async function loginStart() {
+      const name = $("#loginUsername").value.trim();
+
+      if (!name) {
+        return toast("Enter your username", "err");
+      }
+
+      try {
+        const result = await api("/api/auth/start", {
+          body: { username: name }
+        });
+
+        loginData = result;
+
+        const step = $("#loginStep");
+
+        if (!step) return;
+
+        step.innerHTML = `
+          <div class="hint">
+            Put this code in your Roblox profile About section:
+          </div>
+
+          <div class="code">${esc(result.code)}</div>
+
+          <div class="hint">
+            Save the profile, then press Verify.
+          </div>
+
+          <button
+            class="btn mint"
+            style="width:100%"
+            data-act="login-verify"
+          >
+            Verify
+          </button>
+        `;
+      } catch (error) {
+        fail(error);
+      }
+    }
+
+    async function loginVerify() {
+      if (!loginData) return;
+
+      try {
+        const result = await api("/api/auth/verify", {
+          body: {
+            id: loginData.id,
+            code: loginData.code
+          }
+        });
+
+        token = result.token;
+        ME = result.user;
+
+        localStorage.setItem("amp_token", token);
+
+        closeModal();
+        connectSocket();
+        renderHeader();
+
+        toast("Welcome!", "ok");
+        await refresh();
+      } catch (error) {
+        fail(error);
+      }
+    }
+
+    async function logout() {
+      try {
+        if (token) {
+          await api("/api/auth/logout", {
+            method: "POST"
+          });
+        }
+      } catch {
+        // Local logout still proceeds if the server is unavailable.
+      }
+
+      token = "";
+      ME = null;
+
+      localStorage.removeItem("amp_token");
+
+      closeModal();
+      connectSocket();
+      showPage("home");
+      renderHeader();
+
+      toast("Logged out");
+    }
+
+    /* =====================================================
+       INVENTORY GRID
+       ===================================================== */
+
+    function gridHTML() {
+      return `
+        <div class="row">
+          <input
+            type="text"
+            id="gridSearch"
+            placeholder="Search items…"
+          >
+
+          <select id="gridSort">
+            <option value="value-desc">Value ↓</option>
+            <option value="value-asc">Value ↑</option>
+            <option value="name">Name</option>
+          </select>
+
+          <button class="btn gray sm" data-act="select-all">
+            Select All
+          </button>
+
+          <button class="btn gray sm" data-act="select-none">
+            Clear
+          </button>
+        </div>
+
+        <div class="grid" id="grid"></div>
+      `;
+    }
+
+    function renderGrid() {
+      if (!gridContext || !$("#grid")) return;
+
+      const query = ($("#gridSearch")?.value || "").toLowerCase();
+      const sort = $("#gridSort")?.value || "value-desc";
+
+      const items = inventory().filter(item =>
+        String(item.name || "").toLowerCase().includes(query)
+      );
+
+      items.sort((a, b) => {
+        if (sort === "value-asc") {
+          return Number(a.value || 0) - Number(b.value || 0);
+        }
+
+        if (sort === "name") {
+          return String(a.name || "").localeCompare(String(b.name || ""));
+        }
+
+        return Number(b.value || 0) - Number(a.value || 0);
+      });
+
+      $("#grid").innerHTML = items.length
+        ? items.map(item => {
+          const id = itemId(item);
+          const checked = selected.has(id);
+
+          return `
+            <div
+              class="gi ${checked ? "sel" : ""}"
+              data-act="pick"
+              data-id="${esc(id)}"
+            >
+              ${checked ? '<span class="check">✓</span>' : ""}
+              <img src="${esc(itemImage(item))}" alt="">
+              <div class="nm">${esc(item.name)}</div>
+              <div class="vl">${fmt(item.value)}</div>
+              ${tags(item)}
+            </div>
+          `;
+        }).join("")
+        : `
+          <div class="empty" style="grid-column:1/-1">
+            Nothing here
+          </div>
+        `;
+
+      gridContext.info();
+    }
+
+    function bindGrid() {
+      $("#gridSearch")?.addEventListener("input", renderGrid);
+      $("#gridSort")?.addEventListener("change", renderGrid);
+      renderGrid();
+    }
+
+    function pickItem(id) {
+      if (!gridContext) return;
+
+      if (selected.has(id)) {
+        selected.delete(id);
+      } else {
+        if (selected.size >= gridContext.max) {
+          return toast(
+            `You can select up to ${gridContext.max} items`,
+            "err"
+          );
+        }
+
+        selected.add(id);
+      }
+
+      renderGrid();
+    }
+
+    function selectAll() {
+      if (!gridContext) return;
+
+      selected.clear();
+
+      for (const item of inventory()) {
+        if (selected.size >= gridContext.max) break;
+        selected.add(itemId(item));
+      }
+
+      renderGrid();
+    }
+
+    /* =====================================================
+       WALLET / DEPOSIT
+       ===================================================== */
+
+    function showWallet() {
+      if (!requireLogin()) return;
+
+      selected = new Set();
+      viewMatchId = null;
+
+      gridContext = {
+        max: 500,
+        info() {
+          const items = mySelectedItems();
+          const output = $("#walletInfo");
+
+          if (output) {
+            output.textContent = items.length
+              ? `${items.length} selected · ${fmt(itemValue(items))}`
+              : `Inventory: ${fmt(itemValue(inventory()))}`;
+          }
+        }
+      };
+
+      openModal(`
+        ${modalHeader("🎒 My Adopt Me Inventory")}
+
+        ${gridHTML()}
+
+        <div class="row" style="margin-top:10px">
+          <b id="walletInfo" style="flex:1"></b>
+
+          <button class="btn gray" data-act="deposit">
+            + Deposit
+          </button>
+
+          <button class="btn red" data-act="withdraw">
+            Withdraw
+          </button>
+        </div>
+      `, true);
+
+      bindGrid();
+    }
+
+    async function withdraw() {
+      if (!requireLogin()) return;
+
+      const uids = selectedUids();
+
+      if (!uids.length) {
+        return toast("Select items first", "err");
+      }
+
+      try {
+        await api("/api/withdraw", {
+          body: { uids }
+        });
+
+        toast("Withdraw request sent", "ok");
+        await refresh();
+      } catch (error) {
+        fail(error);
+      }
+    }
+
+    function showDeposit() {
+      if (!requireLogin()) return;
+
+      gridContext = null;
+      viewMatchId = null;
+
+      openModal(`
+        ${modalHeader("Deposit")}
+
+        <p class="hint">Choose a game</p>
+
+        <div class="game-card" data-act="bots">
+          <div class="game-pic">🐶🐝</div>
+          <b>Adopt Me</b>
+        </div>
+
+        <p class="hint" style="margin-top:14px">
+          Test mode: no trade bot is connected. Deposits are not active.
+        </p>
+      `);
+    }
+
+    function showBots() {
+      const bot = ST.bot || {};
+
+      openModal(`
+        ${modalHeader("Adopt Me — Bot")}
+
+        <p class="hint">
+          The server link is available, but automatic deposits and
+          withdrawals are disabled in this test version.
+        </p>
+
+        <div class="bot">
+          ${avatar({
+            username: bot.username || BOT_NAME,
+            avatar: bot.avatar
+          }, "lg")}
+
+          <div class="bot-info">
+            <b style="font-size:18px">
+              ${esc(bot.username || BOT_NAME)}
+            </b>
+            <div class="hint">Trade bot integration not connected</div>
+          </div>
+
+          <button class="btn mint" data-act="bot-join">
+            Join
+          </button>
+        </div>
+      `);
+    }
+
+    /* =====================================================
+       CREATE / JOIN MATCH
+       ===================================================== */
+
+    function showCreate() {
+      if (!requireLogin()) return;
+
+      selected = new Set();
+      createSide = "dog";
+      viewMatchId = null;
+
+      gridContext = {
+        max: 8,
+        info() {
+          const items = mySelectedItems();
+          const value = itemValue(items);
+          const [low, high] = range(value);
+          const target = $("#createInfo");
+
+          if (target) {
+            target.textContent = items.length
+              ? `${items.length}/8 · Value ${fmt(value)} · Join: ${fmt(low)} – ${fmt(high)}`
+              : "Select up to 8 items";
+          }
+        }
+      };
+
+      openModal(`
+        ${modalHeader("Create Match")}
+
+        <div class="sides" id="sides">
+          <div class="sd on" data-act="side" data-side="dog">
+            <span>🐶</span>Dog
+          </div>
+
+          <div class="sd" data-act="side" data-side="cat">
+            <span>🐱</span>Cat
+          </div>
+        </div>
+
+        <div style="height:12px"></div>
+
+        ${gridHTML()}
+
+        <div class="row" style="margin-top:10px">
+          <b id="createInfo" style="flex:1"></b>
+          <button class="btn sun" data-act="submit-create">
+            Create
+          </button>
+        </div>
+      `, true);
+
+      bindGrid();
+    }
+
+    async function submitCreate() {
+      const uids = selectedUids();
+
+      if (!uids.length) {
+        return toast("Select items first", "err");
+      }
+
+      try {
+        await api("/api/match/create", {
+          body: {
+            uids,
+            side: createSide
+          }
+        });
+
+        closeModal();
+        toast("Match created!", "ok");
+        await refresh();
+      } catch (error) {
+        fail(error);
+      }
+    }
+
+    function showJoin(id) {
+      if (!requireLogin()) return;
+
+      const match = findMatch(id);
+
+      if (!match || match.state !== "waiting") {
+        return toast("Match is no longer available", "err");
+      }
+
+      selected = new Set();
+      viewMatchId = null;
+
+      const [low, high] = range(Number(match.hostValue || 0));
+
+      gridContext = {
+        max: 8,
+        info() {
+          const value = itemValue(mySelectedItems());
+          const valid = value >= low - 0.001 && value <= high + 0.001;
+          const target = $("#joinInfo");
+
+          if (target) {
+            target.textContent =
+              `Your bet ${fmt(value)} · Need ${fmt(low)} – ${fmt(high)}`;
+
+            target.style.color = valid ? "#18a877" : "var(--red)";
+          }
+        }
+      };
+
+      openModal(`
+        ${modalHeader("Join " + esc(username(match.host)) + "'s Match")}
+
+        <p class="hint">
+          Your side: ${sideIcon(match.joinSide)}
+          ${esc(match.joinSide)}
+        </p>
+
+        ${gridHTML()}
+
+        <div class="row" style="margin-top:10px">
+          <b id="joinInfo" style="flex:1"></b>
+
+          <button
+            class="btn mint"
+            data-act="submit-join"
+            data-id="${esc(match.id)}"
+          >
+            Join
+          </button>
+        </div>
+      `, true);
+
+      bindGrid();
+    }
+
+    async function submitJoin(id) {
+      const uids = selectedUids();
+
+      if (!uids.length) {
+        return toast("Select items first", "err");
+      }
+
+      try {
+        await api("/api/match/join", {
+          body: { id, uids }
+        });
+
+        closeModal();
+        await refresh();
+        showView(id);
+      } catch (error) {
+        fail(error);
+      }
+    }
+
+    /* =====================================================
+       HISTORY / PROFILE
+       ===================================================== */
+
+    async function showHistory() {
+      if (!requireLogin()) return;
+
+      gridContext = null;
+      viewMatchId = null;
+
+      openModal(`
+        ${modalHeader("My History")}
+        <div class="empty">Loading…</div>
+      `, true);
+
+      try {
+        const result = await api("/api/history/me");
+        const matches = list(result.history);
+
+        const content = matches.length
+          ? matches.map(match => {
+            const won = match.winnerId === ME.id;
+            const opponent = match.host?.id === ME.id
+              ? match.joiner
+              : match.host;
+
+            return `
+              <div
+                class="match"
+                style="grid-template-columns:1fr 1fr 1fr 80px"
+              >
+                <div class="pl">
+                  ${avatar(opponent)}
+                  <span class="name">
+                    vs ${esc(username(opponent) || "—")}
+                  </span>
+                </div>
+
+                <div class="items">
+                  ${thumbs(list(match.hostItems), 4)}
+                </div>
+
+                <div class="mid">
+                  <div class="value">
+                    ${fmt(
+                      Number(match.hostValue || 0) +
+                      Number(match.oppValue || 0)
+                    )}
+                  </div>
+                </div>
+
+                <b class="${won ? "pos" : "neg"}">
+                  ${won ? "WON" : "LOST"}
+                </b>
+              </div>
+            `;
+          }).join("")
+          : '<div class="empty">No matches yet</div>';
+
+        $("#modal").innerHTML =
+          modalHeader("My History") + content;
+      } catch (error) {
+        fail(error);
+      }
+    }
+
+    function showPage(page) {
+      $("#pageHome").style.display = page === "home" ? "grid" : "none";
+      $("#pageProfile").style.display =
+        page === "profile" ? "grid" : "none";
+
+      window.scrollTo(0, 0);
+    }
+
+    async function showProfile(page = 1) {
+      if (!requireLogin()) return;
+
+      closeModal();
+      showPage("profile");
+
+      $("#profile").innerHTML =
+        '<div class="card empty">Loading…</div>';
+
+      try {
+        const result = await api(
+          "/api/profile?page=" + encodeURIComponent(page)
+        );
+
+        const stats = result.stats || {};
+        const rows = list(result.rows);
+        const pages = Number(result.pages || 1);
+
+        $("#profile").innerHTML = `
+          <div class="card">
+            <div class="bar" style="gap:16px">
+              ${avatar(ME, "lg")}
+
+              <div style="flex:1">
+                <h2 style="margin:0;font-size:26px">
+                  ${esc(ME.username)}
+                </h2>
+                <span class="pill">${esc(ME.rank || "Rookie")}</span>
+              </div>
+
+              <button class="btn gray" data-act="home">
+                ← Back
+              </button>
+            </div>
+
+            <div class="stats">
+              <div class="stat">
+                <small>Total Bet</small>
+                <b>${fmt(stats.totalBet)}</b>
+              </div>
+
+              <div class="stat">
+                <small>Won</small>
+                <b>${fmt(stats.totalWon)}</b>
+              </div>
+
+              <div class="stat">
+                <small>Profit</small>
+                <b class="${Number(stats.profit || 0) >= 0 ? "pos" : "neg"}">
+                  ${Number(stats.profit || 0) >= 0 ? "+" : ""}
+                  ${fmt(stats.profit)}
+                </b>
+              </div>
+            </div>
+
+            <div class="bar">
+              <h2 style="font-size:18px">Transactions</h2>
+              <button class="btn gray sm" data-act="history">
+                Match History
+              </button>
+            </div>
+
+            ${rows.length
+              ? `
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Type</th>
+                        <th>Reference</th>
+                        <th>Value</th>
+                        <th>Date</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      ${rows.map(row => `
+                        <tr>
+                          <td><b>${esc(row.type)}</b></td>
+                          <td>${esc(row.id || "")}</td>
+                          <td class="${Number(row.amount) < 0 ? "neg" : "pos"}">
+                            ${fmt(row.amount)}
+                          </td>
+                          <td>
+                            ${row.ts
+                              ? esc(new Date(row.ts).toLocaleString())
+                              : ""}
+                          </td>
+                        </tr>
+                      `).join("")}
+                    </tbody>
+                  </table>
+                </div>
+              `
+              : '<div class="empty">No transactions yet</div>'
+            }
+
+            <div class="pg">
+              ${Array.from({ length: pages }, (_, index) => `
+                <button
+                  class="${index + 1 === Number(result.page) ? "on" : ""}"
+                  data-act="profile-page"
+                  data-page="${index + 1}"
+                >
+                  ${index + 1}
+                </button>
+              `).join("")}
+            </div>
+          </div>
+        `;
+      } catch (error) {
+        fail(error);
+        showPage("home");
+      }
+    }
+
+    /* =====================================================
+       ADMIN
+
+       Admin panel code is fetched from the backend after
+       server-side authorization.
+       ===================================================== */
+
+    async function openAdmin() {
+      if (!requireLogin()) return;
+
+      try {
+        const response = await fetch(API_BASE + "/api/admin/ui", {
+          headers: {
+            Authorization: "Bearer " + token
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error("Admin access denied");
+        }
+
+        const script = await response.text();
+
+        window.AMP = {
+          api,
+          esc,
+          toast,
+          fmt,
+          tags
+        };
+
+        /*
+          The trusted backend returns the admin panel function.
+          Authorization is still enforced on every admin API call.
+        */
+        new Function(script)();
+      } catch (error) {
+        fail(error);
+      }
+    }
+
+    /* =====================================================
+       CLICK ROUTER
+       ===================================================== */
+
+    const actions = {
+      home() {
+        closeModal();
+        showPage("home");
+      },
+
+      close: closeModal,
+      login: showLogin,
+      "login-start": loginStart,
+      "login-verify": loginVerify,
+      logout,
+
+      "user-menu"() {
+        $("#userMenu")?.classList.toggle("open");
+      },
+
+      profile() {
+        showProfile(1);
+      },
+
+      "profile-page"(element) {
+        showProfile(Number(element.dataset.page));
+      },
+
+      admin: openAdmin,
+
+      wallet: showWallet,
+      deposit: showDeposit,
+      bots: showBots,
+
+      "bot-join"() {
+        window.open(BOT_LINK, "_blank", "noopener,noreferrer");
+      },
+
+      withdraw,
+
+      create: showCreate,
+      "submit-create": submitCreate,
+
+      side(element) {
+        createSide = element.dataset.side;
+
+        document.querySelectorAll("#sides .sd").forEach(side => {
+          side.classList.toggle("on", side === element);
+        });
+      },
+
+      join(element) {
+        showJoin(element.dataset.id);
+      },
+
+      "submit-join"(element) {
+        submitJoin(element.dataset.id);
+      },
+
+      cancel(element) {
+        cancelMatch(element.dataset.id);
+      },
+
+      view(element) {
+        showView(element.dataset.id);
+      },
+
+      verify(element) {
+        verifyMatch(element.dataset.id);
+      },
+
+      history: showHistory,
+
+      giveaway: showGiveaway,
+
+      "giveaway-mode"(element) {
+        giveawayMode = element.dataset.mode;
+
+        document.querySelectorAll(".seg button").forEach(button => {
+          button.classList.toggle("on", button === element);
+        });
+
+        renderGiveawayOptions();
+      },
+
+      "submit-giveaway": submitGiveaway,
+
+      "enter-giveaway"(element) {
+        enterGiveaway(element.dataset.id);
+      },
+
+      pick(element) {
+        pickItem(element.dataset.id);
+      },
+
+      "select-all": selectAll,
+
+      "select-none"() {
+        selected.clear();
+        renderGrid();
+      },
+
+      send: sendChat
+    };
+
+    document.addEventListener("click", event => {
+      const element = event.target.closest("[data-act]");
+
+      if (!event.target.closest(".user")) {
+        $("#userMenu")?.classList.remove("open");
+      }
+
+      if (!element) return;
+
+      const action = actions[element.dataset.act];
+
+      if (action) {
+        if (element.dataset.act !== "user-menu") {
+          $("#userMenu")?.classList.remove("open");
+        }
+
+        action(element, event);
+      }
+    });
+
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape") {
+        closeModal();
+      }
+    });
+
+    renderHeader();
+    renderLobby();
+    refresh();
+  </script>
 </body>
 </html>
