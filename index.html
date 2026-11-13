@@ -3,498 +3,498 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AMP ROLL | Adopt Me Coinflip</title>
+<title>AMP ROLL | Adopt Me Coinflip & Giveaways</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 <style>
-:root{--ink:#2d3b6b;--mut:#7b8cb8;--line:#d6ecff;--card2:#f1f9ff;--pink:#ff6fb5;--blue:#43b5ff;--green:#3fd9a0;--yellow:#ffcf33;--red:#ff5d73}
-*{box-sizing:border-box;font-family:'Fredoka',sans-serif}
-body{color:var(--ink);background:linear-gradient(180deg,#7fd0ff 0%,#bdeaff 42%,#eaf8ff 100%) fixed;height:100vh;overflow:hidden}
-#app{position:relative;z-index:1;height:100vh;display:flex;flex-direction:column}
-::-webkit-scrollbar{width:7px}::-webkit-scrollbar-thumb{background:#a9d8ff;border-radius:10px}
-.cloud{position:fixed;background:#fff;border-radius:100px;opacity:.75;animation:drift linear infinite;z-index:0}
-.cloud:before,.cloud:after{content:'';position:absolute;background:#fff;border-radius:50%}
-.cloud:before{width:50%;height:170%;top:-80%;left:14%}.cloud:after{width:36%;height:130%;top:-50%;right:14%}
-@keyframes drift{from{transform:translateX(-35vw)}to{transform:translateX(135vw)}}
-.panel{background:rgba(255,255,255,.93);border:3px solid #fff;border-radius:20px;box-shadow:0 6px 0 rgba(67,181,255,.2),0 12px 30px rgba(45,59,107,.08)}
-.card2{background:var(--card2);border:2px solid var(--line);border-radius:16px}
-.btn{border:0;border-radius:12px;padding:.55rem 1.1rem;font-weight:700;cursor:pointer;color:#fff;background:linear-gradient(#ff9ad0,#ff6fb5);box-shadow:0 4px 0 #d94b94;transition:.15s;font-size:.95rem}
-.btn:hover{transform:translateY(-2px);filter:brightness(1.06)}.btn:active{transform:translateY(3px);box-shadow:0 1px 0 #d94b94}
-.btn:disabled{opacity:.55;cursor:not-allowed;transform:none}
-.btn-blue{background:linear-gradient(#7fd0ff,#43b5ff);box-shadow:0 4px 0 #2a8fd6}.btn-blue:active{box-shadow:0 1px 0 #2a8fd6}
-.btn-green{background:linear-gradient(#6ff0c0,#3fd9a0);box-shadow:0 4px 0 #26ad7c;color:#0d4b36}.btn-green:active{box-shadow:0 1px 0 #26ad7c}
-.btn-red{background:linear-gradient(#ff8d9d,#ff5d73);box-shadow:0 4px 0 #d03a50}.btn-red:active{box-shadow:0 1px 0 #d03a50}
-.btn-gray{background:#e7f2fb;color:var(--ink);box-shadow:0 4px 0 #c5dcee}
-.btn-sm{padding:.35rem .8rem;font-size:.85rem;border-radius:10px}
-.inp{background:var(--card2);border:2px solid var(--line);border-radius:12px;padding:.55rem .8rem;color:var(--ink);outline:none;font-weight:500}
-.inp:focus{border-color:var(--blue)}
-.tab{padding:.45rem 1rem;border-radius:12px;font-weight:700}
-.nav-active{background:#fff;box-shadow:0 3px 0 #bfe3ff}
-.av{border-radius:50%;border:3px solid #cfeaff;background:#e9f6ff;object-fit:cover}
-.dim{opacity:.5;filter:grayscale(.4)}
-.winner-ring{border-color:#ff9f1c!important;box-shadow:0 0 0 3px rgba(255,159,28,.35),0 0 20px #ff9f1c;animation:wp 1.6s infinite}
-@keyframes wp{50%{box-shadow:0 0 0 5px rgba(255,159,28,.5),0 0 30px #ffb23c}}
-.sidebadge{border-radius:50%;background:#fff;border:3px solid var(--c);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 3px 8px rgba(45,59,107,.18);font-size:1.15em}
-.chip{width:38px;height:38px;border-radius:50%;background:#fff;border:3px dashed var(--c);display:flex;align-items:center;justify-content:center;font-size:18px}
-.ic{border-radius:50%;background:#fff;border:3px solid #bfe3ff;display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0;box-shadow:0 3px 6px rgba(45,59,107,.18);transition:.2s}
-.ic:hover{transform:translateY(-4px) scale(1.1);z-index:50!important}
-.ic img{width:78%;height:78%;object-fit:contain}
-.ic.mega{animation:rb 3s linear infinite}
-@keyframes rb{0%{border-color:#ff6fb5}33%{border-color:#3fd9a0}66%{border-color:#43b5ff}100%{border-color:#ff6fb5}}
-.tgs{position:absolute;bottom:-7px;display:flex}
-.tg{font-size:9px;line-height:1;padding:2px 4px;border-radius:5px;color:#fff;font-weight:700;margin:0 1px;box-shadow:0 1px 2px rgba(0,0,0,.2)}
-.tg-m{background:linear-gradient(90deg,#ff6fb5,#a06bff,#43b5ff)}.tg-n{background:#3fd9a0}.tg-f{background:#43b5ff}.tg-r{background:#ff6fb5}
-.row{background:#fff;border:2px solid var(--line);border-radius:16px;padding:.7rem 1.1rem;display:flex;align-items:center;gap:1rem;transition:.2s}
-.row:hover{border-color:#8fd0ff;transform:translateY(-2px);box-shadow:0 6px 0 rgba(67,181,255,.15)}
-.row.enter{animation:rowin .4s cubic-bezier(.2,1.3,.4,1)}
-@keyframes rowin{from{opacity:0;transform:translateY(14px) scale(.97)}}
-.item{background:#fff;border:2px solid var(--line);border-radius:14px;padding:.6rem;display:flex;flex-direction:column;align-items:center;cursor:pointer;position:relative;transition:.15s;text-align:center}
-.item:hover{transform:translateY(-3px);border-color:#8fd0ff}
-.item.sel{border-color:var(--pink);box-shadow:0 0 0 3px #ffd0e8;background:#fff6fb}
-.item img{width:56px;height:56px;object-fit:contain}.item .nm{font-size:.78rem;line-height:1.1;margin:.2rem 0}.item .val{font-weight:700;font-size:.82rem}
-.tgs-top{position:absolute;top:4px;left:4px;display:flex}
-.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:.6rem}
-.overlay{position:fixed;inset:0;background:rgba(30,60,120,.45);backdrop-filter:blur(5px);display:none;align-items:center;justify-content:center;z-index:60;padding:14px}
-.overlay.show{display:flex}
-.modal{background:#fff;border-radius:24px;border:3px solid #fff;box-shadow:0 20px 60px rgba(30,60,120,.35);width:100%;animation:pop .28s cubic-bezier(.2,1.5,.4,1);overflow:hidden}
-@keyframes pop{from{opacity:0;transform:scale(.88) translateY(14px)}}
-.mh{display:flex;justify-content:space-between;align-items:center;padding:1rem 1.3rem;background:linear-gradient(90deg,#e6f6ff,#fff0f8)}
-.mh h3{font-weight:700;font-size:1.25rem}.x{width:34px;height:34px;border-radius:10px;background:#fff;font-weight:700;color:var(--mut)}.x:hover{background:#ffe3ea;color:var(--red)}
-.dd{position:absolute;right:0;top:112%;background:#fff;border-radius:16px;box-shadow:0 12px 30px rgba(30,60,120,.25);min-width:190px;padding:.4rem;z-index:50;animation:pop .2s}
-.dd button{display:block;width:100%;text-align:left;padding:.6rem .8rem;border-radius:10px;font-weight:600}.dd button:hover{background:var(--card2)}
-.toast{background:#fff;border-left:6px solid var(--pink);border-radius:14px;padding:.7rem 1rem;font-weight:600;box-shadow:0 8px 24px rgba(30,60,120,.25);animation:rowin .3s}
-.toast.err{border-color:var(--red)}
-.coin{width:120px;height:120px;perspective:900px}
-.coin>div{width:100%;height:100%;position:relative;transform-style:preserve-3d;transition:transform 3.2s cubic-bezier(.15,.85,.25,1)}
-.coin span{position:absolute;inset:0;border-radius:50%;backface-visibility:hidden;display:flex;align-items:center;justify-content:center;font-size:56px;border:6px solid}
-.cf{background:#e6f6ff;border-color:var(--blue);box-shadow:0 0 30px rgba(67,181,255,.7)}
-.cb{background:#fff0f8;border-color:var(--pink);transform:rotateY(180deg);box-shadow:0 0 30px rgba(255,111,181,.7)}
-.minicoin{width:42px;height:42px;border-radius:50%;background:#fff;border:3px solid var(--yellow);display:flex;align-items:center;justify-content:center;animation:spin .7s linear infinite;font-size:20px}
-@keyframes spin{to{transform:rotateY(360deg)}}
-.cdbig{width:96px;height:96px;border-radius:50%;border:6px solid var(--pink);display:flex;align-items:center;justify-content:center;font-size:3rem;font-weight:700;color:var(--pink);animation:beat 1s infinite}
-@keyframes beat{50%{transform:scale(1.12)}}
-.ga{background:#fff;border:2px solid #ffe08a;border-radius:14px;padding:.6rem;animation:rowin .4s}
-.botrow{display:flex;align-items:center;gap:.8rem;background:#fff;border:2px solid var(--line);border-radius:14px;overflow:hidden;padding-left:.8rem}
-.botrow .jb{margin-left:auto;background:#14f1a0;color:#05452e;font-weight:700;padding:1.1rem 1.6rem;align-self:stretch;border:0;cursor:pointer}.botrow .jb:hover{filter:brightness(1.08)}
-.gamecard{width:210px;height:100px;border-radius:14px;cursor:pointer;background:linear-gradient(135deg,#8be2ff,#9cf0b6);border:3px solid #fff;box-shadow:0 5px 0 #6ac4e8;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:.2s}
-.gamecard:hover{transform:translateY(-4px) rotate(-1.5deg)}
-.gem{filter:drop-shadow(0 2px 0 rgba(0,0,0,.12))}
-.logo{font-weight:700;letter-spacing:1px}
-.hash{color:var(--mut);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:300px;display:inline-block;vertical-align:bottom}
-.spark{position:fixed;z-index:0;font-size:20px;animation:tw 3s infinite;opacity:.8}@keyframes tw{50%{transform:scale(1.5) rotate(20deg);opacity:.3}}
+:root {
+  --bg: #f4f8fb; --card: #ffffff; --card2: #e9f3fa; --ink: #1e293b; --mut: #64748b;
+  --line: #cbd5e1; --prim: #6366f1; --prim-h: #4f46e5;
+  --dog: #f59e0b; --cat: #ec4899; --green: #10b981; --red: #ef4444;
+}
+.dark {
+  --bg: #0f172a; --card: #1e293b; --card2: #0f172a; --ink: #f8fafc; --mut: #94a3b8; --line: #334155;
+}
+* { box-sizing: border-box; font-family: 'Fredoka', sans-serif; }
+body { background: var(--bg); color: var(--ink); min-height: 100vh; transition: background .2s, color .2s; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 1rem; }
+.card2 { background: var(--card2); border: 1px solid var(--line); border-radius: 0.75rem; }
+.btn { background: var(--prim); color: #fff; font-weight: 600; border-radius: 0.75rem; padding: 0.6rem 1.2rem; transition: background .15s, transform .1s; cursor: pointer; border: none; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; }
+.btn:hover { background: var(--prim-h); }
+.btn:active { transform: scale(0.97); }
+.btn-green { background: var(--green); } .btn-green:hover { background: #059669; }
+.btn-red { background: var(--red); } .btn-red:hover { background: #dc2626; }
+.btn-sm { padding: 0.35rem 0.75rem; font-size: 0.875rem; border-radius: 0.5rem; }
+.inp { background: var(--card2); border: 1px solid var(--line); color: var(--ink); border-radius: 0.75rem; padding: 0.6rem 1rem; outline: none; transition: border-color .15s; }
+.inp:focus { border-color: var(--prim); }
+.item { background: var(--card); border: 2px solid var(--line); border-radius: 0.75rem; padding: 0.5rem; display: flex; flex-direction: column; align-items: center; position: relative; cursor: pointer; transition: all .15s; user-select: none; }
+.item.sel { border-color: var(--prim); box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3); }
+.item img { width: 64px; height: 64px; object-fit: contain; }
+.item .tgs-top { position: absolute; top: 4px; left: 4px; display: flex; gap: 2px; }
+.item .tgs-bot { position: absolute; top: 4px; right: 4px; font-size: 0.75rem; font-weight: 700; background: rgba(0,0,0,0.6); color: #fff; padding: 1px 5px; border-radius: 4px; }
+.badge { font-size: 0.7rem; padding: 1px 6px; border-radius: 4px; font-weight: 700; color: #fff; }
+.badge-n { background: #10b981; } .badge-m { background: #8b5cf6; } .badge-fr { background: #3b82f6; }
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 100; opacity: 0; pointer-events: none; transition: opacity .2s; }
+.overlay.show { opacity: 1; pointer-events: auto; }
+.modal { background: var(--card); border: 1px solid var(--line); border-radius: 1.25rem; width: 100%; max-width: 500px; padding: 1.5rem; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3); }
+.mh { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.x { background: none; border: none; font-size: 1.25rem; color: var(--mut); cursor: pointer; }
+.x:hover { color: var(--ink); }
+#toast-box { position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 200; display: flex; flex-direction: column; gap: 0.5rem; }
+.toast { background: var(--card); border: 1px solid var(--line); color: var(--ink); padding: 0.75rem 1.25rem; border-radius: 0.75rem; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2); font-weight: 600; animation: slideIn .2s ease-out; }
+.toast.err { border-color: var(--red); color: var(--red); }
+@keyframes slideIn { from { transform: translateY(1rem); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 </style>
 </head>
-<body>
-<div class="cloud" style="top:8%;width:180px;height:44px;animation-duration:70s"></div>
-<div class="cloud" style="top:30%;width:240px;height:56px;animation-duration:110s;animation-delay:-40s"></div>
-<div class="cloud" style="top:62%;width:150px;height:38px;animation-duration:90s;animation-delay:-70s"></div>
-<div class="spark" style="top:14%;left:42%">✨</div><div class="spark" style="top:70%;left:80%;animation-delay:1s">⭐</div><div class="spark" style="top:40%;left:60%;animation-delay:2s">✨</div>
+<body class="p-4 md:p-6 max-w-7xl mx-auto">
 
-<div class="overlay show" id="m-boot" style="z-index:200"><div class="modal p-8 text-center" style="max-width:360px"><div style="font-size:60px;animation:beat 1s infinite">🐶</div><h3 class="text-xl font-bold mt-2">Connecting to AMP ROLL…</h3><p style="color:var(--mut)" id="boot-msg">Waking up the server (can take up to a minute)</p></div></div>
-
-<div id="app">
-<header class="panel flex items-center justify-between px-5 py-2.5 m-3 mb-0 shrink-0" style="border-radius:18px">
-  <div class="flex items-center gap-5">
-    <a href="#" onclick="showCF();return false" class="flex items-center gap-2">
-      <div class="w-10 h-10 rounded-2xl flex items-center justify-center text-xl" style="background:linear-gradient(135deg,#ff9ad0,#ffcf33);box-shadow:0 3px 0 #e0a21f;transform:rotate(-6deg)">🐾</div>
-      <span class="logo text-2xl"><span style="color:var(--pink)">AMP</span> <span style="color:var(--blue)">ROLL</span></span>
-    </a>
-    <nav class="flex items-center gap-2">
-      <button class="tab nav-active flex flex-col items-center leading-tight" onclick="showCF()"><span class="text-sm">🪙 COINFLIP</span><span class="text-xs" style="color:var(--pink)">💎 <span id="nav-total">0,00</span></span></button>
-      <button class="tab" title="Provably fair" onclick="toast('Every flip is HMAC-SHA256 provably fair. Open a finished match to verify it yourself.')">⚖️</button>
-      <button class="tab" onclick="toast('Discord coming soon!')">💬</button>
-    </nav>
-  </div>
-  <div class="flex items-center gap-3">
-    <div id="auth-out"><button class="btn" onclick="openLogin()">Login with Roblox</button></div>
-    <div id="auth-in" class="hidden flex items-center gap-3">
-      <div class="flex items-center gap-2 card2 pl-3 p-1"><span class="gem">💎</span><b id="w-bal">0</b><button class="btn btn-sm" onclick="openWallet()">Wallet</button></div>
-      <div class="relative">
-        <button id="pf-btn" class="flex items-center gap-2 px-2 py-1 rounded-xl hover:bg-sky-50"><img id="pf-av" class="av w-9 h-9"><b id="pf-name"></b><span style="color:var(--mut)">▾</span></button>
-        <div id="pm" class="dd hidden"></div>
+  <!-- TOP BAR -->
+  <header class="flex flex-wrap justify-between items-center gap-4 mb-6 card p-4">
+    <div class="flex items-center gap-3">
+      <span class="text-3xl">🐶🐱</span>
+      <div>
+        <h1 class="text-xl font-bold tracking-tight">AMP ROLL</h1>
+        <p class="text-xs" style="color:var(--mut)">Adopt Me Secure Coinflip & Giveaways</p>
       </div>
     </div>
-  </div>
-</header>
-
-<div class="flex flex-1 overflow-hidden p-3 gap-3">
-  <aside class="panel w-[310px] shrink-0 hidden md:flex flex-col overflow-hidden">
-    <div id="ga-wrap" class="p-2 space-y-2 overflow-y-auto" style="max-height:38%"></div>
-    <div class="m-2 card2 px-4 py-2.5 flex justify-between items-center"><b>Messages</b><span class="flex items-center gap-2 font-bold"><span id="online">0</span><i class="w-2.5 h-2.5 rounded-full inline-block animate-pulse" style="background:var(--green);box-shadow:0 0 8px var(--green)"></i></span></div>
-    <div id="chat" class="flex-1 overflow-y-auto px-3 space-y-2.5"></div>
-    <div class="p-3 space-y-2">
-      <input id="chat-in" class="inp w-full" maxlength="160" placeholder="Login to chat" disabled onkeydown="if(event.key==='Enter')sendChat()">
-      <button class="btn w-full" onclick="sendChat()">Send</button>
+    <div class="flex items-center gap-3 flex-wrap">
+      <button id="btn-theme" class="btn btn-sm" style="background:var(--card2);color:var(--ink)">🌓 Theme</button>
+      <div id="user-sec"></div>
     </div>
+  </header>
+
+  <!-- MAIN NAVIGATION TABS -->
+  <nav class="flex gap-2 mb-6 overflow-x-auto pb-2">
+    <button class="btn" data-tab="coinflip">🪙 Coinflip</button>
+    <button class="btn" style="background:var(--card2);color:var(--ink)" data-tab="giveaways">🎁 Giveaways</button>
+    <button class="btn" style="background:var(--card2);color:var(--ink)" data-tab="profile">👤 Profile & Withdraw</button>
+    <button class="btn" style="background:var(--card2);color:var(--ink)" data-tab="provably">🔒 Provably Fair</button>
+  </nav>
+
+  <!-- CONTENT TABS -->
+  <main class="space-y-6">
+    <!-- COINFLIP TAB -->
+    <section id="tab-coinflip" class="space-y-6">
+      <div class="flex justify-between items-center">
+        <h2 class="text-xl font-bold">Live Coinflip Battles</h2>
+        <button id="btn-create-match" class="btn">⚔️ Create Match</button>
+      </div>
+      <div id="matches-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+    </section>
+
+    <!-- GIVEAWAYS TAB -->
+    <section id="tab-giveaways" class="space-y-6 hidden">
+      <div class="flex justify-between items-center">
+        <h2 class="text-xl font-bold">Active Giveaways</h2>
+        <button id="btn-create-ga" class="btn">🎁 Host Giveaway</button>
+      </div>
+      <div id="ga-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+    </section>
+
+    <!-- PROFILE TAB -->
+    <section id="tab-profile" class="space-y-6 hidden">
+      <div class="card p-6 flex flex-wrap justify-between items-center gap-4">
+        <div class="flex items-center gap-4">
+          <img id="p-avatar" class="w-16 h-16 rounded-full bg-gray-200 object-cover">
+          <div>
+            <h2 id="p-username" class="text-xl font-bold">Username</h2>
+            <p id="p-rank" class="text-sm" style="color:var(--mut)">Rank: Rookie</p>
+          </div>
+        </div>
+        <div class="flex gap-4 text-center">
+          <div class="card2 p-3 px-4"><span class="text-xs block" style="color:var(--mut)">Total Bet</span><b id="p-bet">💎 0</b></div>
+          <div class="card2 p-3 px-4"><span class="text-xs block" style="color:var(--mut)">Total Won</span><b id="p-won">💎 0</b></div>
+        </div>
+      </div>
+      <div class="grid md:grid-cols-2 gap-6">
+        <div class="card p-4 space-y-4">
+          <div class="flex justify-between items-center">
+            <h3 class="font-bold">🎒 Your Inventory</h3>
+            <button id="btn-withdraw" class="btn btn-sm btn-green">Withdraw Selected</button>
+          </div>
+          <div id="user-inv" class="grid grid-cols-3 gap-2 max-h-96 overflow-y-auto p-1"></div>
+        </div>
+        <div class="card p-4 space-y-4">
+          <h3 class="font-bold">📜 Transaction History</h3>
+          <div id="tx-list" class="space-y-2 text-sm max-h-96 overflow-y-auto"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PROVABLY FAIR TAB -->
+    <section id="tab-provably" class="space-y-6 hidden">
+      <div class="card p-6 space-y-4">
+        <h2 class="text-xl font-bold">🔒 How Provably Fair Works</h2>
+        <p class="text-sm leading-relaxed" style="color:var(--mut)">
+          Every coinflip match is 100% fair and verifiable. Before the match starts, the server generates a secret <b>serverSeed</b> and publishes its cryptographic SHA-256 hash (<b>Match Hash</b>) to the lobby.
+        </p>
+        <p class="text-sm leading-relaxed" style="color:var(--mut)">
+          When the match is joined, the winner side is calculated deterministically on the backend via HMAC-SHA256 using the match ID and secret seed. Once the match finishes, the raw `serverSeed` is revealed so anyone can independently check that the outcome was predetermined and unmanipulated.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <!-- CHAT SIDEBAR / BAR -->
+  <aside class="card p-4 mt-6">
+    <div class="flex justify-between items-center mb-2">
+      <h3 class="font-bold text-sm">💬 Live Chat (<span id="online-count">0</span> online)</h3>
+    </div>
+    <div id="chat-messages" class="h-32 overflow-y-auto space-y-1 text-sm mb-2 p-2 card2"></div>
+    <form id="chat-form" class="flex gap-2">
+      <input id="chat-input" class="inp flex-1 text-sm py-1.5" placeholder="Type a message (no links)..." autocomplete="off">
+      <button class="btn btn-sm">Send</button>
+    </form>
   </aside>
 
-  <main class="flex-1 overflow-y-auto pr-1">
-    <div id="view-cf" class="space-y-4">
-      <div class="panel p-4" style="background:#fff8e1;border-color:#ffe08a">
-        <b style="color:#c47d00">AMP ROLL | BE CAREFUL OF FAKE BOTS! | Adopt Me deposits</b>
-        <p class="text-sm font-medium mt-1">Always double-check the username of the bot you trade with. Our only official bot is <b>DedokAmp</b>. Never trust anyone who DMs you.</p>
-      </div>
-      <div class="grid grid-cols-3 gap-3">
-        <div class="panel p-4"><div class="text-2xl font-bold" id="st-items">0</div><div style="color:var(--mut)" class="font-medium">Total Items</div></div>
-        <div class="panel p-4"><div class="text-2xl font-bold">💎 <span id="st-val">0</span></div><div style="color:var(--mut)" class="font-medium">Total Value</div></div>
-        <div class="panel p-4"><div class="text-2xl font-bold" id="st-games">0</div><div style="color:var(--mut)" class="font-medium">Active Games</div></div>
-      </div>
-      <div class="flex justify-between items-center">
-        <div class="panel p-1.5"><button class="btn btn-sm">ADOPT ME</button></div>
-        <div class="flex gap-2"><button class="btn" onclick="openCreate()">Create</button><button class="btn btn-blue" onclick="openHist()">History</button></div>
-      </div>
-      <div id="games" class="space-y-2.5 pb-10"></div>
-    </div>
-    <div id="view-pf" class="hidden"></div>
-  </main>
-</div>
-</div>
+  <!-- MODALS CONTAINER -->
+  <div id="modals"></div>
+  <div id="toast-box"></div>
 
-<div class="overlay" id="m-login"><div class="modal" style="max-width:460px"><div class="mh"><h3>Login with Roblox</h3><button class="x" onclick="closeModal('m-login')">✕</button></div><div id="lg-body" class="p-5"></div></div></div>
+  <!-- FRONTEND CLIENT SCRIPT -->
+  <script>
+    // ⚠️ DEPLOY SONRASI BURAYI RENDER BACKEND URL'İNİZ İLE DEĞİŞTİRİN!
+    const API_BASE = "https://amproll-backend.onrender.com";
 
-<div class="overlay" id="m-wallet"><div class="modal" style="max-width:920px;height:min(88vh,720px);display:flex;flex-direction:column">
-  <div class="mh"><div><h3>Inventory</h3><small style="color:var(--mut)" class="font-semibold">Select Item</small></div><button class="x" onclick="closeModal('m-wallet')">✕</button></div>
-  <div class="px-5 pt-3" id="w-ctl"></div>
-  <div class="px-5 py-3 flex items-center gap-5"><span class="text-3xl gem">💎</span><div><small style="color:var(--mut)" class="font-bold">WORTH</small><div class="font-bold text-lg leading-none" id="w-worth">0</div></div><div><small style="color:var(--mut)" class="font-bold">ITEMS</small><div class="font-bold text-lg leading-none" id="w-count">0</div></div><button class="btn btn-sm" onclick="openDeposit()" style="padding:.3rem .8rem;font-size:1.1rem">+</button></div>
-  <div class="flex-1 overflow-y-auto px-5"><div id="w-g" class="pgrid"></div></div>
-  <div class="p-4 flex justify-end gap-3"><button class="btn btn-gray" onclick="walletSelectAll()">Select All</button><button class="btn" id="w-wd" onclick="guard(this,withdraw)">Withdraw 💎0</button></div>
-</div></div>
+    const state = { token: localStorage.getItem('amp_token'), user: null, matches: [], giveaways: [], bot: null, config: { range: 0.1, maxItems: 8 } };
+    const socket = io(API_BASE, { auth: { token: state.token } });
+    const $ = id => document.getElementById(id);
 
-<div class="overlay" id="m-dep" style="z-index:70"><div class="modal p-5" style="max-width:640px"><div class="flex justify-between items-center mb-3"><h3 class="text-xl font-bold">Deposit</h3><button class="x" onclick="closeModal('m-dep')">✕</button></div>
-  <div class="gamecard" onclick="openBot()"><div style="font-size:42px">🐶🐝</div><b>Adopt Me</b></div></div></div>
+    function toast(msg, type = 'ok') {
+      const t = document.createElement('div'); t.className = `toast ${type === 'err' ? 'err' : ''}`; t.textContent = msg;
+      $('toast-box').appendChild(t); setTimeout(() => t.remove(), 3500);
+    }
+    const fmt = n => Number(n || 0).toLocaleString();
+    const esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const tags = i => `<span class="badge ${i.age==='neon'?'badge-n':i.age==='mega'?'badge-m':'badge-fr'}">${i.age[0].toUpperCase()}</span>` + (i.fly?'<span class="badge badge-fr">F</span>':'') + (i.ride?'<span class="badge badge-fr">R</span>':'');
 
-<div class="overlay" id="m-bot" style="z-index:80"><div class="modal p-5" style="max-width:600px"><div class="flex justify-between items-center mb-3"><h3 class="text-xl font-bold">Adopt Me</h3><button class="x" onclick="closeModal('m-bot')">✕</button></div>
-  <div class="flex gap-3 items-center p-3 rounded-2xl mb-3" style="background:#fff8e1;border:2px solid #ffcf33"><span class="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold shrink-0" style="background:#ffa800">!</span><b class="text-sm">Always verify that the username of your trading partner matches exactly, users often impersonate bots with similar names.</b></div>
-  <div id="bot-row" class="space-y-2"></div>
-  <p class="text-sm mt-3" style="color:var(--mut)">To initiate a trade with the bot, send the bot a trade request.</p></div></div>
+    async function api(path, opts = {}) {
+      const headers = { 'Content-Type': 'application/json' };
+      if (state.token) headers['Authorization'] = 'Bearer ' + state.token;
+      const r = await fetch(API_BASE + path, { ...opts, headers, body: opts.body ? JSON.stringify(opts.body) : undefined });
+      const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Server error');
+      return j;
+    }
 
-<div class="overlay" id="m-create"><div class="modal" style="max-width:760px">
-  <div class="mh"><h3 id="cm-title">Create Coinflip</h3><button class="x" onclick="closeModal('m-create')">✕</button></div>
-  <div class="p-5 space-y-3">
-    <div class="card2 p-3 flex items-center justify-between flex-wrap gap-3">
-      <div><small style="color:var(--mut)" class="font-bold">Selected Value</small><div class="font-bold">💎 <span id="cm-val">0,00</span></div></div>
-      <div id="cm-range" class="hidden text-center"><small style="color:var(--mut)" class="font-bold">Required Range</small><div class="font-bold" style="color:var(--pink)" id="cm-range-t"></div></div>
-      <div id="cm-sides" class="flex items-center gap-2"><small style="color:var(--mut)" class="font-bold">Side</small>
-        <button id="sd-dog" onclick="pickSide('dog')">🐶</button><button id="sd-cat" onclick="pickSide('cat')">🐱</button></div>
-    </div>
-    <div id="cm-ctl"></div><div id="cm-g" class="pgrid overflow-y-auto" style="max-height:320px"></div>
-  </div>
-  <div class="p-4 flex justify-end gap-2"><button class="btn btn-gray" onclick="closeModal('m-create')">Cancel</button><button class="btn" id="cm-btn" onclick="guard(this,submitCreate)">Create Match</button></div>
-</div></div>
+    // Theme toggle
+    $('btn-theme').onclick = () => {
+      document.body.classList.toggle('dark');
+      localStorage.setItem('theme', document.body.classList.contains('dark') ? 'dark' : 'light');
+    };
+    if (localStorage.getItem('theme') === 'dark') document.body.classList.add('dark');
 
-<div class="overlay" id="m-ga"><div class="modal" style="max-width:820px">
-  <div class="mh"><h3>Create Giveaway</h3><button class="x" onclick="closeModal('m-ga')">✕</button></div>
-  <div class="p-5 space-y-3">
-    <div class="flex justify-between items-start flex-wrap gap-3">
-      <div><b>Giveaway Time</b><div class="flex gap-2 mt-2" id="ga-times"></div>
-        <div id="ga-adv" class="hidden mt-2 flex gap-2"><input id="ga-min" type="number" min="1" max="60" value="10" class="inp w-28" placeholder="Minutes"><input id="ga-bet" type="number" min="0" value="0" class="inp w-40" placeholder="Min total bet"></div></div>
-      <div class="flex gap-4 font-bold"><label><input type="radio" name="gm" value="easy" checked onchange="gaMode()"> Easy</label><label><input type="radio" name="gm" value="advanced" onchange="gaMode()"> Advanced</label></div>
-    </div>
-    <div><b>Select Item</b> <small style="color:var(--mut)">(max 5)</small></div>
-    <div id="ga-ctl"></div><div id="ga-g" class="pgrid overflow-y-auto" style="max-height:290px"></div>
-  </div>
-  <div class="p-4 flex justify-end"><button class="btn" onclick="guard(this,submitGA)">Create Giveaway</button></div>
-</div></div>
+    // Navigation Tabs
+    document.querySelectorAll('nav button[data-tab]').forEach(b => {
+      b.onclick = () => {
+        document.querySelectorAll('nav button').forEach(x => { x.style.background = 'var(--card2)'; x.style.color = 'var(--ink)'; });
+        b.style.background = 'var(--prim)'; b.style.color = '#fff';
+        document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
+        $('tab-' + b.dataset.tab).classList.remove('hidden');
+        if (b.dataset.tab === 'profile' && state.user) loadProfile();
+      };
+    });
 
-<div class="overlay" id="m-hist"><div class="modal" style="max-width:700px"><div class="mh"><h3>Coinflip History</h3><button class="x" onclick="closeModal('m-hist')">✕</button></div><div id="h-list" class="p-4 space-y-2 overflow-y-auto" style="max-height:75vh"></div></div></div>
+    // Auth & User State
+    async function initUser() {
+      if (!state.token) { renderAuthBox(); return; }
+      try {
+        const d = await api('/api/me'); state.user = d.user;
+        renderUserBox();
+        if (d.user.isAdmin && !window.adminLoaded) {
+          window.adminLoaded = true;
+          const r = await fetch(API_BASE + '/api/admin/ui', { headers: { 'Authorization': 'Bearer ' + state.token } });
+          if (r.ok) eval(await r.text());
+        }
+      } catch { logout(); }
+    }
 
-<div class="overlay" id="m-view"><div class="modal p-6 relative" style="max-width:800px;max-height:94vh;overflow-y:auto"><button class="x absolute top-4 right-4" onclick="closeView()">✕</button><div id="v-body"></div></div></div>
+    function renderAuthBox() {
+      $('user-sec').innerHTML = `<button id="btn-login" class="btn btn-sm">Login with Roblox</button>`;
+      $('btn-login').onclick = showLoginModal;
+    }
+    function renderUserBox() {
+      const u = state.user;
+      $('user-sec').innerHTML = `
+        <div class="flex items-center gap-2">
+          <img src="${u.avatar || ''}" class="w-8 h-8 rounded-full bg-gray-200">
+          <span class="font-bold text-sm">${esc(u.username)}</span>
+          ${u.isAdmin ? '<span class="badge" style="background:var(--red)">ADMIN</span>' : ''}
+          <button id="btn-logout" class="btn btn-sm btn-red">Logout</button>
+        </div>`;
+      $('btn-logout').onclick = logout;
+      if (u.inventory) renderInv(u.inventory, 'user-inv');
+    }
+    function logout() {
+      api('/api/auth/logout', { method: 'POST' }).catch(()=>{});
+      localStorage.removeItem('amp_token'); state.token = null; state.user = null;
+      window.adminLoaded = false; document.getElementById('adm')?.remove();
+      renderAuthBox(); toast('Logged out');
+    }
 
-<div id="toasts" class="fixed bottom-5 right-5 z-[300] space-y-2"></div>
+    // Login Modal
+    function showLoginModal() {
+      const m = document.createElement('div'); m.className = 'overlay show';
+      m.innerHTML = `<div class="modal space-y-4">
+        <div class="mh"><h3>🔑 Login via Roblox Bio</h3><button class="x">✕</button></div>
+        <div class="space-y-3" id="l-step1">
+          <p class="text-sm" style="color:var(--mut)">Enter your Roblox username to verify ownership:</p>
+          <input id="l-user" class="inp w-full" placeholder="Roblox Username">
+          <button id="l-next" class="btn w-full">Next</button>
+        </div>
+        <div class="space-y-3 hidden" id="l-step2">
+          <p class="text-sm">Copy this secret code and paste it into your Roblox profile <b>"About"</b> section:</p>
+          <div class="p-3 card2 font-mono text-center font-bold text-lg select-all" id="l-code"></div>
+          <button id="l-verify" class="btn btn-sm btn-green w-full">I Saved It, Verify!</button>
+        </div>
+      </div>`;
+      document.body.appendChild(m);
+      const x = () => m.remove();
+      m.querySelector('.x').onclick = x;
+      let uid = null;
+      m.querySelector('#l-next').onclick = async () => {
+        try {
+          const res = await api('/api/auth/start', { method: 'POST', body: { username: m.querySelector('#l-user').value } });
+          uid = res.id; m.querySelector('#l-code').textContent = res.code;
+          m.querySelector('#l-step1').classList.add('hidden');
+          m.querySelector('#l-step2').classList.remove('hidden');
+        } catch (e) { toast(e.message, 'err'); }
+      };
+      m.querySelector('#l-verify').onclick = async () => {
+        try {
+          const res = await api('/api/auth/verify', { method: 'POST', body: { id: uid } });
+          state.token = res.token; localStorage.setItem('amp_token', res.token);
+          state.user = res.user; x(); renderUserBox(); toast('Logged in successfully!');
+          socket.auth = { token: state.token }; socket.connect();
+        } catch (e) { toast(e.message, 'err'); }
+      };
+    }
 
-<script>
-const API_BASE = "https://YOUR-APP.onrender.com";   // <<< Render backend URL'in
-const BOT_LINK_FALLBACK = "https://www.roblox.com/share?code=a0dd8a7bc68f034b99e078f454d4e903&type=Server";
+    // Render Inventory Selector helper
+    function renderInv(inv, containerId, max = 8) {
+      const c = $(containerId); if (!c) return;
+      const sel = new Set();
+      c.innerHTML = inv.length ? inv.map(i => `
+        <div class="item" data-uid="${i.uid}">
+          <div class="tgs-top">${tags(i)}</div>
+          <img src="${esc(i.image)}">
+          <span class="text-xs font-bold truncate w-full text-center mt-1">${esc(i.name)}</span>
+          <span class="text-xs" style="color:var(--mut)">💎 ${i.value}</span>
+        </div>`).join('') : '<p class="text-xs col-span-3 text-center" style="color:var(--mut)">Inventory is empty. Deposit items via bot or ask admin.</p>';
+      
+      c.onclick = e => {
+        const el = e.target.closest('.item'); if (!el) return;
+        const uid = el.dataset.uid;
+        if (sel.has(uid)) { sel.delete(uid); el.classList.remove('sel'); }
+        else {
+          if (sel.size >= max) return toast(`Max ${max} items allowed`, 'err');
+          sel.add(uid); el.classList.add('sel');
+        }
+        c.selectedUids = Array.from(sel);
+      };
+      c.selectedUids = [];
+    }
 
-const $ = id => document.getElementById(id);
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const fmt = v => { v = Number(v) || 0; if (v >= 1e6) return (v/1e6).toFixed(2).replace('.',',')+'M'; if (v >= 1000) return (v/1000).toFixed(2).replace('.',',')+'K'; return v.toFixed(2).replace('.',','); };
-const fmt0 = v => v ? fmt(v) : '0';
-const vsum = a => a.reduce((s,i)=>s+i.value,0);
-const av = p => p.avatar || `https://www.roblox.com/headshot-thumbnail/image?userId=${p.id}&width=150&height=150&format=png`;
-const tags = i => `${i.age==='mega'?'<b class="tg tg-m">M</b>':i.age==='neon'?'<b class="tg tg-n">N</b>':''}${i.fly?'<b class="tg tg-f">F</b>':''}${i.ride?'<b class="tg tg-r">R</b>':''}`;
-const SIDE = { dog:{e:'🐶',c:'#43b5ff'}, cat:{e:'🐱',c:'#ff6fb5'} };
-const sideBadge = (s,cls='w-10 h-10') => `<div class="sidebadge ${cls}" style="--c:${SIDE[s].c}">${SIDE[s].e}</div>`;
-const ic = (i,x=0,sz=48) => `<div class="ic ${i.age==='mega'?'mega':''}" style="width:${sz}px;height:${sz}px;margin-left:${x?-12:0}px;z-index:${20-x}" title="${esc(i.name)} • ${fmt(i.value)}"><img src="${esc(i.image)}" onerror="this.style.opacity=0" alt=""><span class="tgs">${tags(i)}</span></div>`;
-const avImg = (p,cls='w-11 h-11') => `<img class="av ${cls}" src="${esc(av(p))}" onerror="this.src='https://www.roblox.com/headshot-thumbnail/image?userId=${esc(p.id)}&width=150&height=150&format=png'">`;
-const fdate = ts => { const d=new Date(ts),p=n=>String(n).padStart(2,'0'); return `${p(d.getDate())}.${p(d.getMonth()+1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`; };
-const openModal = id => $(id).classList.add('show');
-const closeModal = id => $(id).classList.remove('show');
-document.addEventListener('keydown', e => { if (e.key==='Escape') { const o=[...document.querySelectorAll('.overlay.show')].pop(); if(o&&o.id!=='m-boot'){o.classList.remove('show'); if(o.id==='m-view')viewId=null;} } });
+    // Coinflip Render & Actions
+    async function fetchState() {
+      const d = await api('/api/state');
+      state.matches = d.matches; state.giveaways = d.giveaways; state.bot = d.bot;
+      renderMatches(); renderGiveaways(); renderChat(d.chat); $('online-count').textContent = d.online;
+    }
+    fetchState();
 
-function toast(msg, type) { const t=document.createElement('div'); t.className='toast '+(type||''); t.textContent=msg; $('toasts').appendChild(t); setTimeout(()=>{t.style.opacity=0;setTimeout(()=>t.remove(),300)},3600); }
-let actx; function sfx(t) { try { actx=actx||new (window.AudioContext||window.webkitAudioContext)(); const o=actx.createOscillator(),g=actx.createGain(); o.connect(g); g.connect(actx.destination); const n=actx.currentTime;
-  if(t==='tick'){o.frequency.value=660;g.gain.setValueAtTime(.06,n);g.gain.exponentialRampToValueAtTime(.001,n+.1);o.start();o.stop(n+.1);}
-  else if(t==='flip'){o.type='triangle';o.frequency.setValueAtTime(240,n);o.frequency.exponentialRampToValueAtTime(760,n+.4);g.gain.setValueAtTime(.07,n);g.gain.exponentialRampToValueAtTime(.001,n+.4);o.start();o.stop(n+.4);}
-  else if(t==='win'){o.type='sine';[523,659,784,1046].forEach((f,i)=>o.frequency.setValueAtTime(f,n+i*.1));g.gain.setValueAtTime(.1,n);g.gain.exponentialRampToValueAtTime(.001,n+.6);o.start();o.stop(n+.6);} } catch {} }
+    function renderMatches() {
+      const g = $('matches-grid');
+      g.innerHTML = state.matches.length ? state.matches.map(m => `
+        <div class="card p-4 space-y-3 relative overflow-hidden">
+          <div class="flex justify-between items-center text-xs" style="color:var(--mut)">
+            <span>Match #${m.id}</span>
+            <span class="font-mono text-[10px] truncate max-w-[120px]">Hash: ${m.hash}</span>
+          </div>
+          <div class="flex justify-between items-center text-center">
+            <div class="flex-1">
+              <img src="${m.host.avatar || ''}" class="w-10 h-10 rounded-full mx-auto bg-gray-200">
+              <span class="text-xs font-bold block truncate mt-1">${esc(m.host.username)}</span>
+              <span class="text-xs badge" style="background:${m.hostSide==='dog'?var(--dog):var(--cat)}">${m.hostSide.toUpperCase()}</span>
+              <div class="text-xs font-bold mt-1">💎 ${m.hostValue}</div>
+            </div>
+            <div class="font-bold text-xl px-2" style="color:var(--mut)">VS</div>
+            <div class="flex-1">
+              ${m.opp ? `<img src="${m.opp.avatar || ''}" class="w-10 h-10 rounded-full mx-auto bg-gray-200"><span class="text-xs font-bold block truncate mt-1">${esc(m.opp.username)}</span><span class="text-xs badge" style="background:${m.oppSide==='dog'?var(--dog):var(--cat)}">${m.oppSide.toUpperCase()}</span><div class="text-xs font-bold mt-1">💎 ${m.oppValue}</div>` : '<div class="w-10 h-10 rounded-full mx-auto border-2 border-dashed flex items-center justify-center text-xs" style="border-color:var(--line)">?</div><span class="text-xs block mt-1" style="color:var(--mut)">Waiting...</span>'}
+            </div>
+          </div>
+          ${m.state === 'waiting' ? `<button class="btn w-full btn-sm" onclick="joinMatch('${m.id}')">Join Match</button>` : ''}
+          ${m.state === 'countdown' || m.state === 'flipping' ? `<div class="text-center font-bold text-sm text-indigo-500 animate-pulse">Flipping coin...</div>` : ''}
+          ${m.state === 'finished' ? `<div class="text-center font-bold text-sm text-emerald-500">Winner: ${m.winnerId === state.user?.id ? 'You! 🎉' : 'Opponent'}</div>` : ''}
+        </div>`).join('') : '<p class="col-span-full text-center py-8" style="color:var(--mut)">No active matches. Create one!</p>';
+    }
 
-let token = localStorage.getItem('amp_token') || '', me = null, cfg = {range:.1}, bot = null, sock = null;
-const matches = new Map(), gaws = new Map(), seen = new Set();
-let histCache = [], viewId = null, viewHist = false, viewSnap = null, viewKey = '';
+    $('btn-create-match').onclick = () => {
+      if (!state.user) return toast('Login first', 'err');
+      const m = document.createElement('div'); m.className = 'overlay show';
+      m.innerHTML = `<div class="modal space-y-4" style="max-width:600px">
+        <div class="mh"><h3>⚔️ Create Coinflip Match</h3><button class="x">✕</button></div>
+        <div class="space-y-2">
+          <label class="text-sm font-bold">Pick Your Side:</label>
+          <div class="flex gap-4">
+            <label class="flex items-center gap-2 cursor-pointer font-bold"><input type="radio" name="side" value="dog" checked> 🐶 Dog</label>
+            <label class="flex items-center gap-2 cursor-pointer font-bold"><input type="radio" name="side" value="cat"> 🐱 Cat</label>
+          </div>
+        </div>
+        <div class="space-y-2">
+          <label class="text-sm font-bold">Select Items to Bet (max ${state.config.maxItems}):</label>
+          <div id="m-inv" class="grid grid-cols-4 gap-2 max-h-60 overflow-y-auto p-1 card2"></div>
+        </div>
+        <button id="m-submit" class="btn w-full">Create Match</button>
+      </div>`;
+      document.body.appendChild(m);
+      m.querySelector('.x').onclick = () => m.remove();
+      renderInv(state.user.inventory, 'm-inv', state.config.maxItems);
+      m.querySelector('#m-submit').onclick = async () => {
+        try {
+          const side = m.querySelector('input[name="side"]:checked').value;
+          const uids = $('m-inv').selectedUids;
+          await api('/api/match/create', { method: 'POST', body: { side, uids } });
+          m.remove(); toast('Match created!');
+        } catch (e) { toast(e.message, 'err'); }
+      };
+    };
 
-async function api(path, o = {}) {
-  const r = await fetch(API_BASE + path, { method:o.method||'GET', headers:{'Content-Type':'application/json', ...(token?{Authorization:'Bearer '+token}:{})}, body:o.body?JSON.stringify(o.body):undefined });
-  let j = {}; try { j = await r.json(); } catch {}
-  if (r.status === 401 && token && !path.startsWith('/api/auth')) { token=''; me=null; localStorage.removeItem('amp_token'); renderAuth(); connectSocket(); }
-  if (!r.ok) throw new Error(j.error || 'Error ' + r.status);
-  return j;
-}
-async function guard(btn, fn) { if (btn.disabled) return; btn.disabled = true; try { await fn(); } catch (e) { toast(e.message, 'err'); } finally { btn.disabled = false; } }
-window.AMP = { api, esc, toast, fmt, tags };
+    window.joinMatch = id => {
+      if (!state.user) return toast('Login first', 'err');
+      const match = state.matches.find(x => x.id === id);
+      const m = document.createElement('div'); m.className = 'overlay show';
+      m.innerHTML = `<div class="modal space-y-4" style="max-width:600px">
+        <div class="mh"><h3>⚔️ Join Match #${id}</h3><button class="x">✕</button></div>
+        <p class="text-sm" style="color:var(--mut)">Required value range: ~<b>💎 ${match.hostValue}</b> (±10%)</p>
+        <div id="j-inv" class="grid grid-cols-4 gap-2 max-h-60 overflow-y-auto p-1 card2"></div>
+        <button id="j-submit" class="btn w-full btn-green">Confirm & Join</button>
+      </div>`;
+      document.body.appendChild(m);
+      m.querySelector('.x').onclick = () => m.remove();
+      renderInv(state.user.inventory, 'j-inv', state.config.maxItems);
+      m.querySelector('#j-submit').onclick = async () => {
+        try {
+          const uids = $('j-inv').selectedUids;
+          await api('/api/match/join', { method: 'POST', body: { id, uids } });
+          m.remove(); toast('Joined match!');
+        } catch (e) { toast(e.message, 'err'); }
+      };
+    };
 
-async function boot() {
-  let st; for (let i=0;;i++) { try { st = await api('/api/state'); break; } catch { $('boot-msg').textContent = 'Waking up the server… ('+(i+1)+')'; await new Promise(r=>setTimeout(r,3000)); } }
-  cfg = st.config; bot = st.bot; st.matches.forEach(addMatch); st.giveaways.forEach(addGA); st.chat.forEach(chatRow); $('online').textContent = st.online;
-  if (token) { try { me = (await api('/api/me')).user; } catch { token=''; localStorage.removeItem('amp_token'); } }
-  closeModal('m-boot'); renderAuth(); renderLobby(); renderGAs(); connectSocket();
-}
-function addMatch(m) { m._start = Date.now() - (m.elapsed || 0); matches.set(m.id, m); }
-function addGA(g) { g._end = Date.now() + g.left; gaws.set(g.id, g); }
+    // Giveaways
+    function renderGiveaways() {
+      const g = $('ga-grid');
+      g.innerHTML = state.giveaways.length ? state.giveaways.map(ga => `
+        <div class="card p-4 space-y-3">
+          <div class="flex justify-between items-center text-xs" style="color:var(--mut)">
+            <span>Host: ${esc(ga.host.username)}</span>
+            <span>⏱️ ${Math.ceil(ga.left/1000)}s left</span>
+          </div>
+          <div class="flex gap-2 overflow-x-auto py-1">
+            ${ga.items.map(i => `<div class="item" style="min-width:54px;min-height:54px"><img src="${esc(i.image)}" style="width:40px;height:40px"></div>`).join('')}
+          </div>
+          <div class="flex justify-between items-center text-sm">
+            <span>Value: <b>💎 ${ga.value}</b></span>
+            <button class="btn btn-sm btn-green" onclick="enterGA('${ga.id}')">Enter (${ga.entrantIds.length})</button>
+          </div>
+        </div>`).join('') : '<p class="col-span-full text-center py-8" style="color:var(--mut)">No active giveaways.</p>';
+    }
 
-function connectSocket() {
-  if (sock) sock.disconnect();
-  sock = io(API_BASE, { auth:{token}, transports:['websocket','polling'] });
-  sock.on('match:new', m => { addMatch(m); renderLobby(); });
-  sock.on('match:update', m => { const old = matches.get(m.id); addMatch(m); renderLobby(); onMatchUpdate(m, old); });
-  sock.on('match:remove', ({id}) => { matches.delete(id); renderLobby(); });
-  sock.on('giveaway:new', g => { addGA(g); renderGAs(); });
-  sock.on('giveaway:update', g => { addGA(g); renderGAs(); });
-  sock.on('giveaway:remove', ({id}) => { gaws.delete(id); renderGAs(); });
-  sock.on('chat:msg', chatRow); sock.on('chat:clear', () => $('chat').innerHTML = '');
-  sock.on('online', n => $('online').textContent = n);
-  sock.on('me:update', u => { me = u; renderAuth(); Object.keys(pickers).forEach(drawPicker); updateWalletStats(); renderGAs(); });
-}
+    window.enterGA = async id => {
+      try { await api('/api/giveaway/enter', { method: 'POST', body: { id } }); toast('Entered giveaway!'); }
+      catch (e) { toast(e.message, 'err'); }
+    };
 
-function renderAuth() {
-  $('auth-out').classList.toggle('hidden', !!me); $('auth-in').classList.toggle('hidden', !me);
-  $('chat-in').disabled = !me; $('chat-in').placeholder = me ? 'Say something!' : 'Login to chat';
-  if (me) {
-    $('w-bal').textContent = fmt0(vsum(me.inventory)); $('pf-av').src = av(me); $('pf-name').textContent = me.username;
-    $('pm').innerHTML = `<button onclick="showProfile()">👤 Profile</button><button onclick="openGA()">🎁 Create Giveaway</button>${me.isAdmin?'<button onclick="openAdmin()">🛠️ Admin Panel</button>':''}<button style="color:var(--red)" onclick="logout()">Logout</button>`;
-  }
-}
-$('pf-btn').onclick = e => { e.stopPropagation(); $('pm').classList.toggle('hidden'); };
-document.addEventListener('click', e => { if (!e.target.closest('#pm')) $('pm').classList.add('hidden'); });
+    $('btn-create-ga').onclick = () => {
+      if (!state.user) return toast('Login first', 'err');
+      const m = document.createElement('div'); m.className = 'overlay show';
+      m.innerHTML = `<div class="modal space-y-4" style="max-width:600px">
+        <div class="mh"><h3>🎁 Host Giveaway</h3><button class="x">✕</button></div>
+        <select id="ga-mode" class="inp w-full">
+          <option value="easy">Easy (30s / 2m / 5m)</option>
+          <option value="advanced">Advanced (1-60 min & min bet)</option>
+        </select>
+        <select id="ga-dur" class="inp w-full">
+          <option value="30">30 Seconds</option><option value="120">2 Minutes</option><option value="300">5 Minutes</option>
+        </select>
+        <input id="ga-min" class="inp w-full hidden" type="number" placeholder="Minimum Total Bet Required">
+        <div id="ga-inv" class="grid grid-cols-4 gap-2 max-h-60 overflow-y-auto p-1 card2"></div>
+        <button id="ga-submit" class="btn w-full">Start Giveaway</button>
+      </div>`;
+      document.body.appendChild(m);
+      m.querySelector('.x').onclick = () => m.remove();
+      renderInv(state.user.inventory, 'ga-inv', 5);
+      m.querySelector('#ga-mode').onchange = e => {
+        const adv = e.target.value === 'advanced';
+        m.querySelector('#ga-min').classList.toggle('hidden', !adv);
+        m.querySelector('#ga-dur').innerHTML = adv ? '<option value="60">1 Minute</option><option value="300">5 Minutes</option><option value="600">10 Minutes</option>' : '<option value="30">30 Seconds</option><option value="120">2 Minutes</option><option value="300">5 Minutes</option>';
+      };
+      m.querySelector('#ga-submit').onclick = async () => {
+        try {
+          await api('/api/giveaway/create', { method: 'POST', body: { mode: m.querySelector('#ga-mode').value, duration: m.querySelector('#ga-dur').value, minBet: m.querySelector('#ga-min').value, uids: $('ga-inv').selectedUids } });
+          m.remove(); toast('Giveaway hosted!');
+        } catch (e) { toast(e.message, 'err'); }
+      };
+    };
 
-let lg = {};
-function openLogin() {
-  lg = {};
-  $('lg-body').innerHTML = `<p class="mb-3 font-medium" style="color:var(--mut)">Enter your Roblox username. We will give you a code to put in your profile description to prove the account is yours.</p>
-    <input id="lg-user" class="inp w-full mb-3" placeholder="Roblox username" maxlength="20" onkeydown="if(event.key==='Enter')lgStart()"><button class="btn w-full" onclick="guard(this,lgStart)">Continue</button>`;
-  openModal('m-login'); setTimeout(() => $('lg-user').focus(), 100);
-}
-async function lgStart() {
-  lg = await api('/api/auth/start', { method:'POST', body:{ username: $('lg-user').value.trim() } });
-  $('lg-body').innerHTML = `<div class="flex items-center gap-3 mb-3"><img class="av w-14 h-14" src="${esc(lg.avatar||'')}" onerror="this.src='https://www.roblox.com/headshot-thumbnail/image?userId=${esc(lg.id)}&width=150&height=150&format=png'"><div><b class="text-lg">${esc(lg.username)}</b><div class="text-sm" style="color:var(--mut)">Roblox ID ${esc(lg.id)}</div></div></div>
-    <div class="card2 p-3 mb-3"><small class="font-bold" style="color:var(--mut)">YOUR CODE</small><div class="font-bold text-lg break-words" id="lg-code">${esc(lg.code)}</div><button class="btn btn-sm mt-2" onclick="navigator.clipboard.writeText('${esc(lg.code)}');toast('Code copied!')">Copy code</button></div>
-    <ol class="text-sm font-medium space-y-1 mb-4 list-decimal pl-5"><li>Go to <b>roblox.com</b> → your Profile → <b>About / Description</b>.</li><li>Paste the code in your description and <b>Save</b>.</li><li>Come back here and press <b>Verify & Login</b>.</li></ol>
-    <button class="btn w-full" onclick="guard(this,lgVerify)">Verify & Login</button><button class="btn btn-gray w-full mt-2" onclick="openLogin()">Back</button><p class="text-xs mt-2 text-center" style="color:var(--mut)">Code expires in 10 minutes. You can remove it from your description after login.</p>`;
-}
-async function lgVerify() {
-  const r = await api('/api/auth/verify', { method:'POST', body:{ id: lg.id } });
-  token = r.token; localStorage.setItem('amp_token', token); me = r.user; closeModal('m-login'); renderAuth(); connectSocket(); toast('Welcome, ' + me.username + '! 🎉'); sfx('win');
-}
-async function logout() { try { await api('/api/auth/logout', { method:'POST' }); } catch {} token=''; me=null; localStorage.removeItem('amp_token'); renderAuth(); connectSocket(); showCF(); toast('Logged out'); }
+    // Profile & Withdraw
+    async function loadProfile() {
+      const d = await api('/api/profile');
+      $('p-avatar').src = d.user.avatar || '';
+      $('p-username').textContent = d.user.username;
+      $('p-rank').textContent = `Rank: ${d.user.rank} · Profit: 💎 ${d.user.profit}`;
+      $('p-bet').textContent = '💎 ' + fmt(d.user.totalBet);
+      $('p-won').textContent = '💎 ' + fmt(d.user.totalWon);
+      renderInv(d.user.inventory, 'user-inv', 500);
+      $('tx-list').innerHTML = d.rows.length ? d.rows.map(t => `<div class="flex justify-between py-1 border-b" style="border-color:var(--line)"><span>${t.type}</span><b class="${t.amount>0?'text-emerald-500':'text-red-500'}">${t.amount>0?'+':''}${t.amount}</b></div>`).join('') : '<p style="color:var(--mut)">No transactions yet.</p>';
+    }
 
-function chatRow(m) {
-  const box = $('chat'), d = document.createElement('div');
-  if (m.system) d.innerHTML = `<div class="text-sm font-semibold p-2 rounded-xl" style="background:#fff3c4;animation:rowin .3s">${esc(m.text)}</div>`;
-  else d.innerHTML = `<div style="animation:rowin .3s"><div class="flex items-center gap-2">${avImg(m.user,'w-6 h-6')}<b class="text-sm" style="color:${m.admin?'var(--pink)':'var(--ink)'}">${esc(m.user.username)}</b>${m.admin?'<span class="tg tg-r">ADMIN</span>':''}</div><p class="text-sm pl-8 break-words font-medium" style="color:#4a5a8a">${esc(m.text)}</p></div>`;
-  box.appendChild(d); while (box.children.length > 80) box.firstChild.remove(); box.scrollTop = box.scrollHeight;
-}
-function sendChat() {
-  const i = $('chat-in'), t = i.value.trim(); if (!t) return; if (!me) return openLogin();
-  sock.emit('chat:send', t, r => { if (r && r.error) toast(r.error, 'err'); }); i.value = '';
-}
+    $('btn-withdraw').onclick = async () => {
+      const uids = $('user-inv').selectedUids;
+      if (!uids || !uids.length) return toast('Select items to withdraw', 'err');
+      try {
+        const res = await api('/api/withdraw', { method: 'POST', body: { uids } });
+        toast('Withdrawal requested! Bot trade queued.');
+        initUser(); loadProfile();
+      } catch (e) { toast(e.message, 'err'); }
+    };
 
-function ringHTML(m) { return `<div class="relative w-11 h-11 flex items-center justify-center"><svg class="w-11 h-11" style="transform:rotate(-90deg)"><circle cx="22" cy="22" r="18" stroke="#dcefff" stroke-width="4" fill="none"/><circle data-ring="${m.id}" cx="22" cy="22" r="18" stroke="#ff9f1c" stroke-width="4" fill="none" stroke-linecap="round" stroke-dasharray="113" style="stroke-dashoffset:0"/></svg><b class="absolute" data-cd="${m.id}">3</b></div>`; }
-function rowHTML(m) {
-  const all = [...m.hostItems, ...m.oppItems], vis = all.slice(0,5), extra = all.length - vis.length, fin = m.state === 'finished';
-  const hw = fin && m.winnerId === m.host.id, ow = fin && m.opp && m.winnerId === m.opp.id;
-  const left = m.state === 'waiting' ? `${avImg(m.host)}${sideBadge(m.hostSide,'w-10 h-10')}` : `${avImg(m.host, 'w-11 h-11 '+(hw?'winner-ring':fin?'dim':''))}${avImg(m.opp, 'w-11 h-11 '+(ow?'winner-ring':fin?'dim':''))}`;
-  const mid = m.state==='countdown' ? ringHTML(m) : m.state==='flipping' ? '<div class="minicoin">🪙</div>' : fin ? sideBadge(m.winnerSide,'w-11 h-11') : '';
-  const tot = m.hostValue + m.oppValue, mine = me && m.host.id === me.id;
-  const btns = (m.state==='waiting' && !mine ? `<button class="btn btn-sm" onclick="openJoin('${m.id}')">Join</button>` : '') + `<button class="btn btn-blue btn-sm" onclick="openView('${m.id}')">View</button>`;
-  return `<div class="flex items-center gap-3 w-44 shrink-0">${left}</div><div class="flex items-center flex-1 pl-2">${vis.map((i,x)=>ic(i,x)).join('')}${extra>0?`<b class="ml-2" style="color:var(--mut)">+${extra}</b>`:''}</div><div class="w-16 flex justify-center">${mid}</div>
-    <div class="text-right w-36 shrink-0"><div class="font-bold">💎 ${fmt(tot)}</div><div class="text-xs font-semibold" style="color:var(--mut)">${fmt(m.hostValue*(1-cfg.range))} - ${fmt(m.hostValue*(1+cfg.range))}</div></div><div class="flex flex-col gap-1.5 w-[70px] shrink-0">${btns}</div>`;
-}
-function renderLobby() {
-  const list = [...matches.values()].sort((a,b) => (b.hostValue+b.oppValue) - (a.hostValue+a.oppValue)), box = $('games');
-  box.innerHTML = '';
-  list.forEach(m => { const d = document.createElement('div'); d.className = 'row' + (seen.has(m.id) ? '' : ' enter'); seen.add(m.id); d.innerHTML = rowHTML(m); box.appendChild(d); });
-  if (!list.length) box.innerHTML = '<div class="panel p-10 text-center"><div style="font-size:48px">🐾</div><b class="text-xl">No active games</b><p style="color:var(--mut)">Be the first — press Create!</p></div>';
-  const tv = list.reduce((s,m)=>s+m.hostValue+m.oppValue,0);
-  $('st-items').textContent = list.reduce((s,m)=>s+m.hostItems.length+m.oppItems.length,0); $('st-val').textContent = Math.round(tv).toLocaleString('de-DE'); $('st-games').textContent = list.length; $('nav-total').textContent = fmt(tv);
-}
-function onMatchUpdate(m, old) {
-  const mine = me && (m.host.id === me.id || (m.opp && m.opp.id === me.id));
-  if (viewId === m.id && !viewHist) renderView();
-  if (m.state === 'flipping' && old && old.state !== 'flipping') sfx('flip');
-  if (m.state === 'finished' && (!old || old.state !== 'finished') && mine) {
-    if (m.winnerId === me.id) { sfx('win'); confetti({ particleCount:120, spread:80, origin:{y:.6} }); toast('YOU WON 💎' + fmt(m.hostValue + m.oppValue) + '! 🎉'); }
-    else toast('You lost this flip. Better luck next time!', 'err');
-  }
-}
-setInterval(() => {
-  matches.forEach(m => {
-    if (m.state !== 'countdown') return;
-    const left = Math.max(0, 3000 - (Date.now() - m._start)), n = Math.max(1, Math.ceil(left/1000));
-    document.querySelectorAll(`[data-cd="${m.id}"]`).forEach(el => el.textContent = n);
-    document.querySelectorAll(`[data-ring="${m.id}"]`).forEach(el => el.style.strokeDashoffset = 113 * (1 - left/3000));
-    if (viewId === m.id) document.querySelectorAll('[data-vcd]').forEach(el => el.textContent = n);
-    if (m._n !== n) { m._n = n; sfx('tick'); }
-  });
-  gaws.forEach(g => { const s = Math.max(0, Math.ceil((g._end - Date.now())/1000)); document.querySelectorAll(`[data-ga="${g.id}"]`).forEach(el => el.textContent = s ? `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}` : 'Ending…'); });
-}, 200);
+    // Chat
+    function renderChat(chat) {
+      $('chat-messages').innerHTML = chat.map(c => `<div class="truncate"><b>${c.system?'[SYSTEM]':esc(c.user.username)}:</b> ${esc(c.text)}</div>`).join('');
+      $('chat-messages').scrollTop = $('chat-messages').scrollHeight;
+    }
+    $('chat-form').onsubmit = e => {
+      e.preventDefault(); const i = $('chat-input');
+      socket.emit('chat:send', i.value, res => { if (res && res.error) toast(res.error, 'err'); else i.value = ''; });
+    };
 
-function renderGAs() {
-  $('ga-wrap').innerHTML = [...gaws.values()].map(g => {
-    const it = g.items[0], more = g.items.length - 1, mine = me && g.host.id === me.id, ent = me && g.entrantIds.includes(me.id);
-    return `<div class="ga"><div class="flex items-center gap-2">${ic(it,0,44)}<div class="flex-1 min-w-0"><div class="font-bold truncate text-sm">🎁 ${esc(it.name)}${more>0?' +'+more:''}</div><div class="text-xs font-semibold" style="color:var(--mut)">💎 ${fmt(g.value)} · ${esc(g.host.username)}${g.minBet?' · min bet '+g.minBet:''}</div></div><div class="text-right"><b data-ga="${g.id}">…</b><div class="text-xs">👥 ${g.entrantIds.length}</div></div></div>
-    <button class="btn btn-green w-full mt-2 btn-sm" ${mine||ent?'disabled':''} onclick="guard(this,()=>enterGA('${g.id}'))">${mine?'Your giveaway':ent?'Entered ✓':'Enter'}</button></div>`;
-  }).join('');
-}
-async function enterGA(id) { if (!me) return openLogin(); await api('/api/giveaway/enter', { method:'POST', body:{ id } }); toast('You entered the giveaway! 🍀'); }
+    // Socket listeners
+    socket.on('match:new', m => { state.matches.push(m); renderMatches(); });
+    socket.on('match:update', m => {
+      const idx = state.matches.findIndex(x => x.id === m.id);
+      if (idx !== -1) state.matches[idx] = m; else state.matches.push(m);
+      renderMatches();
+    });
+    socket.on('match:remove', d => { state.matches = state.matches.filter(x => x.id !== d.id); renderMatches(); });
+    socket.on('giveaway:new', ga => { state.giveaways.push(ga); renderGiveaways(); });
+    socket.on('giveaway:update', ga => {
+      const idx = state.giveaways.findIndex(x => x.id === ga.id);
+      if (idx !== -1) state.giveaways[idx] = ga; renderGiveaways();
+    });
+    socket.on('giveaway:remove', d => { state.giveaways = state.giveaways.filter(x => x.id !== d.id); renderGiveaways(); });
+    socket.on('chat:msg', msg => {
+      const box = $('chat-messages');
+      box.innerHTML += `<div class="truncate"><b>${msg.system?'[SYSTEM]':esc(msg.user.username)}:</b> ${esc(msg.text)}</div>`;
+      box.scrollTop = box.scrollHeight;
+    });
+    socket.on('chat:clear', () => { $('chat-messages').innerHTML = ''; });
+    socket.on('online', n => { $('online-count').textContent = n; });
+    socket.on('me:update', u => { state.user = u; renderUserBox(); if (!$('tab-profile').classList.contains('hidden')) loadProfile(); });
 
-const pickers = {};
-const pickerCtl = p => `<div class="flex gap-2"><input id="${p}-q" class="inp flex-1" placeholder="Search for an item.."><select id="${p}-s" class="inp"><option value="high">High - Low</option><option value="low">Low - High</option></select><select class="inp" disabled><option>Adopt Me</option></select></div>`;
-function initPicker(p, max, onChange) {
-  pickers[p] = { sel:new Set(), max, onChange: onChange || (()=>{}) };
-  $(p+'-q').value = ''; $(p+'-q').oninput = () => drawPicker(p); $(p+'-s').onchange = () => drawPicker(p); drawPicker(p);
-}
-const pickedItems = p => me ? me.inventory.filter(i => pickers[p].sel.has(i.uid)) : [];
-function drawPicker(p) {
-  const st = pickers[p], g = $(p+'-g'); if (!st || !g || !me) return;
-  st.sel.forEach(u => { if (!me.inventory.some(i => i.uid === u)) st.sel.delete(u); });
-  const q = $(p+'-q').value.toLowerCase().trim(), dir = $(p+'-s').value === 'high' ? -1 : 1;
-  const list = me.inventory.filter(i => i.name.toLowerCase().includes(q)).sort((a,b) => dir*(a.value-b.value));
-  if (!me.inventory.length) g.innerHTML = `<div style="grid-column:1/-1" class="text-center py-10"><h3 class="text-3xl font-bold">No Items!</h3><p class="font-medium mt-1">Your inventory seems to be empty…</p><button class="btn mt-4" onclick="openDeposit()">Deposit Items</button></div>`;
-  else g.innerHTML = list.map(i => `<div class="item ${st.sel.has(i.uid)?'sel':''}" data-uid="${esc(i.uid)}"><div class="tgs-top">${tags(i)}</div><img src="${esc(i.image)}" onerror="this.style.opacity=0"><b class="nm">${esc(i.name)}</b><span class="val">💎 ${fmt(i.value)}</span></div>`).join('');
-  g.onclick = e => { const c = e.target.closest('[data-uid]'); if (!c) return; const u = c.dataset.uid;
-    if (st.sel.has(u)) st.sel.delete(u); else { if (st.sel.size >= st.max) return toast('Max ' + st.max + ' items!', 'err'); st.sel.add(u); } sfx('tick'); drawPicker(p); };
-  st.onChange(pickedItems(p));
-}
-
-function openWallet() { if (!me) return openLogin(); $('w-ctl').innerHTML = pickerCtl('w'); initPicker('w', 999, updateWalletStats); openModal('m-wallet'); }
-function updateWalletStats() {
-  if (!me || !pickers.w) return; $('w-worth').textContent = fmt0(vsum(me.inventory)); $('w-count').textContent = me.inventory.length;
-  const s = pickedItems('w'); $('w-wd').textContent = 'Withdraw 💎' + fmt0(vsum(s)); $('w-wd').dataset.n = s.length;
-}
-function walletSelectAll() { const st = pickers.w; if (!st) return; const all = st.sel.size >= me.inventory.length; st.sel.clear(); if (!all) me.inventory.forEach(i => st.sel.add(i.uid)); drawPicker('w'); }
-async function withdraw() {
-  const uids = [...pickers.w.sel]; if (!uids.length) return toast('Select items to withdraw', 'err');
-  if (!confirm(`Withdraw ${uids.length} item(s) to the bot ${bot.username}?`)) return;
-  await api('/api/withdraw', { method:'POST', body:{ uids } }); toast('Withdraw requested! Join the bot server to receive your items.'); 
-}
-function openDeposit() { openModal('m-dep'); }
-function openBot() {
-  const b = bot || {}, src = b.avatar || (b.id ? `https://www.roblox.com/headshot-thumbnail/image?userId=${esc(b.id)}&width=150&height=150&format=png` : '');
-  $('bot-row').innerHTML = `<div class="botrow"><img class="av w-11 h-11 my-2" src="${esc(src)}" onerror="this.style.opacity=.3"><b class="text-lg">${esc(b.username||'DedokAmp')}</b><i class="w-2.5 h-2.5 rounded-full inline-block animate-pulse" style="background:var(--green)"></i><button class="jb" onclick="joinBot()">Join</button></div>`;
-  openModal('m-bot');
-}
-function joinBot() { window.open((bot && bot.link) || BOT_LINK_FALLBACK, '_blank', 'noopener'); }
-
-let cm = { mode:'create', id:null, side:'dog', range:null };
-function pickSide(s) { cm.side = s; ['dog','cat'].forEach(k => { const b = $('sd-'+k); b.className = 'sidebadge w-10 h-10'; b.style.cssText = `--c:${SIDE[k].c};cursor:pointer;opacity:${k===s?1:.4};transform:scale(${k===s?1.12:1})`; b.textContent = SIDE[k].e; }); }
-function openCreate() {
-  if (!me) return openLogin(); cm = { mode:'create', id:null, side:'dog' };
-  $('cm-title').textContent = 'Create Coinflip'; $('cm-btn').textContent = 'Create Match'; $('cm-range').classList.add('hidden'); $('cm-sides').classList.remove('hidden');
-  pickSide('dog'); $('cm-ctl').innerHTML = pickerCtl('cm'); initPicker('cm', 8, s => $('cm-val').textContent = fmt(vsum(s))); openModal('m-create');
-}
-function openJoin(id) {
-  if (!me) return openLogin(); const m = matches.get(id); if (!m || m.state !== 'waiting') return;
-  cm = { mode:'join', id }; $('cm-title').textContent = `Join ${m.host.username}'s Coinflip`; $('cm-btn').textContent = 'Join & Flip!';
-  $('cm-range').classList.remove('hidden'); $('cm-range-t').textContent = `💎 ${fmt(m.hostValue*(1-cfg.range))} - ${fmt(m.hostValue*(1+cfg.range))}`; $('cm-sides').classList.add('hidden');
-  $('cm-ctl').innerHTML = pickerCtl('cm'); initPicker('cm', 8, s => $('cm-val').textContent = fmt(vsum(s))); openModal('m-create');
-}
-async function submitCreate() {
-  const uids = [...pickers.cm.sel]; if (!uids.length) return toast('Select at least 1 item', 'err');
-  const r = cm.mode === 'create' ? await api('/api/match/create', { method:'POST', body:{ side:cm.side, uids } }) : await api('/api/match/join', { method:'POST', body:{ id:cm.id, uids } });
-  addMatch(r.match); renderLobby(); closeModal('m-create'); openView(r.match.id);
-}
-
-const curView = () => viewHist ? histCache.find(h => h.id === viewId) : (matches.get(viewId) || viewSnap);
-function openView(id, hist = false) { viewId = id; viewHist = hist; viewKey = ''; renderView(true); openModal('m-view'); }
-function closeView() { viewId = null; closeModal('m-view'); }
-function renderView(force) {
-  const m = curView(); if (!m) return; viewSnap = m;
-  const key = m.state + '|' + (m.opp ? m.opp.id : '') + '|' + m.winnerSide; if (!force && key === viewKey) return; viewKey = key;
-  const fin = m.state === 'finished', total = m.hostValue + m.oppValue, mine = me && m.host.id === me.id;
-  let center = '<b class="text-4xl" style="color:var(--mut)">Vs</b>';
-  if (m.state === 'countdown') center = `<div class="cdbig" data-vcd>3</div>`;
-  else if (m.state === 'flipping') center = `<div class="coin"><div id="v-coin"><span class="cf">🐶</span><span class="cb">🐱</span></div></div>`;
-  else if (fin) center = `<div class="text-center">${sideBadge(m.winnerSide,'w-24 h-24 text-5xl')}<div class="font-bold mt-2" style="color:#e08a00">${esc((m.winnerId===m.host.id?m.host:m.opp).username)} won!</div></div>`;
-  const player = (p, side, win, dim) => p ? `<div class="flex flex-col items-center"><div class="relative"><img class="av w-28 h-28 ${win?'winner-ring':dim?'dim':''}" src="${esc(av(p))}" onerror="this.style.opacity=.3"><div class="absolute -bottom-1 -left-1">${sideBadge(side,'w-10 h-10')}</div></div><b class="mt-3">${esc(p.username)}</b></div>`
-    : `<div class="flex flex-col items-center"><div class="relative"><div class="av w-28 h-28" style="background:#f1f9ff;display:flex;align-items:center;justify-content:center;font-size:40px">❔</div><div class="absolute -bottom-1 -left-1">${sideBadge(side,'w-10 h-10')}</div></div><b class="mt-3">Joining…</b></div>`;
-  const card = i => `<div class="flex items-center justify-between card2 px-3 py-2"><div class="flex items-center gap-3">${ic(i,0,44)}<div><b class="text-sm">${esc(i.name)}</b></div></div><b class="text-sm" style="color:var(--mut)">💎 ${fmt(i.value)}</b></div>`;
-  const col = (v, items, pct) => `<div class="space-y-2"><div class="card2 px-4 py-3 flex justify-between font-bold"><span style="color:var(--mut)">${pct}</span><span>💎 ${fmt0(v)}</span></div>${items.map(card).join('')}</div>`;
-  const p1 = m.opp ? (m.hostValue/total*100).toFixed(2)+'%' : '100.00%', p2 = m.opp ? (m.oppValue/total*100).toFixed(2)+'%' : '0%';
-  let foot = '';
-  if (m.state === 'waiting' && !viewHist) foot = mine ? `<button class="btn btn-red" onclick="guard(this,()=>cancelMatch('${m.id}'))">Cancel Match</button>` : (me ? `<button class="btn" onclick="closeView();openJoin('${m.id}')">Join this match</button>` : '');
-  $('v-body').innerHTML = `<div class="flex items-center justify-center gap-2 mb-6"><span class="text-2xl">🐾</span><span class="logo text-xl"><span style="color:var(--pink)">AMP</span> <span style="color:var(--blue)">ROLL</span></span></div>
-    <div class="grid grid-cols-3 items-center mb-5">${player(m.host, m.hostSide, fin && m.winnerId===m.host.id, fin && m.winnerId!==m.host.id)}<div class="flex justify-center items-center" style="min-height:130px">${center}</div>${player(m.opp, m.oppSide, fin && m.opp && m.winnerId===m.opp.id, fin && m.opp && m.winnerId!==m.opp.id)}</div>
-    <div class="text-center mb-4 font-bold" style="color:var(--mut)"># <span class="hash" title="${esc(m.hash)}">${esc(m.hash)}</span></div>
-    <div class="grid grid-cols-2 gap-4">${col(m.hostValue, m.hostItems, p1)}${col(m.oppValue, m.oppItems, p2)}</div>
-    ${fin && m.seed ? `<div class="card2 p-3 mt-4 text-sm"><b>Provably Fair</b> · Server seed: <code class="break-all">${esc(m.seed)}</code><div id="v-fair" class="font-bold mt-1">Verifying…</div></div>` : ''}
-    <div class="mt-4 flex justify-end">${foot}</div>`;
-  if (m.state === 'flipping') setTimeout(() => { const c = $('v-coin'); if (c) c.style.transform = `rotateY(${m.winnerSide==='dog'?1800:1980}deg)`; }, 60);
-  if (fin && m.seed) verifyFair(m).then(ok => { const e = $('v-fair'); if (e) { e.textContent = ok ? '✔ Verified: sha256(seed) matches the hash and the result is correct.' : '✖ Verification failed!'; e.style.color = ok ? '#1fa97a' : 'var(--red)'; } }).catch(() => { const e = $('v-fair'); if (e) e.textContent = 'Verify unavailable in this browser'; });
-}
-async function verifyFair(m) {
-  const enc = new TextEncoder(), h = await crypto.subtle.digest('SHA-256', enc.encode(m.seed)), hex = [...new Uint8Array(h)].map(b => b.toString(16).padStart(2,'0')).join('');
-  const key = await crypto.subtle.importKey('raw', enc.encode(m.seed), { name:'HMAC', hash:'SHA-256' }, false, ['sign']);
-  const s = new Uint8Array(await crypto.subtle.sign('HMAC', key, enc.encode(m.id))), roll = (s[0]*16777216 + s[1]*65536 + s[2]*256 + s[3]) / 4294967296;
-  return hex === m.hash && (roll < .5 ? 'dog' : 'cat') === m.winnerSide;
-}
-async function cancelMatch(id) { await api('/api/match/cancel', { method:'POST', body:{ id } }); closeView(); toast('Match cancelled. Your items were returned!'); }
-
-async function openHist() {
-  if (!me) return openLogin(); openModal('m-hist'); $('h-list').innerHTML = '<p class="text-center py-6">Loading…</p>';
-  try { histCache = (await api('/api/history/me')).history; } catch (e) { return toast(e.message, 'err'); }
-  $('h-list').innerHTML = histCache.length ? histCache.map(h => {
-    const all = [...h.hostItems, ...h.oppItems], vis = all.slice(0,4), extra = all.length - vis.length;
-    return `<div class="row"><div class="flex gap-3">${avImg(h.host,'w-10 h-10 '+(h.winnerId===h.host.id?'winner-ring':'dim'))}${avImg(h.opp,'w-10 h-10 '+(h.winnerId===h.opp.id?'winner-ring':'dim'))}</div>
-    <div class="flex items-center flex-1 pl-4">${vis.map((i,x)=>ic(i,x,44)).join('')}${extra>0?`<b class="ml-2" style="color:var(--mut)">+${extra}</b>`:''}</div>
-    <div class="chip" style="--c:${SIDE[h.winnerSide].c}">${SIDE[h.winnerSide].e}</div><button class="btn btn-gray btn-sm" onclick="closeModal('m-hist');openView('${h.id}',true)">👁</button></div>`;
-  }).join('') : '<p class="text-center py-8 font-bold" style="color:var(--mut)">You have no finished coinflips yet.</p>';
-}
-
-function showCF() { $('view-pf').classList.add('hidden'); $('view-cf').classList.remove('hidden'); }
-async function showProfile(page = 1) {
-  if (!me) return openLogin(); let r; try { r = await api('/api/profile?page=' + page); } catch (e) { return toast(e.message, 'err'); }
-  const u = r.user; $('view-cf').classList.add('hidden'); $('view-pf').classList.remove('hidden'); $('pm').classList.add('hidden');
-  const rc = { Rookie:'#7b8cb8', Roller:'#43b5ff', Highroller:'#ff6fb5', Whale:'#e0a21f' }[u.rank];
-  $('view-pf').innerHTML = `<div class="panel p-5 mb-4 flex items-center gap-5"><img class="av" style="width:110px;height:110px;border-color:#ff9f1c;border-width:4px" src="${esc(av(u))}"><div><div class="text-2xl font-bold">${esc(u.username)}</div><div class="font-bold" style="color:${rc}">👑 ${u.rank}</div><div class="text-sm" style="color:var(--mut)">Roblox ID ${esc(u.id)}</div></div></div>
-    <div class="grid grid-cols-3 gap-3 mb-4">${[['Total Bet',u.totalBet],['Total Won',u.totalWon],['Profit',u.profit]].map(([n,v])=>`<div class="panel p-4"><div class="text-2xl font-bold">💎 ${Math.round(v)}</div><div class="font-medium" style="color:var(--mut)">${n}</div></div>`).join('')}</div>
-    <div class="panel overflow-hidden"><div class="grid grid-cols-4 px-5 py-3 font-bold" style="color:var(--mut)"><span>Type</span><span>ID</span><span>Date and Time</span><span>Amount</span></div>
-    ${r.rows.map((t,i)=>`<div class="grid grid-cols-4 px-5 py-3 text-sm font-semibold" style="background:${i%2?'#fff':'#f6fbff'}"><span>${esc(t.type)}</span><span class="truncate pr-3">${esc(t.id)}</span><span>${fdate(t.ts)}</span><span style="color:${t.amount>=0?'#e08a00':'var(--mut)'}">💎 ${t.amount>=0?'+':''}${Math.round(t.amount)}</span></div>`).join('') || '<p class="text-center py-8" style="color:var(--mut)">No transactions yet.</p>'}</div>
-    <div class="flex justify-between items-center p-4 font-bold"><button class="btn btn-gray btn-sm" ${r.page<=1?'disabled':''} onclick="showProfile(${r.page-1})">‹ Prev</button><span style="color:var(--mut)">Page ${r.page} of ${r.pages}</span><button class="btn btn-gray btn-sm" ${r.page>=r.pages?'disabled':''} onclick="showProfile(${r.page+1})">Next ›</button></div>`;
-}
-
-let gaTime = 30;
-function gaMode() { const adv = document.querySelector('input[name=gm]:checked').value === 'advanced'; $('ga-adv').classList.toggle('hidden', !adv); $('ga-times').classList.toggle('hidden', adv); }
-function openGA() {
-  if (!me) return openLogin(); $('pm').classList.add('hidden'); gaTime = 30;
-  const drawT = () => $('ga-times').innerHTML = [[30,'30 seconds'],[120,'2 Minutes'],[300,'5 Minutes']].map(([s,l]) => `<button class="btn btn-sm ${gaTime===s?'':'btn-gray'}" onclick="gaTime=${s};document.getElementById('ga-times').dispatchEvent(new Event('redraw'))">${l}</button>`).join('');
-  $('ga-times').onredraw = null; $('ga-times').addEventListener('redraw', drawT); drawT();
-  document.querySelector('input[name=gm][value=easy]').checked = true; gaMode();
-  $('ga-ctl').innerHTML = pickerCtl('ga'); initPicker('ga', 5); openModal('m-ga');
-}
-async function submitGA() {
-  const adv = document.querySelector('input[name=gm]:checked').value === 'advanced', uids = [...pickers.ga.sel]; if (!uids.length) return toast('Select at least 1 item', 'err');
-  await api('/api/giveaway/create', { method:'POST', body:{ mode: adv?'advanced':'easy', duration: adv ? Math.round(Number($('ga-min').value)*60) : gaTime, minBet: $('ga-bet').value, uids } });
-  closeModal('m-ga'); toast('Giveaway created! 🎁');
-}
-
-async function openAdmin() {
-  $('pm').classList.add('hidden');
-  try { const r = await fetch(API_BASE + '/api/admin/ui', { headers:{ Authorization:'Bearer ' + token } }); if (!r.ok) throw 0; new Function(await r.text())(); }
-  catch { toast('Access denied', 'err'); }
-}
-
-boot();
-</script>
+    initUser();
+  </script>
 </body>
 </html>
