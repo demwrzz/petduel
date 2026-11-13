@@ -1,500 +1,579 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AMP ROLL | Adopt Me Coinflip & Giveaways</title>
-<script src="https://cdn.tailwindcss.com"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AMP ROLL</title>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 <style>
-:root {
-  --bg: #f4f8fb; --card: #ffffff; --card2: #e9f3fa; --ink: #1e293b; --mut: #64748b;
-  --line: #cbd5e1; --prim: #6366f1; --prim-h: #4f46e5;
-  --dog: #f59e0b; --cat: #ec4899; --green: #10b981; --red: #ef4444;
-}
-.dark {
-  --bg: #0f172a; --card: #1e293b; --card2: #0f172a; --ink: #f8fafc; --mut: #94a3b8; --line: #334155;
-}
-* { box-sizing: border-box; font-family: 'Fredoka', sans-serif; }
-body { background: var(--bg); color: var(--ink); min-height: 100vh; transition: background .2s, color .2s; }
-.card { background: var(--card); border: 1px solid var(--line); border-radius: 1rem; }
-.card2 { background: var(--card2); border: 1px solid var(--line); border-radius: 0.75rem; }
-.btn { background: var(--prim); color: #fff; font-weight: 600; border-radius: 0.75rem; padding: 0.6rem 1.2rem; transition: background .15s, transform .1s; cursor: pointer; border: none; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; }
-.btn:hover { background: var(--prim-h); }
-.btn:active { transform: scale(0.97); }
-.btn-green { background: var(--green); } .btn-green:hover { background: #059669; }
-.btn-red { background: var(--red); } .btn-red:hover { background: #dc2626; }
-.btn-sm { padding: 0.35rem 0.75rem; font-size: 0.875rem; border-radius: 0.5rem; }
-.inp { background: var(--card2); border: 1px solid var(--line); color: var(--ink); border-radius: 0.75rem; padding: 0.6rem 1rem; outline: none; transition: border-color .15s; }
-.inp:focus { border-color: var(--prim); }
-.item { background: var(--card); border: 2px solid var(--line); border-radius: 0.75rem; padding: 0.5rem; display: flex; flex-direction: column; align-items: center; position: relative; cursor: pointer; transition: all .15s; user-select: none; }
-.item.sel { border-color: var(--prim); box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3); }
-.item img { width: 64px; height: 64px; object-fit: contain; }
-.item .tgs-top { position: absolute; top: 4px; left: 4px; display: flex; gap: 2px; }
-.item .tgs-bot { position: absolute; top: 4px; right: 4px; font-size: 0.75rem; font-weight: 700; background: rgba(0,0,0,0.6); color: #fff; padding: 1px 5px; border-radius: 4px; }
-.badge { font-size: 0.7rem; padding: 1px 6px; border-radius: 4px; font-weight: 700; color: #fff; }
-.badge-n { background: #10b981; } .badge-m { background: #8b5cf6; } .badge-fr { background: #3b82f6; }
-.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 100; opacity: 0; pointer-events: none; transition: opacity .2s; }
-.overlay.show { opacity: 1; pointer-events: auto; }
-.modal { background: var(--card); border: 1px solid var(--line); border-radius: 1.25rem; width: 100%; max-width: 500px; padding: 1.5rem; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3); }
-.mh { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-.x { background: none; border: none; font-size: 1.25rem; color: var(--mut); cursor: pointer; }
-.x:hover { color: var(--ink); }
-#toast-box { position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 200; display: flex; flex-direction: column; gap: 0.5rem; }
-.toast { background: var(--card); border: 1px solid var(--line); color: var(--ink); padding: 0.75rem 1.25rem; border-radius: 0.75rem; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2); font-weight: 600; animation: slideIn .2s ease-out; }
-.toast.err { border-color: var(--red); color: var(--red); }
-@keyframes slideIn { from { transform: translateY(1rem); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+:root{--blue:#2f9bff;--blue2:#1b7fe0;--sun:#ffc83d;--pink:#ff7eb6;--mint:#3fcf9f;--red:#ff5c6c;--ink:#23324d;--mut:#6b7a99;--line:#e0edfb;--card:#fff;--orange:#ff9f1c}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100%}
+body{font-family:'Fredoka',system-ui,sans-serif;color:var(--ink);background:
+radial-gradient(600px 200px at 10% 0,#fff 0,transparent 70%),radial-gradient(500px 180px at 80% 8%,#fff 0,transparent 70%),
+linear-gradient(#bfe6ff,#eaf7ff 45%,#fff7e0) fixed;font-size:15px}
+button{font-family:inherit;cursor:pointer;border:0}
+input,select{font-family:inherit;font-size:14px;color:var(--ink)}
+.app{display:flex;flex-direction:column;min-height:100vh}
+header{display:flex;align-items:center;gap:18px;padding:10px 22px;background:#fff;position:sticky;top:0;z-index:50;box-shadow:0 2px 14px rgba(47,155,255,.18)}
+.logo{font-weight:700;font-size:26px;letter-spacing:1px;cursor:pointer;background:linear-gradient(90deg,var(--blue),var(--pink));-webkit-background-clip:text;background-clip:text;color:transparent}
+.logo small{font-size:20px}
+nav{display:flex;gap:6px;flex:1}
+nav a{padding:8px 16px;border-radius:12px;font-weight:600;color:var(--mut);cursor:pointer}
+nav a.on{background:#e6f3ff;color:var(--blue2)}
+.right{display:flex;align-items:center;gap:12px}
+.wallet{display:flex;align-items:center;background:#f2f9ff;border:2px solid var(--line);border-radius:14px;overflow:hidden}
+.wallet .w{display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer}
+.wallet small{display:block;font-size:11px;color:var(--mut);line-height:1}
+.wallet b{font-size:16px;line-height:1.1}
+.wallet .plus{background:var(--mint);color:#fff;font-size:22px;font-weight:700;width:40px;align-self:stretch}
+.btn{padding:9px 18px;border-radius:12px;font-weight:600;font-size:14px;color:#fff;background:var(--blue);box-shadow:0 3px 0 var(--blue2);transition:.1s}
+.btn:hover{filter:brightness(1.07)}.btn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--blue2)}
+.btn.sun{background:var(--sun);color:#6a4a00;box-shadow:0 3px 0 #e0a800}
+.btn.mint{background:var(--mint);box-shadow:0 3px 0 #2aa57c}
+.btn.red{background:var(--red);box-shadow:0 3px 0 #d63d4e}
+.btn.gray{background:#e7eefa;color:var(--ink);box-shadow:0 3px 0 #cbd7ec}
+.btn.sm{padding:6px 12px;font-size:13px}
+.btn[disabled]{opacity:.5;pointer-events:none}
+.user{position:relative}
+.user>button{display:flex;align-items:center;gap:8px;background:#f2f9ff;border:2px solid var(--line);border-radius:14px;padding:5px 12px 5px 6px;font-weight:600;color:var(--ink)}
+.menu{position:absolute;right:0;top:calc(100% + 8px);background:#fff;border-radius:14px;box-shadow:0 10px 30px rgba(35,50,77,.2);min-width:190px;padding:6px;display:none;z-index:60}
+.menu.open{display:block}
+.menu a{display:block;padding:10px 12px;border-radius:10px;font-weight:500;cursor:pointer}
+.menu a:hover{background:#eaf5ff}
+.av{width:34px;height:34px;border-radius:50%;object-fit:cover;background:linear-gradient(135deg,var(--blue),var(--pink));color:#fff;display:inline-grid;place-items:center;font-weight:700;flex:none}
+.av.lg{width:64px;height:64px;font-size:26px}.av.sm{width:26px;height:26px;font-size:12px}
+.ring{box-shadow:0 0 0 3px #fff,0 0 0 6px var(--orange);}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;padding:16px 22px;max-width:1500px;margin:0 auto;width:100%;flex:1;align-items:start}
+.card{background:var(--card);border-radius:20px;box-shadow:0 6px 22px rgba(47,155,255,.14);padding:16px}
+.bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.bar h2{font-size:20px;flex:1}
+.pill{font-size:12px;font-weight:600;padding:3px 10px;border-radius:99px;background:#e6f3ff;color:var(--blue2)}
+.side{position:sticky;top:76px;height:calc(100vh - 92px);display:flex;flex-direction:column;gap:12px;min-height:0}
+.chat{flex:1;min-height:0;display:flex;flex-direction:column;padding:12px}
+.msgs{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding-right:4px}
+.msg{display:flex;gap:8px;align-items:flex-start;font-size:13.5px;word-break:break-word}
+.msg b{font-weight:600}
+.rk{font-size:10px;padding:1px 6px;border-radius:6px;color:#fff;margin-right:4px;font-weight:600;background:#9fb3d1}
+.rk.Roller{background:var(--blue)}.rk.Highroller{background:var(--pink)}.rk.Whale{background:var(--orange)}.rk.ADMIN{background:var(--red)}
+.cin{display:flex;gap:8px;margin-top:8px}
+.cin input{flex:1;border:2px solid var(--line);border-radius:12px;padding:9px 12px;outline:0}
+.cin input:focus{border-color:var(--blue)}
+.gw{display:flex;gap:10px;align-items:center;padding:10px;border-radius:16px;background:linear-gradient(135deg,#fff3c9,#ffe4f1);border:2px solid #ffe08a}
+.gw .im{display:flex;gap:2px}
+.gw img{width:42px;height:42px;object-fit:contain;background:#fff;border-radius:10px}
+.gw .inf{flex:1;font-size:12.5px;line-height:1.3}
+.match{display:grid;grid-template-columns:150px minmax(0,1fr) 110px 150px 150px;gap:10px;align-items:center;padding:12px;border-radius:18px;border:2px solid var(--line);background:#fbfdff;margin-bottom:10px}
+.match.fin{border-color:#ffd9a0;background:#fffaf0}
+.pl{display:flex;align-items:center;gap:8px;min-width:0}
+.pl span.n{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.side-ico{font-size:18px}
+.items{display:flex;gap:4px;flex-wrap:wrap}
+.it{position:relative;width:46px;height:46px;border-radius:12px;background:#fff;border:2px solid var(--line);display:grid;place-items:center}
+.it img{width:100%;height:100%;object-fit:contain;border-radius:10px}
+.it .q{position:absolute;right:-4px;bottom:-4px;background:var(--blue);color:#fff;font-size:10px;border-radius:8px;padding:0 5px;font-weight:600}
+.mid{text-align:center}
+.mid .v{font-weight:700;font-size:16px;color:var(--blue2)}
+.mid small{color:var(--mut);font-size:11px}
+.acts{display:flex;gap:6px;justify-content:flex-end}
+.coin3d{perspective:500px;display:inline-block}
+.coin{width:52px;height:52px;position:relative;transform-style:preserve-3d}
+.coin .f{position:absolute;inset:0;border-radius:50%;display:grid;place-items:center;backface-visibility:hidden;-webkit-backface-visibility:hidden;font-size:26px;border:3px solid #e0a800;background:radial-gradient(circle at 35% 30%,#fff1a8,#ffc83d)}
+.coin .b{transform:rotateY(180deg)}
+.coin.spin{animation:cf .55s linear infinite}
+.coin.cat{transform:rotateY(180deg)}
+.coin.big{width:96px;height:96px}.coin.big .f{font-size:46px}
+@keyframes cf{to{transform:rotateY(360deg)}}
+.cd{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:20px;color:var(--orange);background:conic-gradient(var(--orange) 0 70%,#ffe5bd 0);position:relative;margin:auto;animation:pulse 1s infinite}
+.cd::before{content:'';position:absolute;inset:5px;background:#fff;border-radius:50%}
+.cd i{position:relative;font-style:normal}
+@keyframes pulse{50%{transform:scale(1.08)}}
+.empty{text-align:center;color:var(--mut);padding:40px 10px}
+.ov{position:fixed;inset:0;background:rgba(35,50,77,.45);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;z-index:100;padding:16px}
+.ov.open{display:flex}
+.modal{background:#fff;border-radius:24px;width:min(560px,100%);max-height:92vh;overflow:auto;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.3);animation:pop .18s}
+.modal.wide{width:min(820px,100%)}
+@keyframes pop{from{transform:scale(.92);opacity:0}}
+.mh{display:flex;align-items:center;margin-bottom:14px}
+.mh h3{flex:1;font-size:21px}
+.x{background:#eef4fc;width:34px;height:34px;border-radius:50%;font-size:18px;color:var(--mut)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:10px;max-height:340px;overflow:auto;padding:4px}
+.gi{position:relative;border:2px solid var(--line);border-radius:16px;padding:8px;text-align:center;cursor:pointer;background:#fbfdff;transition:.1s;user-select:none}
+.gi:hover{border-color:var(--blue)}
+.gi.sel{border-color:var(--mint);background:#effcf7}
+.gi img{width:64px;height:64px;object-fit:contain}
+.gi .nm{font-size:12px;font-weight:600;line-height:1.1;height:27px;overflow:hidden}
+.gi .vl{font-size:12px;color:var(--blue2);font-weight:600}
+.gi .cnt{position:absolute;top:4px;right:4px;background:var(--mint);color:#fff;border-radius:9px;font-size:11px;font-weight:700;padding:1px 7px}
+.tg{display:flex;gap:3px;justify-content:center;margin-top:2px}
+.tg i{font-style:normal;font-size:10px;font-weight:700;color:#fff;border-radius:5px;padding:0 5px}
+.tg .M{background:#b05cff}.tg .N{background:#22d3ee;color:#033}.tg .F{background:var(--pink)}.tg .R{background:var(--orange)}
+.row{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.row input,.row select,.in{border:2px solid var(--line);border-radius:12px;padding:9px 12px;outline:0;background:#fff}
+.row input[type=text],.in{flex:1;min-width:100px}
+.in:focus,.row input:focus{border-color:var(--blue)}
+.sides{display:flex;gap:10px}
+.sd{flex:1;border:3px solid var(--line);border-radius:16px;padding:10px;text-align:center;background:#fff;font-weight:600;font-size:15px}
+.sd.on{border-color:var(--blue);background:#e9f5ff}
+.sd span{font-size:30px;display:block}
+.game{display:flex;gap:14px;flex-wrap:wrap}
+.gc{width:200px;border-radius:20px;overflow:hidden;border:3px solid var(--line);cursor:pointer;transition:.12s;background:#fff}
+.gc:hover{transform:translateY(-4px);border-color:var(--blue)}
+.gc .pic{height:130px;display:grid;place-items:center;font-size:62px;background:linear-gradient(135deg,#8fd3ff,#ffe9a8)}
+.gc b{display:block;text-align:center;padding:10px}
+.bot{display:flex;align-items:center;gap:12px;padding:12px;border:2px solid var(--line);border-radius:16px}
+.bot .inf{flex:1}.bot .inf small{color:var(--mut)}
+.on-dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--mint);margin-right:5px}
+.vs{display:grid;grid-template-columns:1fr 120px 1fr;gap:10px;align-items:start}
+.vs .col{text-align:center;padding:10px;border-radius:18px;background:#f6fbff;border:2px solid var(--line);min-height:150px}
+.vs .col.win{border-color:var(--orange);background:#fff8ea}
+.vs .col .items{justify-content:center;margin-top:8px}
+.vc{text-align:center;padding-top:20px}
+.fair{margin-top:14px;padding:10px;border-radius:14px;background:#f3f8ff;font-size:12px;word-break:break-all;color:var(--mut)}
+.fair code{color:var(--ink)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:14px 0}
+.stat{background:#f2f9ff;border-radius:16px;padding:14px;text-align:center}
+.stat small{color:var(--mut)}.stat b{display:block;font-size:22px}
+.pos{color:#18a877}.neg{color:var(--red)}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{color:var(--mut);text-align:left;font-weight:500;padding:8px;border-bottom:2px solid var(--line)}
+td{padding:9px 8px;border-bottom:1px solid var(--line)}
+.pg{display:flex;gap:6px;justify-content:center;margin-top:12px}
+.pg button{min-width:34px;height:34px;border-radius:10px;background:#eef4fc;font-weight:600;color:var(--ink)}
+.pg button.on{background:var(--blue);color:#fff}
+.toasts{position:fixed;top:78px;right:18px;z-index:300;display:flex;flex-direction:column;gap:8px}
+.toast{background:#23324d;color:#fff;padding:11px 16px;border-radius:12px;font-weight:500;box-shadow:0 6px 20px rgba(0,0,0,.25);animation:pop .15s;max-width:320px}
+.toast.err{background:var(--red)}.toast.ok{background:#18a877}
+#boot{position:fixed;inset:0;background:linear-gradient(#bfe6ff,#fff7e0);z-index:500;display:flex;flex-direction:column;gap:14px;align-items:center;justify-content:center;font-weight:600;font-size:18px}
+.spin2{width:46px;height:46px;border:5px solid #fff;border-top-color:var(--blue);border-radius:50%;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.code{font-size:20px;font-weight:700;background:#fff8e0;border:2px dashed var(--sun);border-radius:14px;padding:14px;text-align:center;margin:12px 0;user-select:all}
+.hint{color:var(--mut);font-size:13px;margin:6px 0}
+canvas#cf{position:fixed;inset:0;pointer-events:none;z-index:400}
+.seg{display:flex;background:#eef4fc;border-radius:12px;padding:4px;margin-bottom:12px}
+.seg button{flex:1;padding:8px;border-radius:9px;background:transparent;font-weight:600;color:var(--mut)}
+.seg button.on{background:#fff;color:var(--blue2);box-shadow:0 2px 6px rgba(0,0,0,.1)}
+@media(max-width:1000px){.main{grid-template-columns:1fr}.side{position:static;height:auto}.chat{height:420px;flex:none}
+.match{grid-template-columns:1fr 1fr}.match .items,.match .mid,.match .acts{grid-column:1/-1}.acts{justify-content:flex-start}
+.vs{grid-template-columns:1fr}.stats{grid-template-columns:1fr}nav{display:none}}
 </style>
 </head>
-<body class="p-4 md:p-6 max-w-7xl mx-auto">
+<body>
+<div id="boot"><div class="spin2"></div><div id="bootmsg">Connecting…</div></div>
+<canvas id="cf"></canvas>
+<div class="toasts" id="toasts"></div>
+<div class="ov" id="ov"><div class="modal" id="modal"></div></div>
 
-  <!-- TOP BAR -->
-  <header class="flex flex-wrap justify-between items-center gap-4 mb-6 card p-4">
-    <div class="flex items-center gap-3">
-      <span class="text-3xl">🐶🐱</span>
-      <div>
-        <h1 class="text-xl font-bold tracking-tight">AMP ROLL</h1>
-        <p class="text-xs" style="color:var(--mut)">Adopt Me Secure Coinflip & Giveaways</p>
+<div class="app">
+<header>
+  <div class="logo" data-act="home">AMP ROLL <small>🐾</small></div>
+  <nav><a class="on" data-act="home">🪙 Coinflip</a></nav>
+  <div class="right" id="hright"></div>
+</header>
+
+<div class="main" id="pgHome">
+  <section>
+    <div class="card">
+      <div class="bar">
+        <h2>🪙 Live Coinflips</h2>
+        <span class="pill" id="cnt">0 games</span>
+        <button class="btn sun" data-act="create">+ Create Match</button>
+        <button class="btn gray" data-act="history">History</button>
       </div>
+      <div id="lobby"></div>
     </div>
-    <div class="flex items-center gap-3 flex-wrap">
-      <button id="btn-theme" class="btn btn-sm" style="background:var(--card2);color:var(--ink)">🌓 Theme</button>
-      <div id="user-sec"></div>
+  </section>
+  <aside class="side">
+    <div id="gws" style="display:flex;flex-direction:column;gap:8px"></div>
+    <div class="card chat">
+      <div class="bar" style="margin-bottom:8px"><h2 style="font-size:17px">💬 Live Chat</h2><span class="pill" id="online">live</span></div>
+      <div class="msgs" id="msgs"></div>
+      <div class="cin"><input id="cin" maxlength="200" placeholder="Say something…"><button class="btn sm" data-act="send">Send</button></div>
     </div>
-  </header>
-
-  <!-- MAIN NAVIGATION TABS -->
-  <nav class="flex gap-2 mb-6 overflow-x-auto pb-2">
-    <button class="btn" data-tab="coinflip">🪙 Coinflip</button>
-    <button class="btn" style="background:var(--card2);color:var(--ink)" data-tab="giveaways">🎁 Giveaways</button>
-    <button class="btn" style="background:var(--card2);color:var(--ink)" data-tab="profile">👤 Profile & Withdraw</button>
-    <button class="btn" style="background:var(--card2);color:var(--ink)" data-tab="provably">🔒 Provably Fair</button>
-  </nav>
-
-  <!-- CONTENT TABS -->
-  <main class="space-y-6">
-    <!-- COINFLIP TAB -->
-    <section id="tab-coinflip" class="space-y-6">
-      <div class="flex justify-between items-center">
-        <h2 class="text-xl font-bold">Live Coinflip Battles</h2>
-        <button id="btn-create-match" class="btn">⚔️ Create Match</button>
-      </div>
-      <div id="matches-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
-    </section>
-
-    <!-- GIVEAWAYS TAB -->
-    <section id="tab-giveaways" class="space-y-6 hidden">
-      <div class="flex justify-between items-center">
-        <h2 class="text-xl font-bold">Active Giveaways</h2>
-        <button id="btn-create-ga" class="btn">🎁 Host Giveaway</button>
-      </div>
-      <div id="ga-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
-    </section>
-
-    <!-- PROFILE TAB -->
-    <section id="tab-profile" class="space-y-6 hidden">
-      <div class="card p-6 flex flex-wrap justify-between items-center gap-4">
-        <div class="flex items-center gap-4">
-          <img id="p-avatar" class="w-16 h-16 rounded-full bg-gray-200 object-cover">
-          <div>
-            <h2 id="p-username" class="text-xl font-bold">Username</h2>
-            <p id="p-rank" class="text-sm" style="color:var(--mut)">Rank: Rookie</p>
-          </div>
-        </div>
-        <div class="flex gap-4 text-center">
-          <div class="card2 p-3 px-4"><span class="text-xs block" style="color:var(--mut)">Total Bet</span><b id="p-bet">💎 0</b></div>
-          <div class="card2 p-3 px-4"><span class="text-xs block" style="color:var(--mut)">Total Won</span><b id="p-won">💎 0</b></div>
-        </div>
-      </div>
-      <div class="grid md:grid-cols-2 gap-6">
-        <div class="card p-4 space-y-4">
-          <div class="flex justify-between items-center">
-            <h3 class="font-bold">🎒 Your Inventory</h3>
-            <button id="btn-withdraw" class="btn btn-sm btn-green">Withdraw Selected</button>
-          </div>
-          <div id="user-inv" class="grid grid-cols-3 gap-2 max-h-96 overflow-y-auto p-1"></div>
-        </div>
-        <div class="card p-4 space-y-4">
-          <h3 class="font-bold">📜 Transaction History</h3>
-          <div id="tx-list" class="space-y-2 text-sm max-h-96 overflow-y-auto"></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- PROVABLY FAIR TAB -->
-    <section id="tab-provably" class="space-y-6 hidden">
-      <div class="card p-6 space-y-4">
-        <h2 class="text-xl font-bold">🔒 How Provably Fair Works</h2>
-        <p class="text-sm leading-relaxed" style="color:var(--mut)">
-          Every coinflip match is 100% fair and verifiable. Before the match starts, the server generates a secret <b>serverSeed</b> and publishes its cryptographic SHA-256 hash (<b>Match Hash</b>) to the lobby.
-        </p>
-        <p class="text-sm leading-relaxed" style="color:var(--mut)">
-          When the match is joined, the winner side is calculated deterministically on the backend via HMAC-SHA256 using the match ID and secret seed. Once the match finishes, the raw `serverSeed` is revealed so anyone can independently check that the outcome was predetermined and unmanipulated.
-        </p>
-      </div>
-    </section>
-  </main>
-
-  <!-- CHAT SIDEBAR / BAR -->
-  <aside class="card p-4 mt-6">
-    <div class="flex justify-between items-center mb-2">
-      <h3 class="font-bold text-sm">💬 Live Chat (<span id="online-count">0</span> online)</h3>
-    </div>
-    <div id="chat-messages" class="h-32 overflow-y-auto space-y-1 text-sm mb-2 p-2 card2"></div>
-    <form id="chat-form" class="flex gap-2">
-      <input id="chat-input" class="inp flex-1 text-sm py-1.5" placeholder="Type a message (no links)..." autocomplete="off">
-      <button class="btn btn-sm">Send</button>
-    </form>
   </aside>
+</div>
 
-  <!-- MODALS CONTAINER -->
-  <div id="modals"></div>
-  <div id="toast-box"></div>
+<div class="main" id="pgProfile" style="display:none;grid-template-columns:1fr"><div id="profile"></div></div>
+</div>
 
-  <!-- FRONTEND CLIENT SCRIPT -->
-  <script>
-    // ⚠️ DEPLOY SONRASI BURAYI RENDER BACKEND URL'İNİZ İLE DEĞİŞTİRİN!
-    const API_BASE = "https://amproll-backend.onrender.com";
+<script>
+/* ====== AYAR: Render URL'ni yaz (sonunda / olmasın) ====== */
+const API_BASE = "https://YOUR-APP.onrender.com";
+/* ========================================================= */
+const BOT_NAME="DedokAmp";
+const BOT_LINK="https://www.roblox.com/share?code=a0dd8a7bc68f034b99e078f454d4e903&type=Server";
 
-    const state = { token: localStorage.getItem('amp_token'), user: null, matches: [], giveaways: [], bot: null, config: { range: 0.1, maxItems: 8 } };
-    const socket = io(API_BASE, { auth: { token: state.token } });
-    const $ = id => document.getElementById(id);
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=n=>Number(n||0).toLocaleString('en-US',{maximumFractionDigits:2});
+const arr=x=>Array.isArray(x)?x:(x&&typeof x==='object'?Object.values(x):[]);
+const uname=u=>!u?'':(typeof u==='string'?u:(u.username||u.name||u.displayName||''));
+const tsn=x=>typeof x==='number'?x:(Date.parse(x)||0);
+let token=localStorage.getItem('amp_token')||'';
+let ME=null, ST={matches:[],giveaways:[],chat:[],catalog:[]}, booted=false, socket=null;
+let SEL={}, GC=null, VIEW=null, PH={}, CELEB={}, PAGE=1;
 
-    function toast(msg, type = 'ok') {
-      const t = document.createElement('div'); t.className = `toast ${type === 'err' ? 'err' : ''}`; t.textContent = msg;
-      $('toast-box').appendChild(t); setTimeout(() => t.remove(), 3500);
-    }
-    const fmt = n => Number(n || 0).toLocaleString();
-    const esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const tags = i => `<span class="badge ${i.age==='neon'?'badge-n':i.age==='mega'?'badge-m':'badge-fr'}">${i.age[0].toUpperCase()}</span>` + (i.fly?'<span class="badge badge-fr">F</span>':'') + (i.ride?'<span class="badge badge-fr">R</span>':'');
+/* ---------- API ---------- */
+async function api(path,opt={}){
+  const h={'Content-Type':'application/json'};
+  if(token){h.Authorization='Bearer '+token;h['x-token']=token;}
+  const r=await fetch(API_BASE+path,{method:opt.method||(opt.body?'POST':'GET'),headers:h,body:opt.body?JSON.stringify(opt.body):undefined});
+  let d={};const t=await r.text();try{d=JSON.parse(t)}catch{d={_text:t}}
+  if(!r.ok)throw new Error(d.error||d.message||('HTTP '+r.status));
+  return d;
+}
+function toast(m,t=''){const e=document.createElement('div');e.className='toast '+t;e.textContent=m;$('#toasts').appendChild(e);setTimeout(()=>e.remove(),3800)}
+const fail=e=>toast(e.message||String(e),'err');
 
-    async function api(path, opts = {}) {
-      const headers = { 'Content-Type': 'application/json' };
-      if (state.token) headers['Authorization'] = 'Bearer ' + state.token;
-      const r = await fetch(API_BASE + path, { ...opts, headers, body: opts.body ? JSON.stringify(opts.body) : undefined });
-      const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Server error');
-      return j;
-    }
+/* ---------- Item helpers ---------- */
+function catMap(){const m={};arr(ST.catalog).forEach(c=>{m[c.id||c._id]=c});return m}
+function resolve(e){const id=e.catalogId||e.id||e._id;const c=catMap()[id]||{};return {...c,...e,id,qty:e.qty||e.count||1}}
+function inv(){return ME?arr(ME.inventory).map(resolve).filter(i=>i.qty>0):[]}
+function itemImg(i){return i.image||i.img||i.imageUrl||i.url||''}
+function tags(i){let s='';if(i.age==='mega'||i.mega)s+='<i class="M">M</i>';if(i.age==='neon'||i.neon)s+='<i class="N">N</i>';if(i.fly)s+='<i class="F">F</i>';if(i.ride)s+='<i class="R">R</i>';return s?`<div class="tg">${s}</div>`:''}
+function thumb(i,max){return `<div class="it" title="${esc(i.name)} • ${fmt(i.value)}"><img src="${esc(itemImg(i))}" alt="" onerror="this.style.opacity=.2">${i.qty>1?`<span class="q">x${i.qty}</span>`:''}</div>`}
+function thumbs(list,max=6){return list.slice(0,max).map(thumb).join('')+(list.length>max?`<div class="it"><b>+${list.length-max}</b></div>`:'')}
+const sumV=l=>l.reduce((a,i)=>a+(Number(i.value)||0)*(i.qty||1),0);
+function av(u,cls='',ring=false){const n=uname(u)||'?';const url=u&&(u.avatar||u.avatarUrl||u.avatar_url||u.headshot);
+  return url?`<img class="av ${cls} ${ring?'ring':''}" src="${esc(url)}" alt="">`:`<span class="av ${cls} ${ring?'ring':''}">${esc(n[0]||'?').toUpperCase()}</span>`}
+const sideIco=s=>s==='cat'?'🐱':'🐶';
 
-    // Theme toggle
-    $('btn-theme').onclick = () => {
-      document.body.classList.toggle('dark');
-      localStorage.setItem('theme', document.body.classList.contains('dark') ? 'dark' : 'light');
-    };
-    if (localStorage.getItem('theme') === 'dark') document.body.classList.add('dark');
+/* ---------- Match normalize ---------- */
+function nm(m){
+  const s=String(m.status||m.state||'waiting').toLowerCase();
+  const status=/cancel/.test(s)?'cancelled':/count|start/.test(s)?'countdown':/flip/.test(s)?'flipping':/fin|done|complet|end/.test(s)?'finished':'waiting';
+  const host=m.host||m.creator||{};const joiner=m.joiner||m.opponent||m.guest||null;
+  const hostItems=arr(m.hostItems||m.items||m.creatorItems).map(resolve);
+  const joinItems=arr(m.joinerItems||m.joinItems||m.opponentItems||m.guestItems).map(resolve);
+  const hostSide=m.hostSide||m.side||'dog';
+  const o={raw:m,id:m.id||m._id,status,host,joiner,hostItems,joinItems,hostSide,joinSide:hostSide==='dog'?'cat':'dog',
+    value:m.value||m.hostValue||sumV(hostItems),hash:m.hash||m.seedHash||m.commit,seed:m.seed||m.serverSeed,
+    result:m.result||m.winnerSide||m.coin,finishedAt:tsn(m.finishedAt||m.endedAt)};
+  let w=m.winner;let wn=uname(w);
+  if(!wn&&(w==='host'||w==='joiner'))wn=uname(w==='host'?host:joiner);
+  if(!wn&&o.result)wn=uname(o.result===hostSide?host:joiner);
+  o.winnerName=wn;o.hostWon=!!wn&&wn===uname(host);
+  o.joinValue=sumV(joinItems);
+  return o;
+}
+function range(v){const r=Number((ST.config&&ST.config.range)||ST.range||0.10);return [v*(1-r),v*(1+r)]}
+function phase(m,key,ms){const t=m.raw.countdownEnd||m.raw.startsAt;if(key==='countdown'&&t)return tsn(t);
+  const k=m.id+key;if(!PH[k])PH[k]=Date.now();return PH[k]+ms}
 
-    // Navigation Tabs
-    document.querySelectorAll('nav button[data-tab]').forEach(b => {
-      b.onclick = () => {
-        document.querySelectorAll('nav button').forEach(x => { x.style.background = 'var(--card2)'; x.style.color = 'var(--ink)'; });
-        b.style.background = 'var(--prim)'; b.style.color = '#fff';
-        document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
-        $('tab-' + b.dataset.tab).classList.remove('hidden');
-        if (b.dataset.tab === 'profile' && state.user) loadProfile();
-      };
-    });
+/* ---------- Modal ---------- */
+function openModal(html,wide){const m=$('#modal');m.className='modal'+(wide?' wide':'');m.innerHTML=html;$('#ov').classList.add('open')}
+function closeModal(){$('#ov').classList.remove('open');GC=null;VIEW=null;SEL={}}
+$('#ov').addEventListener('mousedown',e=>{if(e.target.id==='ov')closeModal()});
+const mh=t=>`<div class="mh"><h3>${t}</h3><button class="x" data-act="close">✕</button></div>`;
 
-    // Auth & User State
-    async function initUser() {
-      if (!state.token) { renderAuthBox(); return; }
-      try {
-        const d = await api('/api/me'); state.user = d.user;
-        renderUserBox();
-        if (d.user.isAdmin && !window.adminLoaded) {
-          window.adminLoaded = true;
-          const r = await fetch(API_BASE + '/api/admin/ui', { headers: { 'Authorization': 'Bearer ' + state.token } });
-          if (r.ok) eval(await r.text());
-        }
-      } catch { logout(); }
-    }
+/* ---------- Header ---------- */
+function renderHeader(){
+  const h=$('#hright');
+  if(!ME){h.innerHTML=`<button class="btn" data-act="login">Login with Roblox</button>`;return}
+  const bal=sumV(inv());
+  h.innerHTML=`<div class="wallet"><div class="w" data-act="wallet"><span style="font-size:22px">🐶</span><div><small>Adopt Me</small><b>${fmt(bal)}</b></div></div><button class="plus" data-act="deposit">+</button></div>
+  <div class="user"><button data-act="umenu">${av(ME,'sm')}<span>${esc(ME.username||ME.name)}</span> ▾</button>
+  <div class="menu" id="umenu"><a data-act="profile">👤 Profile</a><a data-act="giveaway">🎁 Create Giveaway</a>${isAdmin()?'<a data-act="admin">🛠 Admin Panel</a>':''}<a data-act="logout">🚪 Logout</a></div></div>`;
+}
+const isAdmin=()=>!!(ME&&(ME.isAdmin||ME.admin||ME.role==='admin'));
 
-    function renderAuthBox() {
-      $('user-sec').innerHTML = `<button id="btn-login" class="btn btn-sm">Login with Roblox</button>`;
-      $('btn-login').onclick = showLoginModal;
-    }
-    function renderUserBox() {
-      const u = state.user;
-      $('user-sec').innerHTML = `
-        <div class="flex items-center gap-2">
-          <img src="${u.avatar || ''}" class="w-8 h-8 rounded-full bg-gray-200">
-          <span class="font-bold text-sm">${esc(u.username)}</span>
-          ${u.isAdmin ? '<span class="badge" style="background:var(--red)">ADMIN</span>' : ''}
-          <button id="btn-logout" class="btn btn-sm btn-red">Logout</button>
-        </div>`;
-      $('btn-logout').onclick = logout;
-      if (u.inventory) renderInv(u.inventory, 'user-inv');
-    }
-    function logout() {
-      api('/api/auth/logout', { method: 'POST' }).catch(()=>{});
-      localStorage.removeItem('amp_token'); state.token = null; state.user = null;
-      window.adminLoaded = false; document.getElementById('adm')?.remove();
-      renderAuthBox(); toast('Logged out');
-    }
+/* ---------- Lobby ---------- */
+function renderLobby(){
+  const list=arr(ST.matches).map(nm).filter(m=>m.status!=='cancelled').sort((a,b)=>(a.status==='finished')-(b.status==='finished')||b.value-a.value);
+  $('#cnt').textContent=list.length+' games';
+  if(!list.length){$('#lobby').innerHTML='<div class="empty">🐾 No games right now.<br>Be the first and create one!</div>';return}
+  $('#lobby').innerHTML=list.map(m=>{
+    const mine=ME&&uname(m.host)===ME.username;
+    const [lo,hi]=range(m.value);
+    let mid;
+    if(m.status==='waiting')mid=`<div class="v">${fmt(m.value)}</div><small>${fmt(lo)} – ${fmt(hi)}</small>`;
+    else if(m.status==='countdown')mid=`<div class="cd"><i class="cdn" data-end="${phase(m,'countdown',3000)}">3</i></div>`;
+    else if(m.status==='flipping')mid=`<div class="coin3d"><div class="coin spin"><div class="f">🐶</div><div class="f b">🐱</div></div></div>`;
+    else mid=`<div class="coin3d"><div class="coin ${m.result&&(m.result==='cat')?'cat':(m.hostWon===(m.hostSide==='dog')?'':'cat')}"><div class="f">🐶</div><div class="f b">🐱</div></div></div><small>${fmt(m.value+m.joinValue)}</small>`;
+    const jn=m.joiner?`<div class="pl">${av(m.joiner,'',m.status==='finished'&&!m.hostWon)}<span class="n">${esc(uname(m.joiner))}</span><span class="side-ico">${sideIco(m.joinSide)}</span></div>`
+      :`<div class="pl" style="color:var(--mut)">Waiting…</div>`;
+    const act=m.status==='waiting'?(mine?`<button class="btn red sm" data-act="cancel" data-id="${esc(m.id)}">Cancel</button>`:`<button class="btn mint sm" data-act="join" data-id="${esc(m.id)}">Join</button>`):'';
+    return `<div class="match ${m.status==='finished'?'fin':''}">
+      <div class="pl">${av(m.host,'',m.status==='finished'&&m.hostWon)}<span class="n">${esc(uname(m.host))}</span><span class="side-ico">${sideIco(m.hostSide)}</span></div>
+      <div class="items">${thumbs(m.hostItems)}</div>
+      <div class="mid">${mid}</div>${jn}
+      <div class="acts">${act}<button class="btn sm" data-act="view" data-id="${esc(m.id)}">View</button></div></div>`}).join('');
+  list.forEach(m=>{if(m.status==='finished'&&ME&&m.winnerName===ME.username&&!CELEB[m.id]){CELEB[m.id]=1;confetti()}});
+}
 
-    // Login Modal
-    function showLoginModal() {
-      const m = document.createElement('div'); m.className = 'overlay show';
-      m.innerHTML = `<div class="modal space-y-4">
-        <div class="mh"><h3>🔑 Login via Roblox Bio</h3><button class="x">✕</button></div>
-        <div class="space-y-3" id="l-step1">
-          <p class="text-sm" style="color:var(--mut)">Enter your Roblox username to verify ownership:</p>
-          <input id="l-user" class="inp w-full" placeholder="Roblox Username">
-          <button id="l-next" class="btn w-full">Next</button>
-        </div>
-        <div class="space-y-3 hidden" id="l-step2">
-          <p class="text-sm">Copy this secret code and paste it into your Roblox profile <b>"About"</b> section:</p>
-          <div class="p-3 card2 font-mono text-center font-bold text-lg select-all" id="l-code"></div>
-          <button id="l-verify" class="btn btn-sm btn-green w-full">I Saved It, Verify!</button>
-        </div>
-      </div>`;
-      document.body.appendChild(m);
-      const x = () => m.remove();
-      m.querySelector('.x').onclick = x;
-      let uid = null;
-      m.querySelector('#l-next').onclick = async () => {
-        try {
-          const res = await api('/api/auth/start', { method: 'POST', body: { username: m.querySelector('#l-user').value } });
-          uid = res.id; m.querySelector('#l-code').textContent = res.code;
-          m.querySelector('#l-step1').classList.add('hidden');
-          m.querySelector('#l-step2').classList.remove('hidden');
-        } catch (e) { toast(e.message, 'err'); }
-      };
-      m.querySelector('#l-verify').onclick = async () => {
-        try {
-          const res = await api('/api/auth/verify', { method: 'POST', body: { id: uid } });
-          state.token = res.token; localStorage.setItem('amp_token', res.token);
-          state.user = res.user; x(); renderUserBox(); toast('Logged in successfully!');
-          socket.auth = { token: state.token }; socket.connect();
-        } catch (e) { toast(e.message, 'err'); }
-      };
-    }
+/* ---------- Giveaways ---------- */
+function renderGW(){
+  $('#gws').innerHTML=arr(ST.giveaways).map(g=>{
+    const items=arr(g.items).map(resolve);const end=tsn(g.endsAt||g.endTime);
+    const ent=Array.isArray(g.entrants)?g.entrants:null;const n=ent?ent.length:(g.entrants||g.entrantCount||0);
+    const entered=ME&&ent&&ent.some(e=>(e.username||e)===ME.username);
+    return `<div class="gw"><div class="im">${items.slice(0,2).map(i=>`<img src="${esc(itemImg(i))}" alt="">`).join('')}</div>
+      <div class="inf"><b>🎁 Giveaway</b> by ${esc(uname(g.host||g.creator))}<br>Value: <b>${fmt(g.value||sumV(items))}</b> • ${n} in • <span class="gt" data-end="${end}"></span></div>
+      <button class="btn sun sm" data-act="genter" data-id="${esc(g.id||g._id)}" ${entered?'disabled':''}>${entered?'Entered':'Enter'}</button></div>`}).join('');
+}
 
-    // Render Inventory Selector helper
-    function renderInv(inv, containerId, max = 8) {
-      const c = $(containerId); if (!c) return;
-      const sel = new Set();
-      c.innerHTML = inv.length ? inv.map(i => `
-        <div class="item" data-uid="${i.uid}">
-          <div class="tgs-top">${tags(i)}</div>
-          <img src="${esc(i.image)}">
-          <span class="text-xs font-bold truncate w-full text-center mt-1">${esc(i.name)}</span>
-          <span class="text-xs" style="color:var(--mut)">💎 ${i.value}</span>
-        </div>`).join('') : '<p class="text-xs col-span-3 text-center" style="color:var(--mut)">Inventory is empty. Deposit items via bot or ask admin.</p>';
-      
-      c.onclick = e => {
-        const el = e.target.closest('.item'); if (!el) return;
-        const uid = el.dataset.uid;
-        if (sel.has(uid)) { sel.delete(uid); el.classList.remove('sel'); }
-        else {
-          if (sel.size >= max) return toast(`Max ${max} items allowed`, 'err');
-          sel.add(uid); el.classList.add('sel');
-        }
-        c.selectedUids = Array.from(sel);
-      };
-      c.selectedUids = [];
-    }
+/* ---------- Chat ---------- */
+function chatHTML(m){const u=m.user||{};const n=m.username||uname(u)||m.name||'?';const rk=m.admin||u.admin?'ADMIN':(m.rank||u.rank||'');
+  return `<div class="msg">${av({username:n,avatar:m.avatar||u.avatar},'sm')}<div><span class="rk ${esc(rk)}" ${rk?'':'style="display:none"'}>${esc(rk)}</span><b>${esc(n)}</b> ${esc(m.text||m.message||'')}</div></div>`}
+function renderChat(){const b=$('#msgs');const near=b.scrollHeight-b.scrollTop-b.clientHeight<80;
+  b.innerHTML=arr(ST.chat).slice(-100).map(chatHTML).join('');if(near)b.scrollTop=b.scrollHeight}
+function sendChat(){const i=$('#cin');const t=i.value.trim();if(!t)return;if(!ME)return showLogin();
+  if(socket)socket.emit('chat:send',{text:t});i.value=''}
+$('#cin').addEventListener('keydown',e=>{if(e.key==='Enter')sendChat()});
 
-    // Coinflip Render & Actions
-    async function fetchState() {
-      const d = await api('/api/state');
-      state.matches = d.matches; state.giveaways = d.giveaways; state.bot = d.bot;
-      renderMatches(); renderGiveaways(); renderChat(d.chat); $('online-count').textContent = d.online;
-    }
-    fetchState();
+/* ---------- Data loop ---------- */
+let busy=false;
+async function refresh(){
+  if(busy)return;busy=true;
+  try{
+    const d=await api('/api/state');ST={...ST,...d};
+    if(d.bot)ST.bot=d.bot;
+    if(token){try{const m=await api('/api/me');ME=m.user||m.me||m;if(!ME.username)ME=null}catch(e){if(/401|auth|token|session|login/i.test(e.message)){token='';localStorage.removeItem('amp_token');ME=null}}}
+    else ME=null;
+    if(!booted){booted=true;$('#boot').remove();connectSocket()}
+    renderHeader();renderLobby();renderGW();renderChat();
+    if(VIEW)renderView();
+  }catch(e){if(!booted)$('#bootmsg').textContent='Server uyanıyor… (free plan ~30sn sürebilir)'}
+  busy=false;
+}
+let rt=null;const sched=()=>{clearTimeout(rt);rt=setTimeout(refresh,150)};
+setInterval(()=>{if(!document.hidden)refresh()},2000);
+setInterval(()=>{ // tickers
+  const now=Date.now();
+  document.querySelectorAll('.cdn').forEach(e=>{const n=Math.ceil((+e.dataset.end-now)/1000);e.textContent=n>0?n:'…'});
+  document.querySelectorAll('.gt').forEach(e=>{const s=Math.max(0,Math.ceil((+e.dataset.end-now)/1000));e.textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0')});
+},250);
 
-    function renderMatches() {
-      const g = $('matches-grid');
-      g.innerHTML = state.matches.length ? state.matches.map(m => `
-        <div class="card p-4 space-y-3 relative overflow-hidden">
-          <div class="flex justify-between items-center text-xs" style="color:var(--mut)">
-            <span>Match #${m.id}</span>
-            <span class="font-mono text-[10px] truncate max-w-[120px]">Hash: ${m.hash}</span>
-          </div>
-          <div class="flex justify-between items-center text-center">
-            <div class="flex-1">
-              <img src="${m.host.avatar || ''}" class="w-10 h-10 rounded-full mx-auto bg-gray-200">
-              <span class="text-xs font-bold block truncate mt-1">${esc(m.host.username)}</span>
-              <span class="text-xs badge" style="background:${m.hostSide==='dog'?var(--dog):var(--cat)}">${m.hostSide.toUpperCase()}</span>
-              <div class="text-xs font-bold mt-1">💎 ${m.hostValue}</div>
-            </div>
-            <div class="font-bold text-xl px-2" style="color:var(--mut)">VS</div>
-            <div class="flex-1">
-              ${m.opp ? `<img src="${m.opp.avatar || ''}" class="w-10 h-10 rounded-full mx-auto bg-gray-200"><span class="text-xs font-bold block truncate mt-1">${esc(m.opp.username)}</span><span class="text-xs badge" style="background:${m.oppSide==='dog'?var(--dog):var(--cat)}">${m.oppSide.toUpperCase()}</span><div class="text-xs font-bold mt-1">💎 ${m.oppValue}</div>` : '<div class="w-10 h-10 rounded-full mx-auto border-2 border-dashed flex items-center justify-center text-xs" style="border-color:var(--line)">?</div><span class="text-xs block mt-1" style="color:var(--mut)">Waiting...</span>'}
-            </div>
-          </div>
-          ${m.state === 'waiting' ? `<button class="btn w-full btn-sm" onclick="joinMatch('${m.id}')">Join Match</button>` : ''}
-          ${m.state === 'countdown' || m.state === 'flipping' ? `<div class="text-center font-bold text-sm text-indigo-500 animate-pulse">Flipping coin...</div>` : ''}
-          ${m.state === 'finished' ? `<div class="text-center font-bold text-sm text-emerald-500">Winner: ${m.winnerId === state.user?.id ? 'You! 🎉' : 'Opponent'}</div>` : ''}
-        </div>`).join('') : '<p class="col-span-full text-center py-8" style="color:var(--mut)">No active matches. Create one!</p>';
-    }
+function connectSocket(){
+  if(socket){socket.disconnect()}
+  socket=io(API_BASE,{auth:{token},transports:['websocket','polling']});
+  socket.onAny((ev,...a)=>{
+    const p=a[0];
+    if(/err/i.test(ev)){const m=typeof p==='string'?p:(p&&(p.message||p.error));if(m)toast(m,'err');return}
+    if(/^chat/i.test(ev)){
+      if(Array.isArray(p)){ST.chat=p;renderChat()}
+      else if(p&&(p.text||p.message)){ST.chat=arr(ST.chat);if(!p.id||!ST.chat.some(c=>c.id===p.id)){ST.chat.push(p)}renderChat()}
+      else sched();return}
+    if(/online|count/i.test(ev)&&typeof p==='number'){$('#online').textContent=p+' online';return}
+    sched();
+  });
+}
 
-    $('btn-create-match').onclick = () => {
-      if (!state.user) return toast('Login first', 'err');
-      const m = document.createElement('div'); m.className = 'overlay show';
-      m.innerHTML = `<div class="modal space-y-4" style="max-width:600px">
-        <div class="mh"><h3>⚔️ Create Coinflip Match</h3><button class="x">✕</button></div>
-        <div class="space-y-2">
-          <label class="text-sm font-bold">Pick Your Side:</label>
-          <div class="flex gap-4">
-            <label class="flex items-center gap-2 cursor-pointer font-bold"><input type="radio" name="side" value="dog" checked> 🐶 Dog</label>
-            <label class="flex items-center gap-2 cursor-pointer font-bold"><input type="radio" name="side" value="cat"> 🐱 Cat</label>
-          </div>
-        </div>
-        <div class="space-y-2">
-          <label class="text-sm font-bold">Select Items to Bet (max ${state.config.maxItems}):</label>
-          <div id="m-inv" class="grid grid-cols-4 gap-2 max-h-60 overflow-y-auto p-1 card2"></div>
-        </div>
-        <button id="m-submit" class="btn w-full">Create Match</button>
-      </div>`;
-      document.body.appendChild(m);
-      m.querySelector('.x').onclick = () => m.remove();
-      renderInv(state.user.inventory, 'm-inv', state.config.maxItems);
-      m.querySelector('#m-submit').onclick = async () => {
-        try {
-          const side = m.querySelector('input[name="side"]:checked').value;
-          const uids = $('m-inv').selectedUids;
-          await api('/api/match/create', { method: 'POST', body: { side, uids } });
-          m.remove(); toast('Match created!');
-        } catch (e) { toast(e.message, 'err'); }
-      };
-    };
+/* ---------- Login ---------- */
+function showLogin(){
+  openModal(`${mh('Login with Roblox')}
+  <p class="hint">Roblox kullanıcı adını yaz. Sana bir kod vereceğiz; onu Roblox profilindeki <b>About / Description</b> kısmına yapıştır, sonra Verify'a bas.</p>
+  <div class="row"><input class="in" id="lu" type="text" placeholder="Roblox username" maxlength="30"><button class="btn" id="lgo" data-act="lstart">Get code</button></div><div id="lstep"></div>`);
+  setTimeout(()=>$('#lu')&&$('#lu').focus(),50);
+}
+let LOGIN={};
+async function loginStart(){
+  const username=$('#lu').value.trim();if(!username)return;
+  try{const d=await api('/api/auth/start',{body:{username}});LOGIN={username,...d};
+    $('#lstep').innerHTML=`<div class="hint">Bu kodu Roblox profil açıklamana (About) yapıştır:</div><div class="code">${esc(d.code)}</div>
+    <div class="hint">Roblox → Profile → pencil/edit → About → kaydet. Sonra:</div><button class="btn mint" style="width:100%" data-act="lverify">Verify</button>`;
+  }catch(e){fail(e)}
+}
+async function loginVerify(){
+  try{const d=await api('/api/auth/verify',{body:{username:LOGIN.username,robloxId:LOGIN.robloxId,code:LOGIN.code}});
+    token=d.token;localStorage.setItem('amp_token',token);closeModal();toast('Welcome!','ok');
+    if(socket){socket.auth={token};socket.disconnect().connect()}refresh();
+  }catch(e){fail(e)}
+}
 
-    window.joinMatch = id => {
-      if (!state.user) return toast('Login first', 'err');
-      const match = state.matches.find(x => x.id === id);
-      const m = document.createElement('div'); m.className = 'overlay show';
-      m.innerHTML = `<div class="modal space-y-4" style="max-width:600px">
-        <div class="mh"><h3>⚔️ Join Match #${id}</h3><button class="x">✕</button></div>
-        <p class="text-sm" style="color:var(--mut)">Required value range: ~<b>💎 ${match.hostValue}</b> (±10%)</p>
-        <div id="j-inv" class="grid grid-cols-4 gap-2 max-h-60 overflow-y-auto p-1 card2"></div>
-        <button id="j-submit" class="btn w-full btn-green">Confirm & Join</button>
-      </div>`;
-      document.body.appendChild(m);
-      m.querySelector('.x').onclick = () => m.remove();
-      renderInv(state.user.inventory, 'j-inv', state.config.maxItems);
-      m.querySelector('#j-submit').onclick = async () => {
-        try {
-          const uids = $('j-inv').selectedUids;
-          await api('/api/match/join', { method: 'POST', body: { id, uids } });
-          m.remove(); toast('Joined match!');
-        } catch (e) { toast(e.message, 'err'); }
-      };
-    };
+/* ---------- Item grid (shared) ---------- */
+function gridUI(){return `<div class="row"><input type="text" id="gq" placeholder="Search items…"><select id="gs"><option value="vd">Value ↓</option><option value="va">Value ↑</option><option value="nm">Name</option></select><button class="btn gray sm" data-act="selall">Select All</button><button class="btn gray sm" data-act="selnone">Clear</button></div><div class="grid" id="grid"></div>`}
+function renderGrid(){
+  if(!GC)return;const q=($('#gq')&&$('#gq').value||'').toLowerCase();const s=$('#gs')?$('#gs').value:'vd';
+  let l=GC.list().filter(i=>(i.name||'').toLowerCase().includes(q));
+  l.sort((a,b)=>s==='va'?a.value-b.value:s==='nm'?(a.name||'').localeCompare(b.name||''):b.value-a.value);
+  $('#grid').innerHTML=l.length?l.map(i=>{const c=SEL[i.id]||0;return `<div class="gi ${c?'sel':''}" data-act="pick" data-id="${esc(i.id)}">${c?`<span class="cnt">${c}/${i.qty}</span>`:(i.qty>1?`<span class="cnt" style="background:var(--blue)">x${i.qty}</span>`:'')}<img src="${esc(itemImg(i))}" alt="" onerror="this.style.opacity=.2"><div class="nm">${esc(i.name)}</div><div class="vl">${fmt(i.value)}</div>${tags(i)}</div>`}).join(''):'<div class="empty" style="grid-column:1/-1">Nothing here</div>';
+  if(GC.info)GC.info();
+}
+function selList(){const m={};GC.list().forEach(i=>m[i.id]=i);return Object.keys(SEL).filter(k=>SEL[k]>0&&m[k]).map(k=>({...m[k],qty:SEL[k]}))}
+const selPayload=()=>Object.keys(SEL).filter(k=>SEL[k]>0).map(k=>({catalogId:k,qty:SEL[k]}));
+function bindGrid(){['gq','gs'].forEach(id=>{const e=$('#'+id);e&&e.addEventListener('input',renderGrid)});renderGrid()}
 
-    // Giveaways
-    function renderGiveaways() {
-      const g = $('ga-grid');
-      g.innerHTML = state.giveaways.length ? state.giveaways.map(ga => `
-        <div class="card p-4 space-y-3">
-          <div class="flex justify-between items-center text-xs" style="color:var(--mut)">
-            <span>Host: ${esc(ga.host.username)}</span>
-            <span>⏱️ ${Math.ceil(ga.left/1000)}s left</span>
-          </div>
-          <div class="flex gap-2 overflow-x-auto py-1">
-            ${ga.items.map(i => `<div class="item" style="min-width:54px;min-height:54px"><img src="${esc(i.image)}" style="width:40px;height:40px"></div>`).join('')}
-          </div>
-          <div class="flex justify-between items-center text-sm">
-            <span>Value: <b>💎 ${ga.value}</b></span>
-            <button class="btn btn-sm btn-green" onclick="enterGA('${ga.id}')">Enter (${ga.entrantIds.length})</button>
-          </div>
-        </div>`).join('') : '<p class="col-span-full text-center py-8" style="color:var(--mut)">No active giveaways.</p>';
-    }
+/* ---------- Wallet ---------- */
+function showWallet(){
+  if(!ME)return showLogin();SEL={};
+  GC={list:inv,info(){const l=selList();$('#winfo').textContent=l.length?`${l.reduce((a,i)=>a+i.qty,0)} selected • ${fmt(sumV(l))}`:'Inventory: '+fmt(sumV(inv()))}};
+  openModal(`${mh('🎒 My Adopt Me Inventory')}${gridUI()}<div class="row" style="margin-top:10px"><b id="winfo" style="flex:1"></b><button class="btn gray" data-act="deposit">+ Deposit</button><button class="btn red" data-act="withdraw">Withdraw</button></div>`,true);
+  bindGrid();
+}
+async function withdraw(){
+  const p=selPayload();if(!p.length)return toast('Select items first','err');
+  if(!confirm('Withdraw selected items? The bot will send them to you.'))return;
+  try{await api('/api/withdraw',{body:{items:p}});toast('Withdraw queued! Bot will trade you.','ok');SEL={};refresh();renderGrid()}catch(e){fail(e)}
+}
 
-    window.enterGA = async id => {
-      try { await api('/api/giveaway/enter', { method: 'POST', body: { id } }); toast('Entered giveaway!'); }
-      catch (e) { toast(e.message, 'err'); }
-    };
+/* ---------- Deposit / Bots ---------- */
+function showDeposit(){
+  if(!ME)return showLogin();
+  openModal(`${mh('Deposit')}<p class="hint">Choose a game</p><div class="game"><div class="gc" data-act="bots"><div class="pic">🐶🐝</div><b>Adopt Me</b></div></div>`);
+}
+function showBots(){
+  const b=ST.bot||{};const link=b.joinLink||b.link||BOT_LINK;
+  openModal(`${mh('Adopt Me — Bots')}<p class="hint">Join the bot's server, then trade your pets/items to it. They appear in your inventory automatically.</p>
+  <div class="bot"><span class="av lg">🤖</span><div class="inf"><b style="font-size:18px">${esc(b.username||BOT_NAME)}</b><br><small><span class="on-dot"></span>Online</small></div><button class="btn mint" data-act="botjoin">Join</button></div>`);
+}
 
-    $('btn-create-ga').onclick = () => {
-      if (!state.user) return toast('Login first', 'err');
-      const m = document.createElement('div'); m.className = 'overlay show';
-      m.innerHTML = `<div class="modal space-y-4" style="max-width:600px">
-        <div class="mh"><h3>🎁 Host Giveaway</h3><button class="x">✕</button></div>
-        <select id="ga-mode" class="inp w-full">
-          <option value="easy">Easy (30s / 2m / 5m)</option>
-          <option value="advanced">Advanced (1-60 min & min bet)</option>
-        </select>
-        <select id="ga-dur" class="inp w-full">
-          <option value="30">30 Seconds</option><option value="120">2 Minutes</option><option value="300">5 Minutes</option>
-        </select>
-        <input id="ga-min" class="inp w-full hidden" type="number" placeholder="Minimum Total Bet Required">
-        <div id="ga-inv" class="grid grid-cols-4 gap-2 max-h-60 overflow-y-auto p-1 card2"></div>
-        <button id="ga-submit" class="btn w-full">Start Giveaway</button>
-      </div>`;
-      document.body.appendChild(m);
-      m.querySelector('.x').onclick = () => m.remove();
-      renderInv(state.user.inventory, 'ga-inv', 5);
-      m.querySelector('#ga-mode').onchange = e => {
-        const adv = e.target.value === 'advanced';
-        m.querySelector('#ga-min').classList.toggle('hidden', !adv);
-        m.querySelector('#ga-dur').innerHTML = adv ? '<option value="60">1 Minute</option><option value="300">5 Minutes</option><option value="600">10 Minutes</option>' : '<option value="30">30 Seconds</option><option value="120">2 Minutes</option><option value="300">5 Minutes</option>';
-      };
-      m.querySelector('#ga-submit').onclick = async () => {
-        try {
-          await api('/api/giveaway/create', { method: 'POST', body: { mode: m.querySelector('#ga-mode').value, duration: m.querySelector('#ga-dur').value, minBet: m.querySelector('#ga-min').value, uids: $('ga-inv').selectedUids } });
-          m.remove(); toast('Giveaway hosted!');
-        } catch (e) { toast(e.message, 'err'); }
-      };
-    };
+/* ---------- Create / Join ---------- */
+let CSIDE='dog';
+function showCreate(){
+  if(!ME)return showLogin();SEL={};CSIDE='dog';
+  GC={list:inv,info(){const l=selList();const v=sumV(l);const [lo,hi]=range(v);$('#cinf').textContent=l.length?`Value ${fmt(v)} • joiners: ${fmt(lo)} – ${fmt(hi)}`:'Select items to wager (max 8 slots)'}};
+  openModal(`${mh('Create Match')}
+  <div class="sides" id="sides"><div class="sd on" data-act="side" data-s="dog"><span>🐶</span>Dog</div><div class="sd" data-act="side" data-s="cat"><span>🐱</span>Cat</div></div>
+  <div style="height:12px"></div>${gridUI()}
+  <div class="row" style="margin-top:10px"><b id="cinf" style="flex:1"></b><button class="btn sun" data-act="docreate">Create</button></div>`,true);
+  bindGrid();
+}
+async function doCreate(){
+  const p=selPayload();if(!p.length)return toast('Select items','err');
+  try{await api('/api/match/create',{body:{items:p,side:CSIDE}});toast('Match created!','ok');closeModal();refresh()}catch(e){fail(e)}
+}
+function showJoin(id){
+  if(!ME)return showLogin();
+  const m=arr(ST.matches).map(nm).find(x=>x.id===id);if(!m)return;SEL={};const [lo,hi]=range(m.value);
+  GC={list:inv,info(){const v=sumV(selList());const ok=v>=lo-1e-9&&v<=hi+1e-9;const e=$('#jinf');e.textContent=`Your bet ${fmt(v)} • need ${fmt(lo)} – ${fmt(hi)}`;e.style.color=ok?'#18a877':'var(--red)'}};
+  openModal(`${mh('Join '+esc(uname(m.host))+"'s match")}
+  <div class="hint">You'll be on ${sideIco(m.joinSide)} ${m.joinSide}. Match value: <b>${fmt(m.value)}</b></div>${gridUI()}
+  <div class="row" style="margin-top:10px"><b id="jinf" style="flex:1"></b><button class="btn mint" data-act="dojoin" data-id="${esc(id)}">Join</button></div>`,true);
+  bindGrid();
+}
+async function doJoin(id){
+  const p=selPayload();if(!p.length)return toast('Select items','err');
+  try{await api('/api/match/join',{body:{id,items:p}});closeModal();refresh();setTimeout(()=>showView(id),300)}catch(e){fail(e)}
+}
+async function cancelMatch(id){
+  if(!confirm('Cancel this match and get your items back?'))return;
+  try{await api('/api/match/cancel',{body:{id}});toast('Match cancelled — items refunded','ok');if(VIEW)closeModal();refresh()}catch(e){fail(e)}
+}
 
-    // Profile & Withdraw
-    async function loadProfile() {
-      const d = await api('/api/profile');
-      $('p-avatar').src = d.user.avatar || '';
-      $('p-username').textContent = d.user.username;
-      $('p-rank').textContent = `Rank: ${d.user.rank} · Profit: 💎 ${d.user.profit}`;
-      $('p-bet').textContent = '💎 ' + fmt(d.user.totalBet);
-      $('p-won').textContent = '💎 ' + fmt(d.user.totalWon);
-      renderInv(d.user.inventory, 'user-inv', 500);
-      $('tx-list').innerHTML = d.rows.length ? d.rows.map(t => `<div class="flex justify-between py-1 border-b" style="border-color:var(--line)"><span>${t.type}</span><b class="${t.amount>0?'text-emerald-500':'text-red-500'}">${t.amount>0?'+':''}${t.amount}</b></div>`).join('') : '<p style="color:var(--mut)">No transactions yet.</p>';
-    }
+/* ---------- View / VS ---------- */
+function showView(id){VIEW=id;openModal('',true);renderView()}
+function renderView(){
+  const m=arr(ST.matches).map(nm).find(x=>x.id===VIEW);
+  if(!m){$('#modal').innerHTML=mh('Match')+'<div class="empty">This match is gone.</div>';return}
+  const mine=ME&&uname(m.host)===ME.username;const fin=m.status==='finished';
+  let coin;
+  if(m.status==='flipping'||m.status==='countdown'&&false)coin='<div class="coin3d"><div class="coin big spin"><div class="f">🐶</div><div class="f b">🐱</div></div></div>';
+  else if(fin){const face=m.result?(m.result==='cat'?'cat':''):((m.hostWon===(m.hostSide==='dog'))?'':'cat');coin=`<div class="coin3d"><div class="coin big ${face}"><div class="f">🐶</div><div class="f b">🐱</div></div></div>`}
+  else if(m.status==='countdown')coin=`<div class="cd" style="width:80px;height:80px;font-size:34px"><i class="cdn" data-end="${phase(m,'countdown',3000)}">3</i></div>`;
+  else coin=`<div style="font-size:30px;font-weight:700;color:var(--mut)">VS</div>`;
+  const col=(u,items,side,win)=>u?`<div class="col ${win?'win':''}">${av(u,'lg',win)}<div><b>${esc(uname(u))}</b> ${sideIco(side)}</div><div class="hint">${fmt(sumV(items))}</div><div class="items">${thumbs(items,10)}</div></div>`
+    :`<div class="col"><div class="empty">Waiting for opponent…</div></div>`;
+  $('#modal').innerHTML=`${mh('Match • '+fmt(m.value+m.joinValue||m.value))}
+  <div class="vs">${col(m.host,m.hostItems,m.hostSide,fin&&m.hostWon)}<div class="vc">${coin}${fin?`<div class="hint"><b>${esc(m.winnerName)}</b> wins!</div>`:''}</div>${col(m.joiner,m.joinItems,m.joinSide,fin&&!m.hostWon)}</div>
+  <div class="row" style="margin-top:14px;justify-content:flex-end">${m.status==='waiting'?(mine?`<button class="btn red" data-act="cancel" data-id="${esc(m.id)}">Cancel Match</button>`:`<button class="btn mint" data-act="join" data-id="${esc(m.id)}">Join</button>`):''}</div>
+  <div class="fair"><b>Provably fair</b><br>Hash: <code>${esc(m.hash||'—')}</code><br>${fin&&m.seed?`Seed: <code>${esc(m.seed)}</code><br><button class="btn gray sm" style="margin-top:6px" data-act="verify" data-id="${esc(m.id)}">Verify</button> <span id="vres"></span>`:'Seed is revealed when the match ends.'}</div>`;
+}
+async function hex(buf){return [...new Uint8Array(buf)].map(x=>x.toString(16).padStart(2,'0')).join('')}
+async function verify(id){
+  const m=arr(ST.matches).map(nm).find(x=>x.id===id);if(!m)return;const te=new TextEncoder();
+  try{const h=await hex(await crypto.subtle.digest('SHA-256',te.encode(m.seed)));
+    const k=await crypto.subtle.importKey('raw',te.encode(m.seed),{name:'HMAC',hash:'SHA-256'},false,['sign']);
+    const s=await hex(await crypto.subtle.sign('HMAC',k,te.encode(String(id))));
+    const r=parseInt(s.slice(0,8),16)/4294967296;const side=r<0.5?'dog':'cat';
+    $('#vres').innerHTML=h===m.hash?`<b class="pos">✔ Hash matches. Result: ${sideIco(side)} ${side} (${r.toFixed(6)})</b>`:`<b class="neg">✘ Hash mismatch!</b>`;
+  }catch(e){fail(e)}
+}
 
-    $('btn-withdraw').onclick = async () => {
-      const uids = $('user-inv').selectedUids;
-      if (!uids || !uids.length) return toast('Select items to withdraw', 'err');
-      try {
-        const res = await api('/api/withdraw', { method: 'POST', body: { uids } });
-        toast('Withdrawal requested! Bot trade queued.');
-        initUser(); loadProfile();
-      } catch (e) { toast(e.message, 'err'); }
-    };
+/* ---------- History ---------- */
+async function showHistory(){
+  if(!ME)return showLogin();openModal(mh('My History')+'<div class="empty">Loading…</div>',true);
+  try{const d=await api('/api/history/me');const l=arr(d.history||d.matches||d).map(nm);
+    $('#modal').innerHTML=mh('My History')+(l.length?l.map(m=>{const won=m.winnerName===ME.username;const opp=uname(m.host)===ME.username?m.joiner:m.host;
+      return `<div class="match" style="grid-template-columns:1fr 1fr 1fr 90px"><div class="pl">${av(opp)}<span class="n">vs ${esc(uname(opp)||'—')}</span></div><div class="items">${thumbs(m.hostItems,4)}</div><div class="mid"><div class="v">${fmt(m.value+m.joinValue)}</div></div><b class="${won?'pos':'neg'}">${m.status==='cancelled'?'Cancelled':won?'WON':'LOST'}</b></div>`}).join(''):'<div class="empty">No matches yet</div>');
+  }catch(e){fail(e)}
+}
 
-    // Chat
-    function renderChat(chat) {
-      $('chat-messages').innerHTML = chat.map(c => `<div class="truncate"><b>${c.system?'[SYSTEM]':esc(c.user.username)}:</b> ${esc(c.text)}</div>`).join('');
-      $('chat-messages').scrollTop = $('chat-messages').scrollHeight;
-    }
-    $('chat-form').onsubmit = e => {
-      e.preventDefault(); const i = $('chat-input');
-      socket.emit('chat:send', i.value, res => { if (res && res.error) toast(res.error, 'err'); else i.value = ''; });
-    };
+/* ---------- Giveaway ---------- */
+let GMODE='easy';
+function showGiveaway(){
+  if(!ME)return showLogin();SEL={};GMODE='easy';
+  GC={list:inv,info(){const l=selList();$('#ginf').textContent=l.length?`${l.reduce((a,i)=>a+i.qty,0)} items • ${fmt(sumV(l))}`:'Select up to 5 items'}};
+  openModal(`${mh('🎁 Create Giveaway')}
+  <div class="seg"><button class="on" data-act="gmode" data-m="easy">Easy</button><button data-act="gmode" data-m="adv">Advanced</button></div>
+  <div id="gopts"></div>${gridUI()}
+  <div class="row" style="margin-top:10px"><b id="ginf" style="flex:1"></b><button class="btn sun" data-act="gcreate">Create Giveaway</button></div>`,true);
+  gOpts();bindGrid();
+}
+function gOpts(){
+  $('#gopts').innerHTML=GMODE==='easy'?`<div class="row"><label>Duration</label><select id="gdur"><option value="30">30 seconds</option><option value="120">2 minutes</option><option value="300">5 minutes</option></select></div>`
+   :`<div class="row"><label>Duration (min)</label><input type="number" id="gdurm" min="1" max="60" value="10" style="width:90px"><label>Min total bet</label><input type="number" id="gmin" min="0" value="0" style="width:120px"></div>`;
+}
+async function gCreate(){
+  const p=selPayload();if(!p.length)return toast('Select items','err');
+  if(p.reduce((a,i)=>a+1,0)>5)return toast('Max 5 items','err');
+  const body={items:p,mode:GMODE==='easy'?'easy':'advanced'};
+  if(GMODE==='easy')body.duration=+$('#gdur').value;else{body.duration=Math.min(60,Math.max(1,+$('#gdurm').value||10))*60;body.minBet=+$('#gmin').value||0}
+  try{await api('/api/giveaway/create',{body});toast('Giveaway started!','ok');closeModal();refresh()}catch(e){fail(e)}
+}
+async function gEnter(id){try{await api('/api/giveaway/enter',{body:{id}});toast('Entered!','ok');refresh()}catch(e){fail(e)}}
 
-    // Socket listeners
-    socket.on('match:new', m => { state.matches.push(m); renderMatches(); });
-    socket.on('match:update', m => {
-      const idx = state.matches.findIndex(x => x.id === m.id);
-      if (idx !== -1) state.matches[idx] = m; else state.matches.push(m);
-      renderMatches();
-    });
-    socket.on('match:remove', d => { state.matches = state.matches.filter(x => x.id !== d.id); renderMatches(); });
-    socket.on('giveaway:new', ga => { state.giveaways.push(ga); renderGiveaways(); });
-    socket.on('giveaway:update', ga => {
-      const idx = state.giveaways.findIndex(x => x.id === ga.id);
-      if (idx !== -1) state.giveaways[idx] = ga; renderGiveaways();
-    });
-    socket.on('giveaway:remove', d => { state.giveaways = state.giveaways.filter(x => x.id !== d.id); renderGiveaways(); });
-    socket.on('chat:msg', msg => {
-      const box = $('chat-messages');
-      box.innerHTML += `<div class="truncate"><b>${msg.system?'[SYSTEM]':esc(msg.user.username)}:</b> ${esc(msg.text)}</div>`;
-      box.scrollTop = box.scrollHeight;
-    });
-    socket.on('chat:clear', () => { $('chat-messages').innerHTML = ''; });
-    socket.on('online', n => { $('online-count').textContent = n; });
-    socket.on('me:update', u => { state.user = u; renderUserBox(); if (!$('tab-profile').classList.contains('hidden')) loadProfile(); });
+/* ---------- Profile page ---------- */
+function show(p){$('#pgHome').style.display=p==='home'?'grid':'none';$('#pgProfile').style.display=p==='profile'?'grid':'none';window.scrollTo(0,0)}
+async function showProfile(p=1){
+  if(!ME)return showLogin();PAGE=p;show('profile');
+  $('#profile').innerHTML='<div class="card empty">Loading…</div>';
+  try{
+    const d=await api('/api/profile?page='+p);const s=d.stats||d;
+    const tot=s.totalBet??s.total_bet??0,won=s.won??s.totalWon??0,pr=s.profit??(won-tot);
+    const rows=arr(d.transactions||d.rows||d.history);const pages=d.pages||d.totalPages||1;
+    const hist=arr(d.matches||[]).slice(0,6);
+    $('#profile').innerHTML=`<div class="card"><div class="bar" style="gap:16px">${av(ME,'lg')}<div style="flex:1"><h2 style="font-size:26px">${esc(ME.username)}</h2><span class="pill">${esc(ME.rank||'Rookie')}</span></div><button class="btn gray" data-act="home">← Back</button></div>
+    <div class="stats"><div class="stat"><small>Total Bet</small><b>${fmt(tot)}</b></div><div class="stat"><small>Won</small><b>${fmt(won)}</b></div><div class="stat"><small>Profit</small><b class="${pr>=0?'pos':'neg'}">${pr>=0?'+':''}${fmt(pr)}</b></div></div>
+    <h3 style="margin:10px 0">Transactions</h3>
+    ${rows.length?`<table><tr><th>Type</th><th>Details</th><th>Value</th><th>Date</th></tr>${rows.map(r=>`<tr><td><b>${esc(r.type||r.kind||'match')}</b></td><td>${esc(r.details||r.note||r.opponent||r.status||'')}</td><td class="${(r.profit??r.amount??0)<0?'neg':'pos'}">${fmt(r.value??r.amount??r.profit??0)}</td><td>${r.date||r.createdAt||r.ts?new Date(tsn(r.date||r.createdAt||r.ts)).toLocaleString():''}</td></tr>`).join('')}</table>`:'<div class="empty">No transactions yet</div>'}
+    <div class="pg">${Array.from({length:pages},(_,i)=>`<button class="${i+1===p?'on':''}" data-act="ppage" data-p="${i+1}">${i+1}</button>`).join('')}</div></div>`;
+  }catch(e){fail(e);show('home')}
+}
 
-    initUser();
-  </script>
+/* ---------- Admin (kod sadece admin'e sunucudan gelir) ---------- */
+async function openAdmin(){
+  try{
+    const h={};if(token){h.Authorization='Bearer '+token;h['x-token']=token}
+    const r=await fetch(API_BASE+'/api/admin/ui',{headers:h});if(!r.ok)throw new Error('Not allowed');
+    let js=await r.text();try{const j=JSON.parse(js);js=j.js||j.code||js}catch{}
+    window.AMP={api,esc,toast,fmt,tags};
+    if(!window.__ampAdminLoaded){new Function(js)();window.__ampAdminLoaded=true}
+    const f=window.AMP.openAdmin||window.AMP.open||window.openAdmin||window.AMP_ADMIN&&window.AMP_ADMIN.open;if(typeof f==='function')f();
+  }catch(e){fail(e)}
+}
+
+/* ---------- Confetti ---------- */
+function confetti(){
+  const c=$('#cf');const x=c.getContext('2d');c.width=innerWidth;c.height=innerHeight;
+  const P=Array.from({length:120},()=>({x:innerWidth/2,y:innerHeight/3,vx:(Math.random()-.5)*14,vy:Math.random()*-12-3,s:4+Math.random()*6,c:['#2f9bff','#ffc83d','#ff7eb6','#3fcf9f','#ff9f1c'][Math.random()*5|0]}));
+  let f=0;(function t(){x.clearRect(0,0,c.width,c.height);P.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=.35;x.fillStyle=p.c;x.fillRect(p.x,p.y,p.s,p.s)});if(++f<110)requestAnimationFrame(t);else x.clearRect(0,0,c.width,c.height)})();
+}
+
+/* ---------- Click router ---------- */
+const ACT={
+  home(){closeModal();show('home')},close:closeModal,login:showLogin,lstart:loginStart,lverify:loginVerify,
+  umenu(){$('#umenu').classList.toggle('open')},
+  profile(){showProfile(1)},ppage(t){showProfile(+t.dataset.p)},giveaway:showGiveaway,admin:openAdmin,
+  logout(){token='';localStorage.removeItem('amp_token');ME=null;if(socket){socket.auth={};socket.disconnect().connect()}renderHeader();show('home');toast('Logged out')},
+  wallet:showWallet,deposit:showDeposit,bots:showBots,botjoin(){window.open((ST.bot&&(ST.bot.joinLink||ST.bot.link))||BOT_LINK,'_blank','noopener')},
+  withdraw,create:showCreate,docreate:doCreate,join(t){showJoin(t.dataset.id)},dojoin(t){doJoin(t.dataset.id)},
+  cancel(t){cancelMatch(t.dataset.id)},view(t){showView(t.dataset.id)},verify(t){verify(t.dataset.id)},history:showHistory,
+  side(t){CSIDE=t.dataset.s;document.querySelectorAll('#sides .sd').forEach(e=>e.classList.toggle('on',e===t))},
+  pick(t){const i=GC.list().find(x=>String(x.id)===t.dataset.id);if(!i)return;const c=(SEL[i.id]||0)+1;SEL[i.id]=c>i.qty?0:c;renderGrid()},
+  selall(){GC.list().forEach(i=>SEL[i.id]=i.qty);renderGrid()},selnone(){SEL={};renderGrid()},
+  gmode(t){GMODE=t.dataset.m;document.querySelectorAll('.seg button').forEach(b=>b.classList.toggle('on',b===t));gOpts()},
+  gcreate:gCreate,genter(t){gEnter(t.dataset.id)},send:sendChat
+};
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-act]');
+  if(!e.target.closest('.user')){const m=$('#umenu');m&&m.classList.remove('open')}
+  if(!t)return;const f=ACT[t.dataset.act];if(f){if(t.dataset.act!=='umenu'){const m=$('#umenu');m&&m.classList.remove('open')}f(t,e)}
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+
+renderHeader();renderLobby();refresh();
+</script>
 </body>
 </html>
