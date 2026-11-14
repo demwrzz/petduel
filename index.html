@@ -6,7 +6,7 @@
   <title>AMP ROLL | The LEADING Adopt Me item coinflip</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%2300efa0'/%3E%3Ccircle cx='50' cy='50' r='38' fill='%23101218'/%3E%3Cellipse cx='50' cy='62' rx='14' ry='11' fill='%2300efa0'/%3E%3Cellipse cx='33' cy='46' rx='6' ry='8' fill='%2300efa0'/%3E%3Cellipse cx='45' cy='36' rx='6' ry='8' fill='%2300efa0'/%3E%3Cellipse cx='57' cy='36' rx='6' ry='8' fill='%2300efa0'/%3E%3Cellipse cx='69' cy='46' rx='6' ry='8' fill='%2300efa0'/%3E%3C/svg%3E">
 
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
   <script src="/socket.io/socket.io.js"></script>
 
   <style>
@@ -206,27 +206,55 @@
     .match-actions { display: flex; gap: 6px; justify-content: flex-end; }
     .empty { padding: 50px 15px; color: var(--muted); text-align: center; }
 
-    /* ---------- COIN ---------- */
+    /* ---------- COIN (3D, flips end-over-end with visible edge) ---------- */
     .coin-wrap { display: inline-block; perspective: 900px; }
-    .coin-wrap.tossing { animation: toss 1.1s ease-in-out infinite; }
-    @keyframes toss { 50% { transform: translateY(-14px); } }
+    .coin-wrap.tossing { animation: toss .9s ease-in-out infinite; }
+    .coin-wrap.hop { animation: hop-long 3.2s ease-out forwards; }
+    .coin-wrap.hop-short { animation: hop-short 1.5s ease-out forwards; }
+    .coin-wrap.shrunk { transform: scale(.62); }
+
+    @keyframes toss { 50% { transform: translateY(-16px); } }
+    @keyframes hop-long {
+      0% { transform: translateY(0) scale(1); }
+      22% { transform: translateY(-46px) scale(1.1); }
+      72% { transform: translateY(0) scale(1); }
+      100% { transform: translateY(0) scale(.62); }
+    }
+    @keyframes hop-short {
+      0% { transform: translateY(0) scale(1); }
+      35% { transform: translateY(-30px) scale(1.06); }
+      80% { transform: translateY(0) scale(1); }
+      100% { transform: translateY(0) scale(.62); }
+    }
 
     .coin { --s: 48px; position: relative; width: var(--s); height: var(--s); transform-style: preserve-3d; }
     .coin.big { --s: 170px; }
-    .coin.cat { transform: rotateY(180deg); }
-    .coin.spinning { animation: coin-spin .6s linear infinite; }
-    .coin.land-dog { animation: land-dog 3.6s cubic-bezier(.15, .6, .2, 1) forwards; }
-    .coin.land-cat { animation: land-cat 3.6s cubic-bezier(.15, .6, .2, 1) forwards; }
-    .coin-face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
-    .coin-face.back { transform: rotateY(180deg); }
+    .coin.cat { transform: rotateX(180deg); }
+    .coin.spinning { animation: coin-spin .5s linear infinite; }
+    .coin.land-dog { animation: land-dog 3.2s cubic-bezier(.12, .6, .15, 1) forwards; }
+    .coin.land-cat { animation: land-cat 3.2s cubic-bezier(.12, .6, .15, 1) forwards; }
+    .coin.settle-dog { animation: settle-dog 1.5s cubic-bezier(.15, .6, .2, 1) forwards; }
+    .coin.settle-cat { animation: settle-cat 1.5s cubic-bezier(.15, .6, .2, 1) forwards; }
+
+    .coin-face {
+      position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+      transform: translateZ(calc(var(--s) * .042));
+    }
+    .coin-face.back { transform: rotateX(180deg) translateZ(calc(var(--s) * .042)); }
+    .coin-edge {
+      position: absolute; inset: 0; border-radius: 50%; background: #f1ecda;
+      transform: translateZ(calc(var(--s) * var(--k) * .0115));
+    }
+    .coin-edge:nth-child(even) { background: #cdc6ae; }
     .coin .chip { filter: drop-shadow(0 6px 8px rgba(0, 0, 0, .45)); }
 
-    @keyframes coin-spin { to { transform: rotateY(360deg); } }
-    @keyframes land-dog { from { transform: rotateY(0); } to { transform: rotateY(2160deg); } }
-    @keyframes land-cat { from { transform: rotateY(0); } to { transform: rotateY(2340deg); } }
+    @keyframes coin-spin { to { transform: rotateX(360deg); } }
+    @keyframes land-dog { from { transform: rotateX(0); } to { transform: rotateX(2160deg); } }
+    @keyframes land-cat { from { transform: rotateX(0); } to { transform: rotateX(2340deg); } }
+    @keyframes settle-dog { from { transform: rotateX(0); } to { transform: rotateX(1080deg); } }
+    @keyframes settle-cat { from { transform: rotateX(0); } to { transform: rotateX(1260deg); } }
 
     .coin-stage { position: relative; display: inline-block; }
-    .coin-stage .coin { opacity: .45; }
     .count-over {
       position: absolute; inset: 0; display: grid; place-items: center; color: #fff;
       font-size: 64px; font-weight: 800; text-shadow: 0 4px 18px #000;
@@ -237,6 +265,21 @@
       font-size: 24px; font-weight: 800; animation: pulse 1s ease-in-out infinite;
     }
     @keyframes pulse { 50% { transform: scale(1.12); } }
+
+    /* view modal: only the number during the countdown */
+    .big-count {
+      color: #fff; font-size: 110px; font-weight: 800; line-height: 1;
+      text-shadow: 0 6px 30px rgba(0, 0, 0, .7); animation: pulse 1s ease-in-out infinite;
+    }
+
+    /* avatar rings (winner ring draws itself) */
+    .ring-wrap { position: relative; display: inline-block; padding: 10px; }
+    .ring-svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); pointer-events: none; }
+    .ring-svg circle { fill: none; stroke-width: 2.5; }
+    .ring-svg .r-dim { stroke: #2c313c; }
+    .ring-svg .r-win { stroke: var(--green); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 296; stroke-dashoffset: 0; filter: drop-shadow(0 0 6px rgba(0, 239, 160, .7)); }
+    .ring-svg .r-win.anim { stroke-dashoffset: 296; animation: ringdraw 1.1s ease-out forwards; }
+    @keyframes ringdraw { to { stroke-dashoffset: 0; } }
 
     /* ---------- SIDEBAR / CHAT ---------- */
     .sidebar {
@@ -485,11 +528,21 @@
 
     /* ---------- DEPOSIT / BOTS ---------- */
     .game-card {
-      position: relative; display: block; width: 100%; max-width: 360px; aspect-ratio: 16 / 9; overflow: hidden;
-      border: 1px solid #5a4724; border-radius: 10px; cursor: pointer; background: #c2185b url("/assets/adoptme.png") center / cover no-repeat;
+      position: relative; display: grid; place-items: center; width: 100%; max-width: 360px; aspect-ratio: 16 / 9; overflow: hidden;
+      border: 1px solid #7a1f4a; border-radius: 10px; cursor: pointer;
+      background:
+        radial-gradient(circle at 18% 22%, rgba(255, 130, 180, .55), transparent 45%),
+        radial-gradient(circle at 88% 85%, rgba(110, 0, 50, .5), transparent 50%),
+        linear-gradient(135deg, #e8296f, #b5155a);
       transition: transform .2s, border-color .2s, box-shadow .2s;
     }
-    .game-card:hover { transform: translateY(-3px); border-color: var(--orange); box-shadow: 0 10px 28px -8px rgba(255, 60, 120, .6); }
+    .game-card:hover { transform: translateY(-3px); border-color: #ff7aa8; box-shadow: 0 10px 28px -8px rgba(255, 60, 120, .6); }
+    .adopt-logo {
+      font-family: Fredoka, "Baloo 2", "Arial Rounded MT Bold", Arial, sans-serif; font-weight: 700;
+      font-size: clamp(36px, 9vw, 62px); line-height: 1; letter-spacing: -1px; color: #fff; text-align: center;
+      text-shadow: 0 4px 0 rgba(120, 0, 50, .35), 0 10px 26px rgba(0, 0, 0, .28);
+      -webkit-text-stroke: 1px rgba(255, 255, 255, .2); pointer-events: none; user-select: none;
+    }
 
     .warn {
       display: flex; align-items: center; gap: 12px; margin-bottom: 14px; padding: 13px 16px;
@@ -552,6 +605,23 @@
     #boot { position: fixed; inset: 0; z-index: 500; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 15px; padding: 20px; background: #11141b; text-align: center; font-weight: 700; }
     .loader { width: 42px; height: 42px; border: 4px solid #323844; border-top-color: var(--green); border-radius: 50%; animation: spin 1s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    .nav-item.alt { border-bottom-color: transparent; color: #cfd2db; transition: color .2s, border-color .2s; }
+    .nav-item.alt:hover { color: #fff; border-bottom-color: var(--green); }
+
+    .lb-row {
+      display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 12px;
+      margin-bottom: 8px; padding: 10px 14px; border: 1px solid #292d38; border-radius: 8px;
+      background: #191c25; cursor: pointer; transition: background .2s, transform .15s;
+    }
+    .lb-row:hover { background: #1e222c; transform: translateY(-1px); }
+    .lb-row.top1 { border-color: #a8741a; background: linear-gradient(100deg, #2b241d, #191c25); }
+    .lb-row.top2 { border-color: #6b7280; }
+    .lb-row.top3 { border-color: #8a5a2b; }
+    .lb-pos { font-size: 20px; font-weight: 800; text-align: center; color: var(--muted); }
+    .lb-user { display: flex; align-items: center; gap: 12px; min-width: 0; font-weight: 800; }
+    .lb-user span.n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lb-val { display: flex; align-items: center; font-weight: 800; font-size: 16px; }
 
     .discord-btn {
       display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border-radius: 8px;
@@ -653,6 +723,7 @@
 
       <nav class="nav">
         <div class="nav-item" data-action="home">Coinflip</div>
+        <div class="nav-item alt" data-action="leaderboard">🏆 Leaderboard</div>
         <a class="discord-btn" href="https://discord.gg/TaPXaAseP" target="_blank" rel="noopener noreferrer" title="Join our Discord">
           <svg viewBox="0 0 24 24"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189z"/></svg>
           <span>Discord</span>
@@ -808,7 +879,7 @@
 
     let socket = null, booted = false, refreshing = false, refreshTimer = null;
     let selected = new Set(), gridContext = null, gridSig = "";
-    let viewMatchId = null, viewSig = "", viewCache = null;
+    let viewMatchId = null, viewSig = "", viewCache = null, viewPrev = "", viewTimer = null;
     let loginData = null, createSide = "dog";
     let giveawayMode = "easy", giveawayDur = 30;
 
@@ -941,6 +1012,8 @@
       viewMatchId = null;
       viewSig = "";
       viewCache = null;
+      viewPrev = "";
+      clearTimeout(viewTimer);
       clearReplay();
     }
 
@@ -994,14 +1067,20 @@
 
     /* ---------- Coin / Countdown ---------- */
     function coinHTML(mode, side = "dog", size = "") {
-      let cls = "";
-      if (mode === "spin") cls = "spinning";
-      else if (mode === "land") cls = side === "cat" ? "land-cat" : "land-dog";
+      let cls = "", wrap = "";
+
+      if (mode === "spin") { cls = "spinning"; wrap = "tossing"; }
+      else if (mode === "land") { cls = side === "cat" ? "land-cat" : "land-dog"; wrap = "hop"; }
+      else if (mode === "settle") { cls = side === "cat" ? "settle-cat" : "settle-dog"; wrap = "hop-short"; }
+      else if (mode === "final") { cls = side === "cat" ? "cat" : ""; wrap = "shrunk"; }
       else if (side === "cat") cls = "cat";
 
+      const edges = [-3, -2, -1, 0, 1, 2, 3].map(k => `<div class="coin-edge" style="--k:${k}"></div>`).join("");
+
       return `
-        <div class="coin-wrap ${mode === "spin" ? "tossing" : ""}">
+        <div class="coin-wrap ${wrap}">
           <div class="coin ${size} ${cls}">
+            ${edges}
             <div class="coin-face">${chip("dog")}</div>
             <div class="coin-face back">${chip("cat")}</div>
           </div>
@@ -1110,10 +1189,13 @@
         </div>`).join("");
     }
 
-    function buildView(match, phase, replay) {
+    function buildView(match, phase, replay, mode = "reveal") {
       const joiner = match.joiner || match.opp;
       const finished = phase === "done";
-      const hostWon = finished && match.winnerId === match.host?.id;
+      const settling = finished && mode === "settle";      /* coin is still landing: result not shown yet */
+      const revealed = finished && !settling;
+      const animRing = mode === "revealanim";
+      const hostWon = revealed && match.winnerId === match.host?.id;
       const hostSide = match.hostSide || "dog";
       const joinSide = match.joinSide || (hostSide === "dog" ? "cat" : "dog");
       const mine = ME && match.host?.id === ME.id;
@@ -1125,28 +1207,32 @@
       const pot = hv + ov;
       const [low, high] = matchRange(hv);
 
-      /* status pill */
       const status = replay && !finished
         ? ["replay", "REPLAY"]
-        : ({ wait: ["wait", "WAITING FOR PLAYER"], count: ["count", "STARTING"], flip: ["flip", "FLIPPING"], done: ["done", replay ? "REPLAY" : "FINISHED"] }[phase] || ["wait", "WAITING"]);
+        : settling
+          ? ["flip", "FLIPPING"]
+          : ({ wait: ["wait", "WAITING FOR PLAYER"], count: ["count", "STARTING"], flip: ["flip", "FLIPPING"], done: ["done", replay ? "REPLAY" : "FINISHED"] }[phase] || ["wait", "WAITING"]);
 
-      /* center area (result only appears when the match is done) */
       let center;
 
       if (phase === "count") {
         const end = replay ? REPLAY.end : match.countdownEnd;
-        center = `<div class="coin-stage">${coinHTML("idle", "dog", "big")}<div class="count-over ticker-countdown" data-end="${Number(end || 0)}">3</div></div>`;
+        center = `<div class="big-count ticker-countdown" data-end="${Number(end || 0)}">3</div>`;
       } else if (phase === "flip") {
         center = replay ? coinHTML("land", match.winnerSide, "big") : coinHTML("spin", "dog", "big");
+      } else if (settling) {
+        center = coinHTML("settle", match.winnerSide, "big");
       } else if (finished) {
         const winner = hostWon ? match.host : joiner;
-        center = `${coinHTML("idle", match.winnerSide, "big")}
+        center = `${coinHTML("final", match.winnerSide, "big")}
           <div class="winner-text">${esc(getUsername(winner))} wins!<small>${GEM}${fmt(pot)} won</small></div>`;
       } else {
         center = `<div style="opacity:.55">${coinHTML("idle", hostSide, "big")}</div>
           <div class="vs-text">VS</div>
           <div class="vw-range">Join with ${GEM}${fmt(low)} – ${fmt(high)}</div>`;
       }
+
+      const ringSvg = state => `<svg class="ring-svg" viewBox="0 0 100 100"><circle class="r-dim" cx="50" cy="50" r="47"/>${state ? `<circle class="r-win ${state === "anim" ? "anim" : ""}" cx="50" cy="50" r="47"/>` : ""}</svg>`;
 
       const card = (user, side, value, isHost) => {
         if (!user) {
@@ -1157,13 +1243,14 @@
           </div>`;
         }
 
-        const won = finished && (isHost ? hostWon : !hostWon);
-        const cls = finished ? (won ? "win" : "lose") : "";
+        const won = revealed && (isHost ? hostWon : !hostWon);
+        const cls = revealed ? (won ? "win" : "lose") : "";
 
         return `<div class="vw-player ${cls}">
           ${won ? '<div class="vw-crown">👑</div>' : ""}
-          <div class="clickable" data-action="user" data-id="${esc(user.id)}">
-            ${playerAvatar(user, side, "xl", won ? "ring-green" : "ring-dim")}
+          <div class="ring-wrap clickable" data-action="user" data-id="${esc(user.id)}">
+            ${playerAvatar(user, side, "xl", "")}
+            ${ringSvg(won ? (animRing ? "anim" : "static") : "")}
           </div>
           <div class="vw-name"><span class="n">${esc(getUsername(user))}</span>${isHost ? '<span class="vw-host">HOST</span>' : ""}</div>
           <div class="vw-bet">${GEM}${fmt(value)}</div>
@@ -1183,7 +1270,7 @@
           : `<button class="btn" data-action="join" data-id="${esc(match.id)}">Join Match</button>`;
       }
 
-      const verify = finished && match.seed
+      const verify = revealed && match.seed
         ? `Seed: <code>${esc(match.seed)}</code><br>
            <button class="btn gray sm" style="margin-top:8px" data-action="verify" data-id="${esc(match.id)}">Verify result</button>
            <span id="verifyResult"></span>`
@@ -1228,6 +1315,8 @@
       viewMatchId = id;
       viewSig = "";
       viewCache = null;
+      viewPrev = "";
+      clearTimeout(viewTimer);
       openModal("", "view");
       renderView();
     }
@@ -1253,7 +1342,21 @@
       }
 
       const phase = { waiting: "wait", countdown: "count", flipping: "flip", finished: "done" }[match.state] || "wait";
-      $("#modal").innerHTML = buildView(match, phase, false);
+
+      /* if the viewer watched the flip, let the coin land first and reveal the winner after */
+      const settle = phase === "done" && (viewPrev === "flip" || viewPrev === "count");
+      viewPrev = phase;
+
+      clearTimeout(viewTimer);
+      $("#modal").innerHTML = buildView(match, phase, false, settle ? "settle" : "reveal");
+
+      if (settle) {
+        const id = match.id;
+        viewTimer = setTimeout(() => {
+          if (viewMatchId !== id || REPLAY || !$("#overlay").classList.contains("open")) return;
+          $("#modal").innerHTML = buildView(match, "done", false, "revealanim");
+        }, 1500);
+      }
     }
 
     function lookupMatch(id) {
@@ -1356,7 +1459,7 @@
 
     function renderReplay() {
       if (!REPLAY) return;
-      $("#modal").innerHTML = buildView(REPLAY.match, REPLAY.phase, true);
+      $("#modal").innerHTML = buildView(REPLAY.match, REPLAY.phase, true, "revealanim");
     }
 
     /* ---------- Banner (announcement) ---------- */
@@ -1946,7 +2049,7 @@
 
       openModal2(`
         ${modalHeader("Deposit", "close2")}
-        <div class="game-card" data-action="bots" title="Adopt Me"></div>`);
+        <div class="game-card" data-action="bots" title="Adopt Me"><span class="adopt-logo">ADOPT ME!</span></div>`);
     }
 
     function openBotsModal() {
@@ -2171,9 +2274,53 @@
       } catch (error) { fail(error); }
     }
 
+    /* ---------- Leaderboard ---------- */
+    async function showLeaderboard(by = "totalBet") {
+      gridContext = null;
+      viewMatchId = null;
+      clearReplay();
+
+      openModal(`
+        ${modalHeader("🏆 Leaderboard")}
+        <div class="seg" id="lbTabs">
+          <button data-action="lb-tab" data-by="totalBet">Most Wagered</button>
+          <button data-action="lb-tab" data-by="profit">Top Profit</button>
+        </div>
+        <div id="lbBody"><div class="empty">Loading…</div></div>`, "small");
+
+      loadLeaderboard(by);
+    }
+
+    async function loadLeaderboard(by) {
+      document.querySelectorAll("#lbTabs button").forEach(b => b.classList.toggle("on", b.dataset.by === by));
+
+      try {
+        const { list } = await api("/api/leaderboard?by=" + encodeURIComponent(by));
+        const body = $("#lbBody");
+        if (!body) return;
+
+        const medals = ["🥇", "🥈", "🥉"];
+
+        body.innerHTML = asArray(list).length
+          ? asArray(list).map((u, i) => `
+            <div class="lb-row ${i < 3 ? "top" + (i + 1) : ""}" data-action="user" data-id="${esc(u.id)}">
+              <div class="lb-pos">${medals[i] || i + 1}</div>
+              <div class="lb-user">
+                ${avatar(u, "md")}
+                <span class="n">${esc(u.username)}</span>
+                ${rankBadge(u.rank)}
+              </div>
+              <div class="lb-val ${by === "profit" ? (u.value >= 0 ? "positive" : "negative") : ""}">${GEM}${by === "profit" && u.value > 0 ? "+" : ""}${fmt(u.value)}</div>
+            </div>`).join("")
+          : '<div class="empty">No players yet</div>';
+      } catch (error) { fail(error); }
+    }
+
     /* ---------- Click router ---------- */
     const actions = {
       home() { closeModal(); closeModal2(); showPage("home"); },
+      leaderboard() { showLeaderboard("totalBet"); },
+      "lb-tab"(el) { loadLeaderboard(el.dataset.by); },
       close: closeModal,
       close2: closeModal2,
       login: showLogin,
