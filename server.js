@@ -863,6 +863,39 @@ app.post('/api/giveaway/enter', auth, actionLimit, (req, res) => {
   res.json({ ok: true });
 });
 
+/* ================= TIP =================
+   Send items from your inventory to another player (from their profile card).
+   The items leave the sender in the same step they reach the receiver (no dupes).
+   Received items carry a 1x wager requirement, like giveaway / event prizes. */
+
+app.post('/api/tip', auth, actionLimit, (req, res) => {
+  const sender = req.user;
+  const target = S.users[String(req.body.userId || '')];
+  const uids = selectionToUids(req.body);
+
+  if (!target || target.banned) return bad(res, 'User not found');
+  if (target.id === sender.id) return bad(res, 'You cannot tip yourself');
+  if (!pickItems(sender, uids, 10)) return bad(res, 'Select 1–10 valid items');
+
+  const items = takeItems(sender, uids, 10);
+  const value = valueOf(items);
+
+  target.inventory.push(...items);
+  target.wagerLeft = round2((target.wagerLeft || 0) + value);
+
+  addTransaction(sender, 'Tip Sent', target.username, -value);
+  addTransaction(target, 'Tip Received', sender.username, value);
+
+  io.to(`u:${target.id}`).emit('tip:received', {
+    from: sender.username, count: items.length, value
+  });
+
+  emitMe(sender);
+  emitMe(target);
+
+  res.json({ ok: true, value, count: items.length });
+});
+
 /* ================= WITHDRAW (manual) =================
    Items leave the inventory immediately (so they can't be used in a game
    or withdrawn twice) and an admin sends them by hand in Adopt Me. */
@@ -1328,6 +1361,35 @@ app.post('/api/admin/role', auth, adminOnly, (req, res) => {
   res.json({ ok: true });
 });
 
+app.get('/api/admin/inventory', auth, adminOnly, (req, res) => {
+  const user = S.users[String(req.query.id || '')];
+  if (!user) return bad(res, 'User not found', 404);
+
+  res.json({
+    username: user.username,
+    items: user.inventory.map(i => ({
+      uid: i.uid, name: i.name, image: i.image, value: i.value,
+      age: i.age, fly: i.fly, ride: i.ride
+    }))
+  });
+});
+
+app.post('/api/admin/inventory/delete', auth, adminOnly, (req, res) => {
+  const user = S.users[String(req.body.id || '')];
+  if (!user) return bad(res, 'User not found', 404);
+
+  const index = user.inventory.findIndex(i => i.uid === String(req.body.uid || ''));
+  if (index < 0) return bad(res, 'Item not found in this inventory (it may be in a match already)');
+
+  const [item] = user.inventory.splice(index, 1);
+
+  addTransaction(user, 'Item Removed (admin)', item.name, -safeNumber(item.value));
+  console.log(`[ADMIN] ${req.user.username} deleted "${item.name}" (${item.value}) from ${user.username}`);
+
+  emitMe(user);
+  res.json({ ok: true });
+});
+
 app.post('/api/admin/ban', auth, adminOnly, (req, res) => {
   const user = S.users[String(req.body.id || '')];
   if (!user) return bad(res, 'User not found', 404);
@@ -1501,6 +1563,7 @@ function adminUI() {
 
       <h4 style="margin:16px 0 8px">👥 Users</h4>
       <div id="adm-users"></div>
+      <div id="adm-inv"></div>
     </div>`;
 
   document.body.appendChild(overlay);
@@ -1554,6 +1617,7 @@ function adminUI() {
           <b>${esc(u.username)}${u.banned ? ' 🚫' : ''}</b>
           <span>${u.items} items · ${fmt(u.value)}${u.wagerLeft > 0 ? ' · wager left ' + fmt(u.wagerLeft) : ''}</span>
           <span style="display:flex;gap:6px">
+            <button class="btn sm gray" data-inv="${esc(u.id)}">Items</button>
             ${u.isAdmin ? `<button class="btn sm gray" data-tag="${esc(u.id)}" data-state="${u.adminTag ? '0' : '1'}">Tag: ${u.adminTag ? 'ON' : 'OFF'}</button>` : ''}
             <button class="btn sm gray" data-role="${esc(u.id)}" data-state="${u.isAdmin ? '0' : '1'}">${u.isAdmin ? 'Remove admin' : 'Make admin'}</button>
             <button class="btn sm ${u.banned ? 'mint' : 'red'}" data-ban="${esc(u.id)}" data-state="${u.banned ? '0' : '1'}">${u.banned ? 'Unban' : 'Ban'}</button>
@@ -1630,6 +1694,9 @@ function adminUI() {
   };
 
   $('adm-users').onclick = async e => {
+    const iv = e.target.closest('[data-inv]');
+    if (iv) { openInv(iv.dataset.inv); return; }
+
     const r = e.target.closest('[data-role]');
     if (r) {
       const make = r.dataset.state === '1';
@@ -1669,6 +1736,55 @@ function adminUI() {
     try {
       await api('/api/admin/ban', { method: 'POST', body: { id: b.dataset.ban, ban } });
       toast(ban ? 'User banned' : 'User unbanned', 'ok');
+      await load();
+    } catch (err) { toast(err.message, 'err'); }
+  };
+
+  let invUser = null;
+
+  async function openInv(userId) {
+    try {
+      invUser = userId;
+      const data = await api('/api/admin/inventory?id=' + encodeURIComponent(userId));
+
+      $('adm-inv').innerHTML = `
+        <div style="background:#f5faff;padding:14px;border-radius:12px;margin-top:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <b>${esc(data.username)}'s inventory (${data.items.length})</b>
+            <button class="btn gray sm" id="inv-close">Close</button>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;max-height:340px;overflow-y:auto">
+            ${data.items.length ? data.items.map(i => `
+              <div style="border:2px solid #e0edfb;border-radius:10px;padding:8px;text-align:center">
+                <img src="${esc(i.image)}" alt="" style="width:60px;height:60px;object-fit:contain">
+                <div style="font-weight:700;font-size:12px">${esc(i.name)}</div>
+                ${tags(i)}
+                <div>${fmt(i.value)}</div>
+                <button class="btn red sm" data-delitem="${esc(i.uid)}" data-name="${esc(i.name)}" style="margin-top:6px;width:100%">Delete</button>
+              </div>`).join('') : '<p class="hint">This inventory is empty.</p>'}
+          </div>
+        </div>`;
+
+      $('adm-inv').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  $('adm-inv').onclick = async e => {
+    if (e.target.closest('#inv-close')) { $('adm-inv').innerHTML = ''; invUser = null; return; }
+
+    const d = e.target.closest('[data-delitem]');
+    if (!d || !invUser) return;
+
+    if (!(await confirmBox({
+      title: 'Delete item',
+      text: 'Are you sure you want to delete "' + d.dataset.name + '" from this player\'s inventory? This cannot be undone.',
+      ok: 'Delete', danger: true
+    }))) return;
+
+    try {
+      await api('/api/admin/inventory/delete', { method: 'POST', body: { id: invUser, uid: d.dataset.delitem } });
+      toast('Item deleted', 'ok');
+      await openInv(invUser);
       await load();
     } catch (err) { toast(err.message, 'err'); }
   };
