@@ -550,6 +550,26 @@ app.get('/api/user/:id', (req, res) => {
   });
 });
 
+app.get('/api/leaderboard', (req, res) => {
+  const by = req.query.by === 'profit' ? 'profit' : 'totalBet';
+
+  const list = Object.values(S.users)
+    .filter(u => !u.banned && (u[by] || 0) > 0)
+    .sort((a, b) => (b[by] || 0) - (a[by] || 0))
+    .slice(0, 20)
+    .map(u => ({
+      id: u.id,
+      username: u.username,
+      avatar: u.avatar || null,
+      rank: rankOf(u.totalBet),
+      value: round2(u[by] || 0),
+      totalBet: round2(u.totalBet),
+      totalWon: round2(u.totalWon)
+    }));
+
+  res.json({ by, list });
+});
+
 app.get('/api/history/me', auth, (req, res) => {
   const history = S.history
     .filter(m => m.host?.id === req.user.id || m.joiner?.id === req.user.id)
