@@ -507,6 +507,7 @@ app.get('/api/state', (req, res) => {
     online: io.engine.clientsCount,
     bot,
     announcement: S.announcement,
+    event: publicEvent(EVENT),
     discord: DISCORD_INVITE,
     config: { range: RANGE, maxItems: MAX_ITEMS }
   });
@@ -900,6 +901,343 @@ app.post('/api/withdraw', auth, actionLimit, (req, res) => {
   });
 });
 
+/* ================= EVENTS (wheel + word scramble) =================
+   Prize items are created from a catalog item only when someone wins.
+   Events live in memory: a restart simply ends the running event. */
+
+const SCRAMBLE_WORDS = [
+  'unicorn', 'dragon', 'phoenix', 'kitten', 'puppy', 'penguin', 'giraffe', 'turtle',
+  'monkey', 'flamingo', 'parrot', 'bunny', 'elephant', 'hedgehog', 'dolphin', 'butterfly',
+  'panda', 'raccoon', 'dinosaur', 'mermaid', 'reindeer', 'lemur', 'peacock', 'cheetah'
+];
+
+const WHEEL_MAX_PLAYERS = 30;
+const SPIN_MS = 3500;
+const REVEAL_MS = 2600;
+
+let EVENT = null;
+let eventTimers = [];
+const lastGuess = new Map();
+
+function clearEventTimers() {
+  eventTimers.forEach(clearTimeout);
+  eventTimers = [];
+}
+
+function later(fn, ms) {
+  eventTimers.push(setTimeout(fn, ms));
+}
+
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = crypto.randomInt(i + 1);
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/* The word, and who will be eliminated next, are never sent to the clients early. */
+function publicEvent(ev) {
+  if (!ev) return null;
+
+  const base = {
+    id: ev.id, type: ev.type, status: ev.status, host: ev.host,
+    prize: publicItem(ev.prize), createdAt: ev.createdAt, note: ev.note || null
+  };
+
+  if (ev.type === 'wheel') {
+    return {
+      ...base,
+      joinEndsAt: ev.joinEndsAt,
+      participants: ev.participants,
+      players: ev.players,
+      round: ev.round,
+      phase: ev.phase,
+      phaseEndsAt: ev.phaseEndsAt,
+      victimId: ev.phase === 'reveal' ? ev.victimId : null,
+      eliminated: ev.eliminated,
+      winner: ev.winner
+    };
+  }
+
+  return {
+    ...base,
+    scrambled: ev.scrambled,
+    length: ev.word.length,
+    endsAt: ev.endsAt,
+    winner: ev.winner,
+    word: ev.status === 'finished' ? ev.word : null
+  };
+}
+
+function emitEvent() {
+  io.emit('event:update', publicEvent(EVENT));
+}
+
+function eventChat(text, withButton = false) {
+  pushChat({
+    id: rid(4),
+    user: { username: '🎉 Event', avatar: null },
+    text,
+    ts: now(),
+    event: withButton
+  });
+}
+
+function scheduleEventClear(ev) {
+  later(() => {
+    if (EVENT === ev) {
+      EVENT = null;
+      io.emit('event:update', null);
+    }
+  }, 60000);
+}
+
+/* items from events must be wagered 1x their value before withdrawing */
+function awardPrize(user, ev) {
+  const item = ev.prize;
+
+  user.inventory.push(item);
+  user.wagerLeft = round2((user.wagerLeft || 0) + safeNumber(item.value));
+  addTransaction(user, 'Event Win', ev.id, item.value);
+  emitMe(user);
+
+  sendWebhook(WEBHOOK_GW, {
+    title: ev.type === 'wheel' ? '🎡 Wheel event winner' : '🔤 Word scramble winner',
+    color: 0xffb52e,
+    fields: [
+      { name: 'Winner', value: clip(user.username, 100), inline: true },
+      { name: 'Host', value: clip(ev.host.username, 100), inline: true },
+      { name: 'Prize', value: itemLine([item]) }
+    ],
+    timestamp: new Date().toISOString()
+  });
+}
+
+function eventBusy() {
+  return EVENT && EVENT.status !== 'finished';
+}
+
+/* ---------- wheel ---------- */
+
+function beginWheel(ev) {
+  if (EVENT !== ev || ev.status !== 'joining') return;
+
+  const alive = ev.participants.filter(p => {
+    const u = S.users[p.id];
+    return u && !u.banned;
+  });
+
+  if (alive.length < 2) {
+    ev.status = 'finished';
+    ev.note = 'Not enough players (at least 2 needed).';
+    emitEvent();
+    eventChat('🎡 Wheel event cancelled: not enough players.');
+    scheduleEventClear(ev);
+    return;
+  }
+
+  ev.players = shuffle(alive);
+  ev.status = 'running';
+  ev.round = 0;
+
+  eventChat('🎡 The wheel is spinning!');
+  startWheelRound(ev);
+}
+
+function startWheelRound(ev) {
+  if (EVENT !== ev || ev.status !== 'running') return;
+
+  if (ev.players.length <= 1) return finishWheel(ev);
+
+  ev.round += 1;
+  ev.phase = 'spin';
+  ev.victimId = null;
+  ev.victim = ev.players[crypto.randomInt(ev.players.length)];   // private until reveal
+  ev.phaseEndsAt = now() + SPIN_MS;
+
+  emitEvent();
+  later(() => revealWheel(ev), SPIN_MS);
+}
+
+function revealWheel(ev) {
+  if (EVENT !== ev || ev.status !== 'running') return;
+
+  ev.phase = 'reveal';
+  ev.victimId = ev.victim.id;
+  ev.phaseEndsAt = now() + REVEAL_MS;
+
+  emitEvent();
+
+  later(() => {
+    if (EVENT !== ev || ev.status !== 'running') return;
+    ev.eliminated.push(ev.victim);
+    ev.players = ev.players.filter(p => p.id !== ev.victim.id);
+    startWheelRound(ev);
+  }, REVEAL_MS);
+}
+
+function finishWheel(ev) {
+  const winnerPublic = ev.players[0];
+  const user = winnerPublic && S.users[winnerPublic.id];
+
+  ev.status = 'finished';
+  ev.phase = 'done';
+  ev.winner = winnerPublic || null;
+
+  if (user) awardPrize(user, ev);
+
+  emitEvent();
+  if (winnerPublic) eventChat(`🏆 ${winnerPublic.username} won the wheel event and got ${ev.prize.name}!`);
+  scheduleEventClear(ev);
+}
+
+/* ---------- word scramble ---------- */
+
+function scrambleWord(word) {
+  let out = word;
+  for (let k = 0; k < 30 && out === word && word.length > 1; k++) {
+    out = shuffle(word.split('')).join('');
+  }
+  return out.toUpperCase();
+}
+
+function endScramble(ev, winnerUser) {
+  if (EVENT !== ev || ev.status !== 'running') return;
+
+  ev.status = 'finished';
+
+  if (winnerUser) {
+    ev.winner = publicUser(winnerUser);
+    awardPrize(winnerUser, ev);
+    eventChat(`🔤 ${winnerUser.username} solved "${ev.word}" and won ${ev.prize.name}!`);
+  } else {
+    ev.note = 'Time is up! Nobody solved it.';
+    eventChat(`🔤 Time is up! The word was "${ev.word}".`);
+  }
+
+  emitEvent();
+  scheduleEventClear(ev);
+}
+
+/* ---------- admin: start / cancel ---------- */
+
+app.post('/api/admin/event/wheel', auth, adminOnly, (req, res) => {
+  if (eventBusy()) return bad(res, 'An event is already running');
+
+  const catalogItem = S.catalog.find(x => x.id === req.body.itemId);
+  if (!catalogItem) return bad(res, 'Pick a prize item');
+
+  const seconds = Math.floor(Number(req.body.seconds));
+  if (!(seconds >= 15 && seconds <= 600)) return bad(res, 'Join time must be 15–600 seconds');
+
+  clearEventTimers();
+
+  const ev = {
+    id: rid(6), type: 'wheel', status: 'joining',
+    host: publicUser(req.user), prize: newItem(catalogItem), createdAt: now(),
+    joinEndsAt: now() + seconds * 1000,
+    participants: [], players: [], eliminated: [],
+    round: 0, phase: 'join', phaseEndsAt: 0, victim: null, victimId: null, winner: null
+  };
+
+  EVENT = ev;
+  later(() => beginWheel(ev), seconds * 1000);
+
+  emitEvent();
+  eventChat(`🎡 Wheel event started! Prize: ${catalogItem.name}. Click to join!`, true);
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/event/scramble', auth, adminOnly, (req, res) => {
+  if (eventBusy()) return bad(res, 'An event is already running');
+
+  const catalogItem = S.catalog.find(x => x.id === req.body.itemId);
+  if (!catalogItem) return bad(res, 'Pick a prize item');
+
+  const seconds = Math.floor(Number(req.body.seconds));
+  if (!(seconds >= 30 && seconds <= 600)) return bad(res, 'Time must be 30–600 seconds');
+
+  let word = String(req.body.word || '').trim().toLowerCase();
+
+  if (!word) {
+    word = SCRAMBLE_WORDS[crypto.randomInt(SCRAMBLE_WORDS.length)];
+  } else if (!/^[a-z]{3,20}$/.test(word)) {
+    return bad(res, 'Word must be 3–20 letters (a-z)');
+  }
+
+  clearEventTimers();
+
+  const ev = {
+    id: rid(6), type: 'scramble', status: 'running',
+    host: publicUser(req.user), prize: newItem(catalogItem), createdAt: now(),
+    word, scrambled: scrambleWord(word), endsAt: now() + seconds * 1000, winner: null
+  };
+
+  EVENT = ev;
+  later(() => endScramble(ev, null), seconds * 1000);
+
+  emitEvent();
+  eventChat(`🔤 Word Scramble started! Prize: ${catalogItem.name}. Click to play!`, true);
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/event/cancel', auth, adminOnly, (req, res) => {
+  const ev = EVENT;
+  if (!ev || ev.status === 'finished') return bad(res, 'No running event');
+
+  clearEventTimers();
+  ev.status = 'finished';
+  ev.phase = 'done';
+  ev.note = 'This event was cancelled by an admin.';
+
+  emitEvent();
+  eventChat('Event cancelled by an admin.');
+  scheduleEventClear(ev);
+  res.json({ ok: true });
+});
+
+/* ---------- players ---------- */
+
+app.post('/api/event/join', auth, (req, res) => {
+  const ev = EVENT;
+
+  if (!ev || ev.type !== 'wheel' || ev.status !== 'joining' || ev.id !== req.body.id) {
+    return bad(res, 'Joining is closed');
+  }
+  if (ev.host.id === req.user.id) return bad(res, 'The host cannot join');
+  if (ev.participants.some(p => p.id === req.user.id)) return bad(res, 'You already joined');
+  if (ev.participants.length >= WHEEL_MAX_PLAYERS) return bad(res, 'The event is full');
+
+  ev.participants.push(publicUser(req.user));
+  emitEvent();
+  res.json({ ok: true });
+});
+
+app.post('/api/event/guess', auth, (req, res) => {
+  const ev = EVENT;
+
+  if (!ev || ev.type !== 'scramble' || ev.status !== 'running' || ev.id !== req.body.id) {
+    return bad(res, 'No active word scramble');
+  }
+  if (ev.host.id === req.user.id) return bad(res, 'The host cannot play');
+
+  const t = now();
+  if (t - (lastGuess.get(req.user.id) || 0) < 700) return bad(res, 'Slow down');
+  lastGuess.set(req.user.id, t);
+
+  const guess = String(req.body.guess || '').trim().toLowerCase().slice(0, 30);
+  if (!guess) return bad(res, 'Type your answer');
+
+  if (guess === ev.word) {
+    endScramble(ev, req.user);
+    return res.json({ correct: true });
+  }
+
+  res.json({ correct: false });
+});
+
 /* ================= ADMIN API ================= */
 
 function cleanItem(body) {
@@ -930,7 +1268,8 @@ app.get('/api/admin/data', auth, adminOnly, (req, res) => {
       id: u.id, username: u.username, items: u.inventory.length,
       value: valueOf(u.inventory), totalBet: round2(u.totalBet),
       banned: Boolean(u.banned), wagerLeft: round2(u.wagerLeft || 0),
-      isAdmin: isAdmin(u)
+      isAdmin: isAdmin(u),
+      adminTag: isAdmin(u) && u.adminTag !== false
     })),
     withdrawals: S.withdrawals.filter(w => w.status === 'pending')
   });
@@ -957,14 +1296,17 @@ app.post('/api/admin/withdraw/refund', auth, adminOnly, (req, res) => {
   res.json({ ok: true });
 });
 
-/* Give / remove admin access. Admins set in the Render env (ADMIN_USERS / ADMIN_IDS)
-   cannot be removed from here, and you cannot change your own role. */
+/* Give / remove admin access (and choose if the ADMIN chat tag is shown).
+   Admins set in the Render env (ADMIN_USERS / ADMIN_IDS) cannot be removed from here.
+   You cannot remove your own admin access, but you can change your own chat tag. */
 app.post('/api/admin/role', auth, adminOnly, (req, res) => {
   const user = S.users[String(req.body.id || '')];
   if (!user) return bad(res, 'User not found', 404);
-  if (user.id === req.user.id) return bad(res, 'You cannot change your own role');
 
   const make = Boolean(req.body.admin);
+  const tag = req.body.tag === undefined ? true : Boolean(req.body.tag);
+
+  if (user.id === req.user.id && !make) return bad(res, 'You cannot remove your own admin access');
 
   const fromEnv =
     ADMIN_IDS.includes(String(user.id)) ||
@@ -973,7 +1315,14 @@ app.post('/api/admin/role', auth, adminOnly, (req, res) => {
   if (!make && fromEnv) return bad(res, 'This admin is set in the server settings and cannot be removed here');
   if (make && user.banned) return bad(res, 'Unban this user first');
 
-  user.admin = make;
+  if (make) {
+    if (!fromEnv) user.admin = true;
+    user.adminTag = tag;
+  } else {
+    user.admin = false;
+    delete user.adminTag;
+  }
+
   markDirty();
   emitMe(user);
   res.json({ ok: true });
@@ -1079,7 +1428,7 @@ app.post('/api/admin/grant', auth, adminOnly, (req, res) => {
 /* ================= ADMIN UI (sent to browser only after auth) ================= */
 
 function adminUI() {
-  const { api, esc, toast, fmt, tags } = window.AMP;
+  const { api, esc, toast, fmt, tags, confirmBox } = window.AMP;
   if (document.getElementById('adm')) return;
 
   const overlay = document.createElement('div');
@@ -1116,6 +1465,22 @@ function adminUI() {
           <input id="g-qty" class="in" style="width:100%;margin-bottom:8px" type="number" min="1" max="50" value="1">
           <p class="hint">User must have logged in once. Enter the username, then press Give on an item.</p>
         </div>
+      </div>
+
+      <h4 style="margin:16px 0 8px">🎉 Events</h4>
+      <div style="background:#f5faff;padding:14px;border-radius:12px">
+        <select id="ev-item" class="in" style="width:100%;margin-bottom:8px"></select>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div><small>Wheel: join time (seconds)</small><input id="ev-wsec" class="in" type="number" min="15" max="600" value="60" style="width:100%"></div>
+          <div><small>Scramble: time (seconds)</small><input id="ev-ssec" class="in" type="number" min="30" max="600" value="120" style="width:100%"></div>
+        </div>
+        <input id="ev-word" class="in" maxlength="20" style="width:100%;margin-bottom:8px" placeholder="Scramble word (leave empty for a random one)">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button id="ev-wheel" class="btn" style="flex:1">🎡 Start Wheel</button>
+          <button id="ev-scr" class="btn" style="flex:1">🔤 Start Word Scramble</button>
+          <button id="ev-cancel" class="btn red">Cancel event</button>
+        </div>
+        <p class="hint">The prize is created from the selected catalog item and given to the winner (the winner must wager its value once before withdrawing). Starting an event posts an announcement in chat and a banner on the home page.</p>
       </div>
 
       <h4 style="margin:16px 0 8px">📢 Announcement (shown in the top banner)</h4>
@@ -1189,6 +1554,7 @@ function adminUI() {
           <b>${esc(u.username)}${u.banned ? ' 🚫' : ''}</b>
           <span>${u.items} items · ${fmt(u.value)}${u.wagerLeft > 0 ? ' · wager left ' + fmt(u.wagerLeft) : ''}</span>
           <span style="display:flex;gap:6px">
+            ${u.isAdmin ? `<button class="btn sm gray" data-tag="${esc(u.id)}" data-state="${u.adminTag ? '0' : '1'}">Tag: ${u.adminTag ? 'ON' : 'OFF'}</button>` : ''}
             <button class="btn sm gray" data-role="${esc(u.id)}" data-state="${u.isAdmin ? '0' : '1'}">${u.isAdmin ? 'Remove admin' : 'Make admin'}</button>
             <button class="btn sm ${u.banned ? 'mint' : 'red'}" data-ban="${esc(u.id)}" data-state="${u.banned ? '0' : '1'}">${u.banned ? 'Unban' : 'Ban'}</button>
           </span>
@@ -1196,6 +1562,12 @@ function adminUI() {
       : '<p class="hint">No users yet.</p>';
 
     $('g-users').innerHTML = data.users.map(u => `<option value="${esc(u.username)}"></option>`).join('');
+
+    const prevItem = $('ev-item').value;
+    $('ev-item').innerHTML = data.catalog.length
+      ? data.catalog.map(i => `<option value="${esc(i.id)}">${esc(i.name)} (${fmt(i.value)})</option>`).join('')
+      : '<option value="">No catalog items</option>';
+    if (prevItem) $('ev-item').value = prevItem;
   }
 
   $('adm-wd').onclick = async e => {
@@ -1238,7 +1610,7 @@ function adminUI() {
         await load();
       }
       if (button.dataset.action === 'delete') {
-        if (!confirm('Delete this catalog item?')) return;
+        if (!(await confirmBox({ title: 'Delete item', text: 'Are you sure you want to delete this catalog item?', ok: 'Delete', danger: true }))) return;
         await api('/api/admin/catalog/delete', { method: 'POST', body: { id } });
         toast('Item deleted', 'ok');
         await load();
@@ -1261,10 +1633,30 @@ function adminUI() {
     const r = e.target.closest('[data-role]');
     if (r) {
       const make = r.dataset.state === '1';
-      if (!confirm(make ? 'Give this user admin access?' : 'Remove admin access?')) return;
+      const answer = await confirmBox({
+        title: make ? 'Make admin' : 'Remove admin',
+        text: make
+          ? 'Are you sure you want to give this user admin access? They will be able to use the whole admin panel.'
+          : 'Are you sure you want to remove this user\'s admin access?',
+        ok: make ? 'Make admin' : 'Remove admin',
+        danger: !make,
+        checkbox: make ? { label: 'Show the ADMIN tag in chat', checked: true } : null
+      });
+      if (!answer) return;
       try {
-        await api('/api/admin/role', { method: 'POST', body: { id: r.dataset.role, admin: make } });
+        await api('/api/admin/role', { method: 'POST', body: { id: r.dataset.role, admin: make, tag: make ? answer.checked : true } });
         toast(make ? 'Admin access given' : 'Admin access removed', 'ok');
+        await load();
+      } catch (err) { toast(err.message, 'err'); }
+      return;
+    }
+
+    const tg = e.target.closest('[data-tag]');
+    if (tg) {
+      const on = tg.dataset.state === '1';
+      try {
+        await api('/api/admin/role', { method: 'POST', body: { id: tg.dataset.tag, admin: true, tag: on } });
+        toast(on ? 'ADMIN chat tag is now shown' : 'ADMIN chat tag is now hidden', 'ok');
         await load();
       } catch (err) { toast(err.message, 'err'); }
       return;
@@ -1273,7 +1665,7 @@ function adminUI() {
     const b = e.target.closest('[data-ban]');
     if (!b) return;
     const ban = b.dataset.state === '1';
-    if (ban && !confirm('Ban this user?')) return;
+    if (ban && !(await confirmBox({ title: 'Ban user', text: 'Are you sure you want to ban this user?', ok: 'Ban', danger: true }))) return;
     try {
       await api('/api/admin/ban', { method: 'POST', body: { id: b.dataset.ban, ban } });
       toast(ban ? 'User banned' : 'User unbanned', 'ok');
@@ -1293,6 +1685,26 @@ function adminUI() {
       toast(clear ? 'Announcement removed' : 'Announcement published', 'ok');
     } catch (err) { toast(err.message, 'err'); }
   }
+
+  async function startEvent(kind) {
+    try {
+      const body = kind === 'wheel'
+        ? { itemId: $('ev-item').value, seconds: $('ev-wsec').value }
+        : { itemId: $('ev-item').value, seconds: $('ev-ssec').value, word: $('ev-word').value };
+      await api('/api/admin/event/' + kind, { method: 'POST', body });
+      toast('Event started!', 'ok');
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  $('ev-wheel').onclick = () => startEvent('wheel');
+  $('ev-scr').onclick = () => startEvent('scramble');
+  $('ev-cancel').onclick = async () => {
+    if (!(await confirmBox({ title: 'Cancel event', text: 'Are you sure you want to cancel the running event?', ok: 'Cancel event', danger: true }))) return;
+    try {
+      await api('/api/admin/event/cancel', { method: 'POST', body: {} });
+      toast('Event cancelled', 'ok');
+    } catch (err) { toast(err.message, 'err'); }
+  };
 
   $('an-send').onclick = () => announce(false);
   $('an-clear').onclick = () => announce(true);
@@ -1328,6 +1740,7 @@ io.on('connection', socket => {
     lastChat.set(user.id, t);
 
     const admin = isAdmin(user);
+    const showTag = admin && user.adminTag !== false;
 
     if (admin && text === '/clear') {
       S.chat = [];
@@ -1343,7 +1756,7 @@ io.on('connection', socket => {
       id: rid(4),
       user: { ...publicUser(user), rank: rankOf(user.totalBet) },
       rank: rankOf(user.totalBet),
-      text, ts: t, admin
+      text, ts: t, admin: showTag
     });
     callback({ ok: true });
   });
