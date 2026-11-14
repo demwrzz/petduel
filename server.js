@@ -82,7 +82,8 @@ function sendWebhook(url, embed) {
 
 function isAdmin(user) {
   if (!user) return false;
-  return ADMIN_IDS.includes(String(user.id)) ||
+  return user.admin === true ||
+    ADMIN_IDS.includes(String(user.id)) ||
     ADMIN_NAMES.includes(String(user.username).toLowerCase());
 }
 
@@ -928,7 +929,8 @@ app.get('/api/admin/data', auth, adminOnly, (req, res) => {
     users: Object.values(S.users).map(u => ({
       id: u.id, username: u.username, items: u.inventory.length,
       value: valueOf(u.inventory), totalBet: round2(u.totalBet),
-      banned: Boolean(u.banned), wagerLeft: round2(u.wagerLeft || 0)
+      banned: Boolean(u.banned), wagerLeft: round2(u.wagerLeft || 0),
+      isAdmin: isAdmin(u)
     })),
     withdrawals: S.withdrawals.filter(w => w.status === 'pending')
   });
@@ -951,6 +953,28 @@ app.post('/api/admin/withdraw/refund', auth, adminOnly, (req, res) => {
   w.status = 'refunded';
   user.inventory.push(...w.items);
   addTransaction(user, 'Withdraw Refund', w.id, w.value);
+  emitMe(user);
+  res.json({ ok: true });
+});
+
+/* Give / remove admin access. Admins set in the Render env (ADMIN_USERS / ADMIN_IDS)
+   cannot be removed from here, and you cannot change your own role. */
+app.post('/api/admin/role', auth, adminOnly, (req, res) => {
+  const user = S.users[String(req.body.id || '')];
+  if (!user) return bad(res, 'User not found', 404);
+  if (user.id === req.user.id) return bad(res, 'You cannot change your own role');
+
+  const make = Boolean(req.body.admin);
+
+  const fromEnv =
+    ADMIN_IDS.includes(String(user.id)) ||
+    ADMIN_NAMES.includes(String(user.username).toLowerCase());
+
+  if (!make && fromEnv) return bad(res, 'This admin is set in the server settings and cannot be removed here');
+  if (make && user.banned) return bad(res, 'Unban this user first');
+
+  user.admin = make;
+  markDirty();
   emitMe(user);
   res.json({ ok: true });
 });
@@ -1164,7 +1188,10 @@ function adminUI() {
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px;border-bottom:1px solid #e0edfb">
           <b>${esc(u.username)}${u.banned ? ' 🚫' : ''}</b>
           <span>${u.items} items · ${fmt(u.value)}${u.wagerLeft > 0 ? ' · wager left ' + fmt(u.wagerLeft) : ''}</span>
-          <button class="btn sm ${u.banned ? 'mint' : 'red'}" data-ban="${esc(u.id)}" data-state="${u.banned ? '0' : '1'}">${u.banned ? 'Unban' : 'Ban'}</button>
+          <span style="display:flex;gap:6px">
+            <button class="btn sm gray" data-role="${esc(u.id)}" data-state="${u.isAdmin ? '0' : '1'}">${u.isAdmin ? 'Remove admin' : 'Make admin'}</button>
+            <button class="btn sm ${u.banned ? 'mint' : 'red'}" data-ban="${esc(u.id)}" data-state="${u.banned ? '0' : '1'}">${u.banned ? 'Unban' : 'Ban'}</button>
+          </span>
         </div>`).join('')
       : '<p class="hint">No users yet.</p>';
 
@@ -1231,6 +1258,18 @@ function adminUI() {
   };
 
   $('adm-users').onclick = async e => {
+    const r = e.target.closest('[data-role]');
+    if (r) {
+      const make = r.dataset.state === '1';
+      if (!confirm(make ? 'Give this user admin access?' : 'Remove admin access?')) return;
+      try {
+        await api('/api/admin/role', { method: 'POST', body: { id: r.dataset.role, admin: make } });
+        toast(make ? 'Admin access given' : 'Admin access removed', 'ok');
+        await load();
+      } catch (err) { toast(err.message, 'err'); }
+      return;
+    }
+
     const b = e.target.closest('[data-ban]');
     if (!b) return;
     const ban = b.dataset.state === '1';
