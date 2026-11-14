@@ -592,6 +592,7 @@
     .check-row input { width: 18px; height: 18px; accent-color: var(--green); }
 
     .chat-event-btn { margin-top: 6px; }
+    .tip-btn { width: 100%; min-height: 46px; margin-top: 12px; font-size: 15px; }
 
     .event-strip {
       display: flex; align-items: center; gap: 14px; margin-bottom: 14px; padding: 14px 18px;
@@ -1721,7 +1722,9 @@
             <div class="uc-stat"><b class="${profit >= 0 ? "positive" : "negative"}">${GEM}${profit > 0 ? "+" : ""}${fmt(profit)}</b><small>Total Profit</small></div>
             <div class="uc-stat"><b>${GEM}${fmt(user.totalWon)}</b><small>Total Won</small></div>
             <div class="uc-stat"><b>${GEM}${fmt(user.totalLost)}</b><small>Total Lost</small></div>
-          </div>`;
+          </div>
+
+          ${ME && ME.id !== user.id ? `<button class="btn tip-btn" data-action="tip" data-id="${esc(user.id)}" data-name="${esc(user.username)}">Tip</button>` : ""}`;
       } catch (error) {
         closeModal2();
         fail(error);
@@ -1757,6 +1760,8 @@
       });
 
       socket.on("chat:clear", () => { STATE.chat = []; renderChat(); });
+
+      socket.on("tip:received", d => toast(`🎁 ${d.from} tipped you ${d.count} item(s) worth ${fmt(d.value)}!`, "ok"));
 
       socket.on("event:update", ev => {
         if (ev && ev.status !== "finished" && ev.id !== lastEventId) {
@@ -2627,6 +2632,64 @@
       } catch (error) { fail(error); }
     }
 
+    /* ---------- Tip (send items to another player) ---------- */
+    let tipTarget = null;
+
+    function showTip(el) {
+      if (!requireLogin()) return;
+
+      tipTarget = { id: el.dataset.id, name: el.dataset.name };
+
+      closeModal2();
+      selected = new Set();
+      viewMatchId = null;
+
+      gridContext = {
+        max: 10,
+        info() {
+          const t = $("#tipInfo");
+          const items = selectedItems();
+          if (t) t.innerHTML = `${items.length}/10 selected · ${GEM}${fmt(totalValue(items))}`;
+        }
+      };
+
+      openModal(`
+        ${modalHeader("Tip " + esc(tipTarget.name))}
+        <p class="hint">Choose the items you want to send (up to 10). A tip cannot be taken back.</p>
+
+        ${selectionGridHTML()}
+
+        <div class="modal-footer">
+          <span id="tipInfo" style="margin-right:auto;align-self:center"></span>
+          <button class="btn gray" data-action="select-none">Clear</button>
+          <button class="btn" data-action="submit-tip">Send Tip</button>
+        </div>`, "wide");
+
+      bindGrid();
+    }
+
+    async function submitTip() {
+      if (!tipTarget) return;
+
+      const items = selectedItems();
+      if (!items.length) return toast("Select items first", "err");
+
+      const ok = await confirmBox({
+        title: "Send tip",
+        text: `Send ${items.length} item(s) worth ${fmt(totalValue(items))} to ${tipTarget.name}? This cannot be undone.`,
+        ok: "Send tip"
+      });
+
+      if (!ok) return;
+
+      try {
+        await api("/api/tip", { body: { userId: tipTarget.id, uids: items.map(itemId) } });
+        closeModal();
+        toast(`Tip sent to ${tipTarget.name}!`, "ok");
+        await refresh();
+      } catch (error) { fail(error); }
+    }
+
     /* ---------- Leaderboard ---------- */
     async function showLeaderboard(by = "totalBet") {
       gridContext = null;
@@ -2674,6 +2737,8 @@
       home() { closeModal(); closeModal2(); showPage("home"); },
       leaderboard() { showLeaderboard("totalBet"); },
       "lb-tab"(el) { loadLeaderboard(el.dataset.by); },
+      tip: showTip,
+      "submit-tip": submitTip,
       event: openEvent,
       "event-join": joinEvent,
       "event-guess": submitGuess,
