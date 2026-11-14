@@ -21,6 +21,12 @@ const BOT_NAME = 'DedokAmp';
 const BOT_LINK = 'https://www.roblox.com/share?code=a0dd8a7bc68f034b99e078f454d4e903&type=Server';
 const MAX_ITEMS = 8;
 
+const DISCORD_INVITE = E.DISCORD_INVITE || 'https://discord.gg/TaPXaAseP';
+/* Put the webhook URLs in Render > Environment, NOT in the code */
+const WEBHOOK_GW = E.DISCORD_GW_WEBHOOK || '';
+const WEBHOOK_CF = E.DISCORD_CF_WEBHOOK || '';
+const MAX_GW_MINUTES = 200;
+
 let RANGE = Number(E.JOIN_RANGE || 0.10);
 if (!Number.isFinite(RANGE) || RANGE < 0 || RANGE > 1) RANGE = 0.10;
 
@@ -32,7 +38,8 @@ const S = {
   history: [],
   giveaways: {},
   chat: [],
-  withdrawals: []
+  withdrawals: [],
+  announcement: null
 };
 
 const pending = new Map();
@@ -49,6 +56,29 @@ const safeNumber = v => { const n = Number(v); return Number.isFinite(n) ? n : 0
 const valueOf = items => round2(items.reduce((t, i) => t + safeNumber(i.value), 0));
 
 const publicUser = u => ({ id: u.id, username: u.username, avatar: u.avatar || null });
+
+/* ---------- Discord webhooks ---------- */
+const clip = (v, n = 1000) => String(v ?? '').slice(0, n);
+
+const itemLine = items => clip(
+  items.map(i =>
+    `${i.name}${i.age && i.age !== 'normal' ? ' (' + i.age + ')' : ''}${i.fly ? ' F' : ''}${i.ride ? ' R' : ''} - ${i.value}`
+  ).join('\n') || '-'
+);
+
+function sendWebhook(url, embed) {
+  if (!url) return;
+  fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: 'AMP ROLL',
+      allowed_mentions: { parse: [] },
+      embeds: [embed]
+    }),
+    signal: AbortSignal.timeout(8000)
+  }).catch(err => console.error('Webhook error:', err.message));
+}
 
 function isAdmin(user) {
   if (!user) return false;
@@ -84,6 +114,7 @@ function meView(user) {
     totalLost: round2(user.totalLost || 0),
     profit: round2(user.profit),
     rank: rankOf(user.totalBet),
+    wagerLeft: round2(user.wagerLeft || 0),
     inventory: user.inventory.map(inventoryView)
   };
 }
@@ -143,6 +174,7 @@ function ensureUser(u) {
   u.totalWon = u.totalWon || 0;
   u.totalLost = u.totalLost || 0;
   u.profit = u.profit || 0;
+  u.wagerLeft = u.wagerLeft || 0;
   return u;
 }
 
@@ -172,7 +204,8 @@ function snapshot() {
     sessions: S.sessions,
     catalog: S.catalog,
     history: S.history.slice(0, 200),
-    withdrawals: S.withdrawals.slice(0, 500)
+    withdrawals: S.withdrawals.slice(0, 500),
+    announcement: S.announcement
   };
 }
 
@@ -196,6 +229,7 @@ async function initDb() {
       S.catalog = d.catalog || [];
       S.history = d.history || [];
       S.withdrawals = d.withdrawals || [];
+      S.announcement = d.announcement || null;
       console.log('State loaded from MongoDB.');
     }
   } catch (err) {
@@ -471,6 +505,8 @@ app.get('/api/state', (req, res) => {
     chat: S.chat,
     online: io.engine.clientsCount,
     bot,
+    announcement: S.announcement,
+    discord: DISCORD_INVITE,
     config: { range: RANGE, maxItems: MAX_ITEMS }
   });
 });
@@ -551,6 +587,10 @@ function finishMatch(match) {
 
   host.totalBet = round2(host.totalBet + match.hostValue);
   opponent.totalBet = round2(opponent.totalBet + match.oppValue);
+
+  /* wager requirement goes down by what each player staked */
+  host.wagerLeft = Math.max(0, round2((host.wagerLeft || 0) - match.hostValue));
+  opponent.wagerLeft = Math.max(0, round2((opponent.wagerLeft || 0) - match.oppValue));
   winner.totalWon = round2(winner.totalWon + loserStake);
   loser.totalLost = round2((loser.totalLost || 0) + loserStake);
   winner.profit = round2(winner.profit + loserStake);
@@ -561,6 +601,21 @@ function finishMatch(match) {
 
   S.history.unshift(publicMatch(match));
   if (S.history.length > 500) S.history.length = 500;
+
+  sendWebhook(WEBHOOK_CF, {
+    title: '🪙 Coinflip finished',
+    color: 0x00efa0,
+    fields: [
+      { name: 'Winner', value: clip(winner.username, 100), inline: true },
+      { name: 'Loser', value: clip(loser.username, 100), inline: true },
+      { name: 'Pot', value: String(round2(match.hostValue + match.oppValue)), inline: true },
+      { name: clip(`${match.host.username} (${match.hostSide}) - ${match.hostValue}`, 250), value: itemLine(match.hostItems) },
+      { name: clip(`${match.opp.username} - ${match.oppValue}`, 250), value: itemLine(match.oppItems) },
+      { name: 'Winning side', value: String(match.winnerSide), inline: true },
+      { name: 'Match / Hash', value: clip(`${match.id}\n${match.hash}`, 300) }
+    ],
+    timestamp: new Date().toISOString()
+  });
 
   io.emit('match:update', publicMatch(match));
   emitMe(winner);
@@ -683,18 +738,35 @@ function endGiveaway(id) {
     id: rid(4), user: { username: 'System', avatar: null }, text, ts: now()
   });
 
-  if (!g.entrants.length) {
+  const eligible = g.entrants.filter(uid => S.users[uid] && !S.users[uid].banned);
+
+  if (!eligible.length) {
     host.inventory.push(...g.items);
     emitMe(host);
     system(`🎁 ${g.host.username}'s giveaway ended with no entrants. Items returned.`);
   } else {
-    const winner = S.users[g.entrants[crypto.randomInt(g.entrants.length)]];
+    const winner = S.users[eligible[crypto.randomInt(eligible.length)]];
     if (!winner) {
       host.inventory.push(...g.items);
       emitMe(host);
     } else {
       winner.inventory.push(...g.items);
+      /* items from giveaways must be wagered 1x their value before withdrawing */
+      winner.wagerLeft = round2((winner.wagerLeft || 0) + g.value);
       addTransaction(winner, 'Giveaway Win', g.id, g.value);
+
+      sendWebhook(WEBHOOK_GW, {
+        title: '🎉 Giveaway ended',
+        color: 0xffb52e,
+        fields: [
+          { name: 'Host', value: clip(g.host.username, 100), inline: true },
+          { name: 'Winner', value: clip(winner.username, 100), inline: true },
+          { name: 'Entrants', value: String(eligible.length), inline: true },
+          { name: 'Value', value: String(g.value), inline: true },
+          { name: 'Items', value: itemLine(g.items) }
+        ],
+        timestamp: new Date().toISOString()
+      });
       emitMe(winner);
       system(`🎉 ${winner.username} won ${g.items.length} item(s) worth ${g.value} from ${g.host.username}'s giveaway!`);
     }
@@ -712,7 +784,7 @@ app.post('/api/giveaway/create', auth, actionLimit, (req, res) => {
   if (mode === 'easy') {
     if (![30, 120, 300].includes(duration)) return bad(res, 'Invalid duration');
   } else if (mode === 'advanced') {
-    if (!(duration >= 60 && duration <= 3600)) return bad(res, 'Advanced duration must be 1–60 minutes');
+    if (!(duration >= 60 && duration <= MAX_GW_MINUTES * 60)) return bad(res, `Advanced duration must be 1–${MAX_GW_MINUTES} minutes`);
     if (!Number.isFinite(minBet) || minBet < 0) return bad(res, 'Invalid minimum bet');
   } else {
     return bad(res, 'Invalid mode');
@@ -735,6 +807,20 @@ app.post('/api/giveaway/create', auth, actionLimit, (req, res) => {
 
   S.giveaways[g.id] = g;
   setTimeout(() => endGiveaway(g.id), duration * 1000);
+
+  sendWebhook(WEBHOOK_GW, {
+    title: '🎁 New giveaway',
+    color: 0x00efa0,
+    fields: [
+      { name: 'Host', value: clip(user.username, 100), inline: true },
+      { name: 'Value', value: String(g.value), inline: true },
+      { name: 'Mode', value: mode, inline: true },
+      { name: 'Ends', value: `<t:${Math.floor(g.endsAt / 1000)}:R>`, inline: true },
+      { name: 'Min total bet', value: String(g.minBet), inline: true },
+      { name: 'Items', value: itemLine(g.items) }
+    ],
+    timestamp: new Date().toISOString()
+  });
 
   io.emit('giveaway:new', publicGiveaway(g));
   emitMe(user);
@@ -762,6 +848,10 @@ app.post('/api/giveaway/enter', auth, actionLimit, (req, res) => {
 app.post('/api/withdraw', auth, actionLimit, (req, res) => {
   const user = req.user;
   const uids = selectionToUids(req.body);
+
+  if ((user.wagerLeft || 0) > 0.001) {
+    return bad(res, `You must wager ${round2(user.wagerLeft)} more before you can withdraw.`);
+  }
 
   const open = S.withdrawals.filter(w => w.user.id === user.id && w.status === 'pending');
   if (open.length >= 5) return bad(res, 'You already have 5 pending withdrawals');
@@ -817,7 +907,8 @@ app.get('/api/admin/data', auth, adminOnly, (req, res) => {
     catalog: S.catalog,
     users: Object.values(S.users).map(u => ({
       id: u.id, username: u.username, items: u.inventory.length,
-      value: valueOf(u.inventory), totalBet: round2(u.totalBet)
+      value: valueOf(u.inventory), totalBet: round2(u.totalBet),
+      banned: Boolean(u.banned), wagerLeft: round2(u.wagerLeft || 0)
     })),
     withdrawals: S.withdrawals.filter(w => w.status === 'pending')
   });
@@ -841,6 +932,61 @@ app.post('/api/admin/withdraw/refund', auth, adminOnly, (req, res) => {
   user.inventory.push(...w.items);
   addTransaction(user, 'Withdraw Refund', w.id, w.value);
   emitMe(user);
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/ban', auth, adminOnly, (req, res) => {
+  const user = S.users[String(req.body.id || '')];
+  if (!user) return bad(res, 'User not found', 404);
+
+  const ban = Boolean(req.body.ban);
+  if (ban && isAdmin(user)) return bad(res, 'You cannot ban an admin');
+
+  user.banned = ban;
+
+  if (ban) {
+    for (const [key, session] of Object.entries(S.sessions)) {
+      if (session.userId === user.id) delete S.sessions[key];
+    }
+
+    /* return items of their open (waiting) matches */
+    for (const m of Object.values(S.matches)) {
+      if (m.state === 'waiting' && m.host.id === user.id) {
+        delete S.matches[m.id];
+        user.inventory.push(...m.hostItems);
+        io.emit('match:remove', { id: m.id });
+      }
+    }
+
+    io.in(`u:${user.id}`).disconnectSockets(true);
+  }
+
+  markDirty();
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/announce', auth, adminOnly, (req, res) => {
+  const title = String(req.body.title || '').trim().slice(0, 60);
+  const text = String(req.body.text || '').trim().slice(0, 300);
+
+  if (!title && !text) {
+    S.announcement = null;
+  } else {
+    S.announcement = { title: title || 'Announcement', text, ts: now() };
+  }
+
+  if (req.body.chat && text) {
+    pushChat({
+      id: rid(4),
+      user: { username: '📢 Announcement', avatar: null },
+      text,
+      ts: now(),
+      admin: true
+    });
+  }
+
+  markDirty();
+  io.emit('announce:update', S.announcement);
   res.json({ ok: true });
 });
 
@@ -881,6 +1027,7 @@ app.post('/api/admin/grant', auth, adminOnly, (req, res) => {
   if (!Number.isInteger(qty) || qty < 1 || qty > 50) return bad(res, 'Quantity must be between 1 and 50');
 
   for (let i = 0; i < qty; i++) user.inventory.push(newItem(item));
+  user.wagerLeft = round2((user.wagerLeft || 0) + item.value * qty);
   emitMe(user);
   res.json({ ok: true });
 });
@@ -924,6 +1071,19 @@ function adminUI() {
           <datalist id="g-users"></datalist>
           <input id="g-qty" class="in" style="width:100%;margin-bottom:8px" type="number" min="1" max="50" value="1">
           <p class="hint">User must have logged in once. Enter the username, then press Give on an item.</p>
+        </div>
+      </div>
+
+      <h4 style="margin:16px 0 8px">📢 Announcement (shown in the top banner)</h4>
+      <div style="background:#f5faff;padding:14px;border-radius:12px">
+        <input id="an-title" class="in" maxlength="60" style="width:100%;margin-bottom:8px" placeholder="Title (e.g. Maintenance tonight)">
+        <input id="an-text" class="in" maxlength="300" style="width:100%;margin-bottom:8px" placeholder="Message">
+        <div class="row">
+          <label><input id="an-chat" type="checkbox"> Also send to chat</label>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button id="an-send" class="btn" style="flex:1">Publish</button>
+          <button id="an-clear" class="btn gray">Remove announcement</button>
         </div>
       </div>
 
@@ -981,8 +1141,10 @@ function adminUI() {
 
     $('adm-users').innerHTML = data.users.length
       ? data.users.map(u => `
-        <div style="display:flex;justify-content:space-between;gap:10px;padding:8px;border-bottom:1px solid #e0edfb">
-          <b>${esc(u.username)}</b><span>${u.items} items · ${fmt(u.value)}</span>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px;border-bottom:1px solid #e0edfb">
+          <b>${esc(u.username)}${u.banned ? ' 🚫' : ''}</b>
+          <span>${u.items} items · ${fmt(u.value)}${u.wagerLeft > 0 ? ' · wager left ' + fmt(u.wagerLeft) : ''}</span>
+          <button class="btn sm ${u.banned ? 'mint' : 'red'}" data-ban="${esc(u.id)}" data-state="${u.banned ? '0' : '1'}">${u.banned ? 'Unban' : 'Ban'}</button>
         </div>`).join('')
       : '<p class="hint">No users yet.</p>';
 
@@ -1047,6 +1209,34 @@ function adminUI() {
       toast('Catalog value updated', 'ok');
     } catch (err) { toast(err.message, 'err'); await load(); }
   };
+
+  $('adm-users').onclick = async e => {
+    const b = e.target.closest('[data-ban]');
+    if (!b) return;
+    const ban = b.dataset.state === '1';
+    if (ban && !confirm('Ban this user?')) return;
+    try {
+      await api('/api/admin/ban', { method: 'POST', body: { id: b.dataset.ban, ban } });
+      toast(ban ? 'User banned' : 'User unbanned', 'ok');
+      await load();
+    } catch (err) { toast(err.message, 'err'); }
+  };
+
+  async function announce(clear) {
+    try {
+      await api('/api/admin/announce', {
+        method: 'POST',
+        body: clear
+          ? { title: '', text: '' }
+          : { title: $('an-title').value, text: $('an-text').value, chat: $('an-chat').checked }
+      });
+      if (clear) { $('an-title').value = ''; $('an-text').value = ''; }
+      toast(clear ? 'Announcement removed' : 'Announcement published', 'ok');
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  $('an-send').onclick = () => announce(false);
+  $('an-clear').onclick = () => announce(true);
 
   load().catch(err => { toast(err.message, 'err'); overlay.remove(); });
 }
