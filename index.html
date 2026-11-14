@@ -587,6 +587,63 @@
     .loader { width: 42px; height: 42px; border: 4px solid #323844; border-top-color: var(--green); border-radius: 50%; animation: spin 1s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    .ov.top3 { z-index: 250; background: rgba(0, 0, 0, .62); }
+    .check-row { display: flex; align-items: center; gap: 10px; margin: 12px 0 4px; padding: 12px; border-radius: 8px; background: #191c25; font-weight: 700; cursor: pointer; }
+    .check-row input { width: 18px; height: 18px; accent-color: var(--green); }
+
+    .chat-event-btn { margin-top: 6px; }
+
+    .event-strip {
+      display: flex; align-items: center; gap: 14px; margin-bottom: 14px; padding: 14px 18px;
+      border: 1px solid var(--orange); border-radius: 8px;
+      background: linear-gradient(100deg, #3a2d14, #1f1e22); box-shadow: 0 0 26px -10px rgba(255, 181, 46, .6);
+    }
+    .event-strip .ev-ico { font-size: 34px; }
+    .event-strip .ev-text { flex: 1; min-width: 0; line-height: 1.5; }
+    .event-strip small { color: #d6caa8; font-size: 12px; }
+    .event-strip b.ticker-giveaway { color: var(--orange); }
+
+    .ev-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px; }
+    .ev-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .ev-head h2 { flex: 1; margin: 0; }
+    .ev-prize { display: inline-flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid #4a3d22; border-radius: 8px; background: #20222a; }
+    .ev-prize img { width: 54px; height: 54px; object-fit: contain; }
+    .ev-prize span { display: block; color: var(--green); font-weight: 800; }
+    .ev-status { margin: 14px 0; font-size: 16px; font-weight: 800; text-align: center; min-height: 24px; }
+    .ev-status b { color: var(--orange); }
+    .ev-center { display: flex; flex-direction: column; align-items: center; }
+    .ev-list { display: flex; flex-direction: column; gap: 6px; max-height: 460px; overflow-y: auto; }
+    .ev-list h4 { margin: 8px 0 2px; color: var(--muted); font-size: 11px; letter-spacing: .7px; text-transform: uppercase; }
+    .ev-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid #2c303b; border-radius: 8px; background: #191c25; font-weight: 700; transition: opacity .4s; }
+    .ev-row.out { opacity: .4; text-decoration: line-through; }
+    .ev-row.win { border-color: var(--green); background: #15332a; }
+    .ev-winner { margin-top: 14px; padding: 18px; border: 1px solid var(--green); border-radius: 10px; background: #15332a; text-align: center; font-size: 18px; font-weight: 800; animation: enter .4s both; }
+    .ev-winner .ev-prize { margin-top: 12px; text-align: left; }
+
+    .wheel-box { position: relative; width: min(340px, 86vw); aspect-ratio: 1; margin: 6px auto; }
+    .wheel-rot { width: 100%; height: 100%; }
+    .wheel-rot svg { width: 100%; height: 100%; display: block; }
+    .wheel-rot.idle { animation: wspin 40s linear infinite; }
+    .wheel-rot.fast { animation: wspin .9s linear infinite; }
+    @keyframes wspin { to { transform: rotate(360deg); } }
+    .wheel-pointer {
+      position: absolute; top: -10px; left: 50%; z-index: 2; width: 0; height: 0; transform: translateX(-50%);
+      border-left: 14px solid transparent; border-right: 14px solid transparent; border-top: 28px solid #fff;
+      filter: drop-shadow(0 3px 5px rgba(0, 0, 0, .7));
+    }
+    .wheel-empty { display: grid; place-items: center; width: 100%; height: 100%; border: 3px dashed #3a3f4c; border-radius: 50%; color: var(--muted); font-weight: 800; text-align: center; padding: 20px; }
+
+    .tiles { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: 24px 0; }
+    .tile {
+      display: grid; place-items: center; width: 56px; height: 64px; border: 2px solid #4a3d22; border-radius: 10px;
+      background: linear-gradient(180deg, #2b2418, #1b1d24); color: var(--orange); font-size: 30px; font-weight: 800;
+      box-shadow: 0 6px 18px -8px rgba(255, 181, 46, .5);
+    }
+    .guess-row { display: flex; gap: 8px; max-width: 460px; margin: 0 auto; }
+    .guess-row input { flex: 1; text-transform: lowercase; }
+
+    @media (max-width: 1050px) { .ev-grid { grid-template-columns: 1fr; } }
+
     .nav-item.alt { border-bottom-color: transparent; color: #cfd2db; transition: color .2s, border-color .2s; }
     .nav-item.alt:hover { color: #fff; border-bottom-color: var(--green); }
 
@@ -694,6 +751,7 @@
 
   <div class="ov" id="overlay"><div class="modal" id="modal"></div></div>
   <div class="ov top" id="overlay2"><div class="modal small" id="modal2"></div></div>
+  <div class="ov top3" id="overlay3"><div class="modal" id="modal3" style="width:min(440px,100%)"></div></div>
 
   <div class="app">
     <header class="topbar">
@@ -738,6 +796,7 @@
       </aside>
 
       <section class="content">
+        <div id="eventStrip"></div>
         <div class="banner" id="banner">
           <div>
             <h1 id="bannerTitle">AMP ROLL Coinflip</h1>
@@ -765,6 +824,10 @@
 
     <main class="main" id="profilePage" style="display:none;grid-template-columns:1fr">
       <div id="profile"></div>
+    </main>
+
+    <main class="main" id="eventPage" style="display:none;grid-template-columns:1fr">
+      <div id="eventView"></div>
     </main>
   </div>
 
@@ -1366,7 +1429,7 @@
     }
 
     async function cancelMatch(id) {
-      if (!confirm("Cancel this match and return the items?")) return;
+      if (!(await confirmBox({ title: "Cancel match", text: "Cancel this match and return the items?", ok: "Cancel match", danger: true }))) return;
       try {
         await api("/api/match/cancel", { body: { id } });
         closeModal();
@@ -1594,6 +1657,7 @@
               ${m.admin ? '<span class="tag-admin">ADMIN</span>' : rankBadge(rank)}
             </div>
             <div class="txt">${esc(m.text || "")}</div>
+            ${m.event === true ? '<button class="btn sun sm chat-event-btn" data-action="event">Click to open the event</button>' : ""}
           </div>
         </div>`;
     }
@@ -1694,6 +1758,16 @@
 
       socket.on("chat:clear", () => { STATE.chat = []; renderChat(); });
 
+      socket.on("event:update", ev => {
+        if (ev && ev.status !== "finished" && ev.id !== lastEventId) {
+          lastEventId = ev.id;
+          toast((ev.type === "wheel" ? "🎡 Wheel" : "🔤 Word Scramble") + " event started! Click the banner to join.", "ok");
+        }
+        STATE.event = ev;
+        renderEventStrip();
+        if (currentPage === "event") renderEventPage();
+      });
+
       ["match:new", "match:update", "match:remove", "giveaway:new", "giveaway:update", "giveaway:remove", "me:update", "announce:update"]
         .forEach(ev => socket.on(ev, scheduleRefresh));
     }
@@ -1729,6 +1803,9 @@
         renderLobby();
         renderGiveaways();
         renderBanner();
+        if (STATE.event && !lastEventId) lastEventId = STATE.event.id;
+        renderEventStrip();
+        if (currentPage === "event") renderEventPage();
         renderChat();
 
         $("#online").textContent = Number(STATE.online || 0) + " online";
@@ -1894,7 +1971,7 @@
         const checked = selected.has(id);
 
         return `
-          <div class="inventory-item ${glow(item)} ${checked ? "selected" : ""}" data-action="pick" data-id="${esc(id)}">
+          <div class="inventory-item ${checked ? "selected" : ""}" data-action="pick" data-id="${esc(id)}">
             ${checked ? '<span class="check">✓</span>' : ""}
             <img src="${esc(itemImage(item))}" alt="">
             <div class="name">${esc(item.name)}</div>
@@ -2166,9 +2243,13 @@
     }
 
     /* ---------- Profile page ---------- */
+    let currentPage = "home";
+
     function showPage(page) {
+      currentPage = page;
       $("#homePage").style.display = page === "home" ? "grid" : "none";
       $("#profilePage").style.display = page === "profile" ? "grid" : "none";
+      $("#eventPage").style.display = page === "event" ? "grid" : "none";
       window.scrollTo(0, 0);
     }
 
@@ -2246,8 +2327,303 @@
         if (!response.ok) throw new Error("Admin access denied");
 
         const script = await response.text();
-        window.AMP = { api, esc, toast, fmt, tags };
+        window.AMP = { api, esc, toast, fmt, tags, confirmBox };
         new Function(script)();
+      } catch (error) { fail(error); }
+    }
+
+    /* ---------- Confirm box (in-site, replaces the browser popup) ---------- */
+    let confirmCancel = null;
+
+    function confirmBox({ title = "Are you sure?", text = "", ok = "Confirm", danger = false, checkbox = null } = {}) {
+      return new Promise(resolve => {
+        const overlay = $("#overlay3");
+
+        $("#modal3").innerHTML = `
+          <div class="mh"><h3>${esc(title)}</h3></div>
+          <p class="hint" style="font-size:14px;color:#c8cad1">${esc(text)}</p>
+          ${checkbox ? `<label class="check-row"><input type="checkbox" id="cbChk" ${checkbox.checked ? "checked" : ""}> ${esc(checkbox.label)}</label>` : ""}
+          <div class="modal-footer">
+            <button class="btn gray" id="cbNo">Cancel</button>
+            <button class="btn ${danger ? "red" : ""}" id="cbYes">${esc(ok)}</button>
+          </div>`;
+
+        overlay.classList.add("open");
+
+        const done = value => {
+          overlay.classList.remove("open");
+          confirmCancel = null;
+          resolve(value);
+        };
+
+        confirmCancel = () => done(null);
+        $("#cbNo").onclick = () => done(null);
+        $("#cbYes").onclick = () => done({ checked: !!($("#cbChk") && $("#cbChk").checked) });
+        overlay.onmousedown = e => { if (e.target === overlay) done(null); };
+      });
+    }
+
+    /* ---------- Events (wheel + word scramble) ---------- */
+    let eventSig = "", stripSig = "", lastEventId = "";
+
+    const eventKey = ev => ev
+      ? [ev.id, ev.status, ev.round, ev.phase, asArray(ev.participants).length, asArray(ev.players).length, ev.victimId, ev.winner && ev.winner.id].join("|")
+      : "none";
+
+    const prizeHTML = item => `
+      <div class="ev-prize">
+        <img src="${esc(itemImage(item))}" alt="">
+        <div><b>${esc(item.name)}</b>${tags(item)}<span>${GEM}${fmt(item.value)}</span></div>
+      </div>`;
+
+    function renderEventStrip() {
+      const ev = STATE.event;
+      const live = ev && ev.status !== "finished";
+      const sig = live ? eventKey(ev) : "none";
+      if (sig === stripSig) return;
+      stripSig = sig;
+
+      const el = $("#eventStrip");
+
+      if (!live) { el.innerHTML = ""; return; }
+
+      const wheel = ev.type === "wheel";
+      let info, label;
+
+      if (wheel && ev.status === "joining") {
+        info = `Joining ends in <b class="ticker-giveaway" data-end="${Number(ev.joinEndsAt)}"></b> · ${asArray(ev.participants).length} joined`;
+        label = "Click to join";
+      } else if (wheel) {
+        info = `The wheel is spinning · ${asArray(ev.players).length} left`;
+        label = "Watch";
+      } else {
+        info = `Time left <b class="ticker-giveaway" data-end="${Number(ev.endsAt)}"></b> · unscramble the word first!`;
+        label = "Play now";
+      }
+
+      el.innerHTML = `
+        <div class="event-strip enter">
+          <div class="ev-ico">${wheel ? "🎡" : "🔤"}</div>
+          <div class="ev-text">
+            <b>${wheel ? "Wheel Event" : "Word Scramble Event"}</b> — Prize: ${esc(ev.prize.name)} (${GEM}${fmt(ev.prize.value)})<br>
+            <small>${info}</small>
+          </div>
+          <button class="btn sun" data-action="event">${label}</button>
+        </div>`;
+    }
+
+    function openEvent() {
+      closeModal();
+      closeModal2();
+      showPage("event");
+      renderEventPage(true);
+    }
+
+    const WHEEL_COLORS = ["#00a870", "#f08a00", "#3b82f6", "#a855f7", "#ef4444", "#14b8a6", "#eab308", "#ec4899", "#6366f1", "#84cc16"];
+
+    function wheelSVG(players) {
+      const n = players.length;
+      const cx = 160, cy = 160, R = 150;
+      const point = (angle, r) => [cx + r * Math.cos(angle), cy + r * Math.sin(angle)];
+
+      let body = "";
+
+      if (n === 1) {
+        body = `<circle cx="${cx}" cy="${cy}" r="${R}" fill="${WHEEL_COLORS[0]}"/>
+          <text x="${cx}" y="${cy - 60}" text-anchor="middle" fill="#fff" font-weight="800" font-size="14">${esc(players[0].username.slice(0, 14))}</text>`;
+      } else {
+        body = players.map((p, i) => {
+          const a0 = (i / n) * Math.PI * 2 - Math.PI / 2;
+          const a1 = ((i + 1) / n) * Math.PI * 2 - Math.PI / 2;
+          const [x0, y0] = point(a0, R);
+          const [x1, y1] = point(a1, R);
+          const mid = (a0 + a1) / 2;
+          const [tx, ty] = point(mid, R * 0.64);
+          const size = n > 20 ? 8 : n > 12 ? 10 : 13;
+
+          return `<path d="M${cx} ${cy} L${x0} ${y0} A${R} ${R} 0 ${n === 2 ? 1 : 0} 1 ${x1} ${y1} Z" fill="${WHEEL_COLORS[i % WHEEL_COLORS.length]}" stroke="#14171f" stroke-width="2"/>
+            <text transform="translate(${tx} ${ty}) rotate(${(mid * 180) / Math.PI})" text-anchor="middle" dominant-baseline="middle"
+              fill="#fff" font-weight="800" font-size="${size}">${esc(p.username.slice(0, 11))}</text>`;
+        }).join("");
+      }
+
+      return `<svg viewBox="0 0 320 320">${body}<circle cx="${cx}" cy="${cy}" r="16" fill="#14171f" stroke="#fff" stroke-width="3"/></svg>`;
+    }
+
+    function evRow(p, out, winnerId) {
+      return `<div class="ev-row ${out ? "out" : ""} ${winnerId && winnerId === p.id ? "win" : ""}" data-pid="${esc(p.id)}">${avatar(p, "sm")}<span>${esc(p.username)}</span></div>`;
+    }
+
+    function wheelPageHTML(ev) {
+      const joining = ev.status === "joining";
+      const finished = ev.status === "finished";
+      const shown = joining ? asArray(ev.participants) : asArray(ev.players);
+      const joined = ME && asArray(ev.participants).some(p => p.id === ME.id);
+      const isHost = ME && ev.host.id === ME.id;
+
+      let rotClass = "";
+      if (joining) rotClass = "idle";
+      else if (ev.status === "running" && ev.phase === "spin") rotClass = "fast";
+
+      let status = "";
+
+      if (joining) {
+        status = `<div class="ev-status">Joining ends in <b class="ticker-giveaway" data-end="${Number(ev.joinEndsAt)}"></b></div>` +
+          (isHost ? '<p class="hint" style="text-align:center">You are the host.</p>'
+            : joined ? '<button class="btn gray" disabled>✔ You joined</button>'
+              : '<button class="btn sun" data-action="event-join">Join the wheel</button>');
+      } else if (finished) {
+        status = ev.winner
+          ? `<div class="ev-winner">🏆 ${esc(ev.winner.username)} won!${prizeHTML(ev.prize)}</div>`
+          : `<div class="ev-status">${esc(ev.note || "The event has ended.")}</div>`;
+      } else if (ev.phase === "reveal") {
+        status = '<div class="ev-status" id="wheelMsg"></div>';
+      } else {
+        status = `<div class="ev-status">Round ${Number(ev.round)} · spinning…</div>`;
+      }
+
+      const wheel = shown.length
+        ? `<div class="wheel-box"><div class="wheel-pointer"></div><div class="wheel-rot ${rotClass}" id="wheelRot">${wheelSVG(shown)}</div></div>`
+        : `<div class="wheel-box"><div class="wheel-empty">Waiting for players to join…</div></div>`;
+
+      const winnerId = ev.winner && ev.winner.id;
+
+      return `
+        <div class="card profile-card enter">
+          <div class="ev-head">
+            <h2>🎡 Wheel Event</h2>
+            ${prizeHTML(ev.prize)}
+            <button class="btn gray" data-action="home">← Back</button>
+          </div>
+
+          <div class="ev-grid">
+            <div class="ev-center">${wheel}${status}</div>
+
+            <div class="ev-list">
+              <h4>${joining ? "Joined" : "Still in"} (${shown.length})</h4>
+              ${shown.map(p => evRow(p, false, winnerId)).join("") || '<div class="empty" style="padding:20px">Nobody yet</div>'}
+              ${asArray(ev.eliminated).length ? `<h4>Eliminated</h4>${asArray(ev.eliminated).map(p => evRow(p, true, "")).join("")}` : ""}
+            </div>
+          </div>
+        </div>`;
+    }
+
+    function scramblePageHTML(ev) {
+      const running = ev.status === "running";
+      const isHost = ME && ev.host.id === ME.id;
+      const tiles = String(ev.scrambled || "").split("").map(c => `<span class="tile">${esc(c)}</span>`).join("");
+
+      let bottom;
+
+      if (running) {
+        bottom = `<div class="ev-status">Time left <b class="ticker-giveaway" data-end="${Number(ev.endsAt)}"></b></div>` +
+          (isHost
+            ? '<p class="hint" style="text-align:center">You are the host and cannot play.</p>'
+            : `<div class="guess-row">
+                 <input id="guessInput" class="in" maxlength="30" placeholder="Type the word…" autocomplete="off">
+                 <button class="btn sun" data-action="event-guess">Submit</button>
+               </div>`);
+      } else {
+        bottom = (ev.winner
+          ? `<div class="ev-winner">🏆 ${esc(ev.winner.username)} solved it!${prizeHTML(ev.prize)}</div>`
+          : `<div class="ev-status">${esc(ev.note || "The event has ended.")}</div>`) +
+          (ev.word ? `<p class="hint" style="text-align:center;font-size:14px">The word was <b>${esc(ev.word)}</b></p>` : "");
+      }
+
+      return `
+        <div class="card profile-card enter">
+          <div class="ev-head">
+            <h2>🔤 Word Scramble</h2>
+            ${prizeHTML(ev.prize)}
+            <button class="btn gray" data-action="home">← Back</button>
+          </div>
+
+          <p class="hint" style="text-align:center;font-size:14px">Unscramble the letters (${Number(ev.length)} letters). The first correct answer wins the prize!</p>
+          <div class="tiles">${tiles}</div>
+          ${bottom}
+        </div>`;
+    }
+
+    /* land the wheel on the eliminated player (result is only known at the reveal phase) */
+    function landWheel(ev) {
+      const rot = $("#wheelRot");
+      if (!rot) return;
+
+      const index = asArray(ev.players).findIndex(p => p.id === ev.victimId);
+      if (index < 0) return;
+
+      const segment = 360 / ev.players.length;
+      const finalAngle = 1440 - (index + 0.5) * segment;
+
+      rot.style.animation = "none";
+      rot.style.transform = "rotate(0deg)";
+      void rot.offsetWidth;
+      rot.style.transition = "transform 1.8s cubic-bezier(.12,.6,.15,1)";
+      rot.style.transform = `rotate(${finalAngle}deg)`;
+
+      const victim = ev.players[index];
+      const id = ev.victimId;
+
+      setTimeout(() => {
+        const row = document.querySelector(`[data-pid="${CSS.escape(String(id))}"]`);
+        if (row) row.classList.add("out");
+
+        const msg = $("#wheelMsg");
+        if (msg) msg.innerHTML = `💀 <b>${esc(victim.username)}</b> is eliminated!`;
+      }, 1800);
+    }
+
+    function renderEventPage(force) {
+      const box = $("#eventView");
+      if (!box) return;
+
+      const ev = STATE.event;
+      const sig = eventKey(ev) + "|" + (ME && ME.id);
+
+      if (!force && sig === eventSig) return;
+      eventSig = sig;
+
+      if (!ev) {
+        box.innerHTML = `
+          <div class="card profile-card enter">
+            <div class="empty">There is no active event right now.</div>
+            <div style="text-align:center"><button class="btn gray" data-action="home">← Back</button></div>
+          </div>`;
+        return;
+      }
+
+      box.innerHTML = ev.type === "wheel" ? wheelPageHTML(ev) : scramblePageHTML(ev);
+
+      if (ev.type === "wheel" && ev.status === "running" && ev.phase === "reveal") landWheel(ev);
+      if (ev.type === "scramble" && ev.status === "running") setTimeout(() => { const i = $("#guessInput"); if (i) i.focus(); }, 50);
+    }
+
+    async function joinEvent() {
+      if (!requireLogin()) return;
+      const ev = STATE.event;
+      if (!ev) return;
+
+      try {
+        await api("/api/event/join", { body: { id: ev.id } });
+        toast("You joined the wheel!", "ok");
+      } catch (error) { fail(error); }
+    }
+
+    async function submitGuess() {
+      if (!requireLogin()) return;
+
+      const ev = STATE.event;
+      const input = $("#guessInput");
+      if (!ev || !input) return;
+
+      const guess = input.value.trim();
+      if (!guess) return;
+
+      try {
+        const result = await api("/api/event/guess", { body: { id: ev.id, guess } });
+        input.value = "";
+        if (result.correct) toast("Correct! 🎉", "ok");
+        else { toast("Wrong answer, try again", "err"); input.focus(); }
       } catch (error) { fail(error); }
     }
 
@@ -2298,6 +2674,9 @@
       home() { closeModal(); closeModal2(); showPage("home"); },
       leaderboard() { showLeaderboard("totalBet"); },
       "lb-tab"(el) { loadLeaderboard(el.dataset.by); },
+      event: openEvent,
+      "event-join": joinEvent,
+      "event-guess": submitGuess,
       close: closeModal,
       close2: closeModal2,
       login: showLogin,
@@ -2386,8 +2765,15 @@
     });
 
     document.addEventListener("keydown", event => {
+      if (event.key === "Enter" && event.target && event.target.id === "guessInput") {
+        submitGuess();
+        return;
+      }
+
       if (event.key !== "Escape") return;
-      if ($("#overlay2").classList.contains("open")) closeModal2();
+
+      if ($("#overlay3").classList.contains("open") && confirmCancel) confirmCancel();
+      else if ($("#overlay2").classList.contains("open")) closeModal2();
       else closeModal();
     });
 
