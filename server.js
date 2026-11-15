@@ -25,6 +25,7 @@ const DISCORD_INVITE = E.DISCORD_INVITE || 'https://discord.gg/TaPXaAseP';
 /* Put the webhook URLs in Render > Environment, NOT in the code */
 const WEBHOOK_GW = E.DISCORD_GW_WEBHOOK || '';
 const WEBHOOK_CF = E.DISCORD_CF_WEBHOOK || '';
+const WEBHOOK_JP = E.DISCORD_JP_WEBHOOK || WEBHOOK_CF;
 const MAX_GW_MINUTES = 200;
 
 let RANGE = Number(E.JOIN_RANGE || 0.10);
@@ -39,7 +40,8 @@ const S = {
   giveaways: {},
   chat: [],
   withdrawals: [],
-  announcement: null
+  announcement: null,
+  notifications: []
 };
 
 const pending = new Map();
@@ -56,6 +58,15 @@ const safeNumber = v => { const n = Number(v); return Number.isFinite(n) ? n : 0
 const valueOf = items => round2(items.reduce((t, i) => t + safeNumber(i.value), 0));
 
 const publicUser = u => ({ id: u.id, username: u.username, avatar: u.avatar || null });
+
+/* ---------- admin notifications (bell) ---------- */
+function notifyAdmins(type, text) {
+  const n = { id: rid(4), type, text, ts: now() };
+  S.notifications.unshift(n);
+  if (S.notifications.length > 50) S.notifications.length = 50;
+  markDirty();
+  io.to('admins').emit('admin:notify', n);
+}
 
 /* ---------- Discord webhooks ---------- */
 const clip = (v, n = 1000) => String(v ?? '').slice(0, n);
@@ -240,13 +251,21 @@ function snapshot() {
     if (users[g.host.id]) users[g.host.id].inventory.push(...JSON.parse(JSON.stringify(g.items)));
   }
 
+  /* items sitting in an unfinished jackpot round go back to their owners */
+  if (JP && JP.state !== 'finished') {
+    for (const e of JP.entries) {
+      if (users[e.user.id]) users[e.user.id].inventory.push(...JSON.parse(JSON.stringify(e.items)));
+    }
+  }
+
   return {
     users,
     sessions: S.sessions,
     catalog: S.catalog,
     history: S.history.slice(0, 200),
     withdrawals: S.withdrawals.slice(0, 500),
-    announcement: S.announcement
+    announcement: S.announcement,
+    notifications: S.notifications.slice(0, 50)
   };
 }
 
@@ -271,6 +290,7 @@ async function initDb() {
       S.history = d.history || [];
       S.withdrawals = d.withdrawals || [];
       S.announcement = d.announcement || null;
+      S.notifications = d.notifications || [];
       console.log('State loaded from MongoDB.');
     }
   } catch (err) {
@@ -469,6 +489,7 @@ app.post('/api/auth/verify', authLimit, async (req, res) => {
       avatar: null, createdAt: now(), banned: false
     });
     S.users[id] = user;
+    notifyAdmins('register', `New player registered: ${user.username}`);
   }
 
   if (user.banned) return bad(res, 'Account banned', 403);
@@ -535,7 +556,8 @@ function publicMatch(match) {
 function publicGiveaway(g) {
   return {
     id: g.id, host: g.host, items: g.items.map(publicItem), value: g.value,
-    endsAt: g.endsAt, minBet: g.minBet, minRank: g.minRank || '', entrantCount: g.entrants.length
+    endsAt: g.endsAt, startedAt: g.startedAt, duration: g.duration,
+    minBet: g.minBet, minRank: g.minRank || '', entrantCount: g.entrants.length, entrantIds: g.entrants
   };
 }
 
@@ -548,6 +570,7 @@ app.get('/api/state', (req, res) => {
     bot,
     announcement: S.announcement,
     event: publicEvent(EVENT),
+    jackpot: publicJackpot(JP),
     discord: DISCORD_INVITE,
     config: { range: RANGE, maxItems: MAX_ITEMS, ranks: RANKS }
   });
@@ -683,7 +706,7 @@ function finishMatch(match) {
   emitMe(winner);
   emitMe(loser);
 
-  setTimeout(() => removeFinishedMatch(match.id), 20000);
+  setTimeout(() => removeFinishedMatch(match.id), 45000);
 }
 
 function runMatch(match) {
@@ -691,7 +714,7 @@ function runMatch(match) {
     if (match.state !== 'countdown') return;
     match.state = 'flipping';
     io.emit('match:update', publicMatch(match));
-    setTimeout(() => finishMatch(match), 3600);
+    setTimeout(() => finishMatch(match), 2400);
   }, 3000);
 }
 
@@ -866,6 +889,8 @@ app.post('/api/giveaway/create', auth, actionLimit, (req, res) => {
   const g = {
     id: rid(8), host: publicUser(user), items, value: valueOf(items),
     endsAt: now() + duration * 1000,
+    startedAt: now(),
+    duration,
     minBet: mode === 'advanced' ? round2(minBet) : 0,
     minRank,
     entrants: []
@@ -909,6 +934,197 @@ app.post('/api/giveaway/enter', auth, actionLimit, (req, res) => {
 
   g.entrants.push(user.id);
   io.emit('giveaway:update', publicGiveaway(g));
+  res.json({ ok: true });
+});
+
+/* ================= JACKPOT =================
+   Players put items in the pot. When a second player joins a 120s countdown starts.
+   The winner is picked by value share: roll = HMAC(seed, roundId), published after the round.
+   The winner and roll are hidden from the clients until the round is finished. */
+
+const JP_TIME = 120;
+const JP_ROLL_MS = 4500;
+const JP_RESULT_MS = 9000;
+const JP_MAX_PLAYERS = 25;
+const JP_MAX_JOIN_ITEMS = 8;
+const JP_MAX_USER_ITEMS = 24;
+
+let JP = null;
+let jpTimers = [];
+
+function jpLater(fn, ms) { jpTimers.push(setTimeout(fn, ms)); }
+
+function publicJackpot(j) {
+  if (!j) return null;
+
+  const out = {
+    id: j.id,
+    state: j.state,
+    hash: j.hash,
+    entries: j.entries.map(e => ({ user: e.user, value: e.value, items: e.items.map(publicItem) })),
+    total: j.total,
+    endsAt: j.endsAt,
+    rollEndsAt: j.rollEndsAt,
+    time: JP_TIME
+  };
+
+  if (j.state === 'finished') {
+    out.winnerId = j.winnerId;
+    out.roll = j.roll;
+    out.seed = j.seed;
+  }
+
+  return out;
+}
+
+function emitJackpot() { io.emit('jackpot:update', publicJackpot(JP)); }
+
+function newJackpot() {
+  jpTimers.forEach(clearTimeout);
+  jpTimers = [];
+
+  const seed = rid(32);
+  JP = {
+    id: rid(8), state: 'waiting', seed, hash: sha(seed),
+    entries: [], total: 0, endsAt: 0, rollEndsAt: 0,
+    winnerId: null, roll: null, winner: null
+  };
+
+  emitJackpot();
+}
+
+function jpRecalc(j) {
+  for (const e of j.entries) e.value = valueOf(e.items);
+  j.total = round2(j.entries.reduce((t, e) => t + e.value, 0));
+}
+
+function rollJackpot(j) {
+  if (JP !== j || j.state !== 'countdown') return;
+
+  const digest = crypto.createHmac('sha256', j.seed).update(j.id).digest('hex');
+  j.roll = parseInt(digest.slice(0, 8), 16) / 0x100000000;
+
+  const ticket = j.roll * j.total;
+  let acc = 0;
+  j.winner = j.entries[j.entries.length - 1];
+
+  for (const e of j.entries) {
+    acc += e.value;
+    if (ticket < acc) { j.winner = e; break; }
+  }
+
+  j.state = 'rolling';
+  j.rollEndsAt = now() + JP_ROLL_MS;
+  emitJackpot();
+
+  jpLater(() => finishJackpot(j), JP_ROLL_MS);
+}
+
+function finishJackpot(j) {
+  if (JP !== j || j.state !== 'rolling') return;
+
+  const winEntry = j.winner;
+  const winner = S.users[winEntry.user.id];
+  const allItems = j.entries.flatMap(e => e.items);
+
+  j.state = 'finished';
+  j.winnerId = winEntry.user.id;
+
+  if (winner) winner.inventory.push(...allItems);
+
+  for (const e of j.entries) {
+    const u = S.users[e.user.id];
+    if (!u) continue;
+
+    u.totalBet = round2(u.totalBet + e.value);
+    u.wagerLeft = Math.max(0, round2((u.wagerLeft || 0) - e.value));
+
+    if (e === winEntry) {
+      const gain = round2(j.total - e.value);
+      u.totalWon = round2(u.totalWon + gain);
+      u.profit = round2(u.profit + gain);
+      addTransaction(u, 'Jackpot Win', j.id, gain);
+    } else {
+      u.totalLost = round2((u.totalLost || 0) + e.value);
+      u.profit = round2(u.profit - e.value);
+      addTransaction(u, 'Jackpot Loss', j.id, -e.value);
+    }
+
+    emitMe(u);
+  }
+
+  sendWebhook(WEBHOOK_JP, {
+    title: '💣 Jackpot finished',
+    color: 0xff5968,
+    fields: [
+      { name: 'Winner', value: clip(winEntry.user.username, 100), inline: true },
+      { name: 'Pot', value: String(j.total), inline: true },
+      { name: 'Chance', value: `${round2((winEntry.value / j.total) * 100)}%`, inline: true },
+      { name: 'Players', value: j.entries.map(e => `${e.user.username}: ${e.value}`).join('\n').slice(0, 1000) },
+      { name: 'Round / Hash', value: clip(`${j.id}\n${j.hash}`, 300) }
+    ],
+    timestamp: new Date().toISOString()
+  });
+
+  emitJackpot();
+  jpLater(() => newJackpot(), JP_RESULT_MS);
+}
+
+app.post('/api/jackpot/join', auth, actionLimit, (req, res) => {
+  const user = req.user;
+  const j = JP;
+
+  if (!j || (j.state !== 'waiting' && j.state !== 'countdown')) {
+    return bad(res, 'This round is already rolling. Join the next round.');
+  }
+
+  const uids = selectionToUids(req.body);
+  const selected = pickItems(user, uids, JP_MAX_JOIN_ITEMS);
+
+  if (!selected) return bad(res, 'Select 1–8 valid items');
+  if (valueOf(selected) <= 0) return bad(res, 'Value too low');
+
+  let entry = j.entries.find(e => e.user.id === user.id);
+
+  if (!entry && j.entries.length >= JP_MAX_PLAYERS) return bad(res, 'The jackpot is full');
+  if (entry && entry.items.length + uids.length > JP_MAX_USER_ITEMS) return bad(res, 'Too many items in this round');
+
+  const items = takeItems(user, uids, JP_MAX_JOIN_ITEMS);
+
+  if (!entry) {
+    entry = { user: publicUser(user), items: [], value: 0 };
+    j.entries.push(entry);
+  }
+
+  entry.items.push(...items);
+  jpRecalc(j);
+
+  if (j.state === 'waiting' && j.entries.length >= 2) {
+    j.state = 'countdown';
+    j.endsAt = now() + JP_TIME * 1000;
+    jpLater(() => rollJackpot(j), JP_TIME * 1000);
+  }
+
+  emitJackpot();
+  emitMe(user);
+  res.json({ ok: true });
+});
+
+/* a lone player can take their items back while nobody else has joined */
+app.post('/api/jackpot/leave', auth, actionLimit, (req, res) => {
+  const j = JP;
+
+  if (!j || j.state !== 'waiting') return bad(res, 'You can only leave while waiting for a second player');
+
+  const index = j.entries.findIndex(e => e.user.id === req.user.id);
+  if (index < 0) return bad(res, 'You are not in this round');
+
+  const [entry] = j.entries.splice(index, 1);
+  req.user.inventory.push(...entry.items);
+  jpRecalc(j);
+
+  emitJackpot();
+  emitMe(req.user);
   res.json({ ok: true });
 });
 
@@ -973,6 +1189,7 @@ app.post('/api/withdraw', auth, actionLimit, (req, res) => {
   };
 
   S.withdrawals.unshift(request);
+  notifyAdmins('withdraw', `${user.username} requested a withdraw worth ${request.value}`);
   addTransaction(user, 'Withdraw Request', request.id, -request.value);
   emitMe(user);
 
@@ -1349,6 +1566,7 @@ app.get('/api/admin/data', auth, adminOnly, (req, res) => {
     users: Object.values(S.users).map(u => ({
       id: u.id, username: u.username, items: u.inventory.length,
       value: valueOf(u.inventory), totalBet: round2(u.totalBet),
+      totalWon: round2(u.totalWon), totalLost: round2(u.totalLost || 0), profit: round2(u.profit),
       banned: Boolean(u.banned), wagerLeft: round2(u.wagerLeft || 0),
       isAdmin: isAdmin(u),
       adminTag: isAdmin(u) && u.adminTag !== false,
@@ -1436,6 +1654,49 @@ app.post('/api/admin/inventory/delete', auth, adminOnly, (req, res) => {
   addTransaction(user, 'Item Removed (admin)', item.name, -safeNumber(item.value));
   console.log(`[ADMIN] ${req.user.username} deleted "${item.name}" (${item.value}) from ${user.username}`);
 
+  emitMe(user);
+  res.json({ ok: true });
+});
+
+app.get('/api/admin/notifications', auth, adminOnly, (req, res) => {
+  const seen = req.user.notifSeen || 0;
+  res.json({
+    list: S.notifications,
+    seen,
+    unread: S.notifications.filter(n => n.ts > seen).length
+  });
+});
+
+app.post('/api/admin/notifications/read', auth, adminOnly, (req, res) => {
+  req.user.notifSeen = now();
+  markDirty();
+  res.json({ ok: true });
+});
+
+/* Fix a player's stats (rank follows total bet automatically). Every change is logged. */
+app.post('/api/admin/stats', auth, adminOnly, (req, res) => {
+  const user = S.users[String(req.body.id || '')];
+  if (!user) return bad(res, 'User not found', 404);
+
+  const next = {};
+
+  for (const f of ['totalBet', 'totalWon', 'totalLost', 'profit']) {
+    const raw = req.body[f];
+    if (raw === undefined || raw === null || raw === '') continue;
+
+    const n = Number(raw);
+    if (!Number.isFinite(n) || Math.abs(n) > 1e12) return bad(res, `Invalid value for ${f}`);
+    if (f !== 'profit' && n < 0) return bad(res, `${f} cannot be negative`);
+
+    next[f] = round2(n);
+  }
+
+  console.log(`[ADMIN] ${req.user.username} changed stats of ${user.username}:`, JSON.stringify({ before: {
+    totalBet: user.totalBet, totalWon: user.totalWon, totalLost: user.totalLost, profit: user.profit
+  }, after: next }));
+
+  Object.assign(user, next);
+  markDirty();
   emitMe(user);
   res.json({ ok: true });
 });
@@ -1642,6 +1903,7 @@ function adminUI() {
       <h4 style="margin:16px 0 8px">👥 Users</h4>
       <div id="adm-users"></div>
       <div id="adm-inv"></div>
+      <div id="adm-stats"></div>
     </div>`;
 
   document.body.appendChild(overlay);
@@ -1697,6 +1959,7 @@ function adminUI() {
           <span style="display:flex;gap:6px">
             ${!u.isAdmin ? `<button class="btn sm gray" data-mute="${esc(u.id)}" data-state="${u.muted ? '0' : '1'}">${u.muted ? 'Unmute' : 'Mute'}</button>` : ''}
             <button class="btn sm gray" data-inv="${esc(u.id)}">Items</button>
+            <button class="btn sm gray" data-stats="${esc(u.id)}">Stats</button>
             ${u.isAdmin ? `<button class="btn sm gray" data-tag="${esc(u.id)}" data-state="${u.adminTag ? '0' : '1'}">Tag: ${u.adminTag ? 'ON' : 'OFF'}</button>` : ''}
             <button class="btn sm gray" data-role="${esc(u.id)}" data-state="${u.isAdmin ? '0' : '1'}">${u.isAdmin ? 'Remove admin' : 'Make admin'}</button>
             <button class="btn sm ${u.banned ? 'mint' : 'red'}" data-ban="${esc(u.id)}" data-state="${u.banned ? '0' : '1'}">${u.banned ? 'Unban' : 'Ban'}</button>
@@ -1704,6 +1967,7 @@ function adminUI() {
         </div>`).join('')
       : '<p class="hint">No users yet.</p>';
 
+    usersCache = data.users;
     $('g-users').innerHTML = data.users.map(u => `<option value="${esc(u.username)}"></option>`).join('');
 
     const prevItem = $('ev-item').value;
@@ -1773,6 +2037,9 @@ function adminUI() {
   };
 
   $('adm-users').onclick = async e => {
+    const st = e.target.closest('[data-stats]');
+    if (st) { openStats(st.dataset.stats); return; }
+
     const mu = e.target.closest('[data-mute]');
     if (mu) {
       const doMute = mu.dataset.state === '1';
@@ -1841,6 +2108,56 @@ function adminUI() {
       await api('/api/admin/ban', { method: 'POST', body: { id: b.dataset.ban, ban } });
       toast(ban ? 'User banned' : 'User unbanned', 'ok');
       await load();
+    } catch (err) { toast(err.message, 'err'); }
+  };
+
+  let usersCache = [];
+  let statsUser = null;
+
+  function openStats(userId) {
+    const u = usersCache.find(x => x.id === userId);
+    if (!u) return;
+    statsUser = userId;
+
+    const field = (id, label, value) => `
+      <div><small>${label}</small>
+      <input id="${id}" class="in" type="number" step="0.01" value="${esc(value)}" style="width:100%"></div>`;
+
+    $('adm-stats').innerHTML = `
+      <div style="background:#f5faff;padding:14px;border-radius:12px;margin-top:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <b>${esc(u.username)}'s stats</b>
+          <button class="btn gray sm" id="st-close">Close</button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:10px">
+          ${field('st-bet', 'Total bet', u.totalBet)}
+          ${field('st-won', 'Total won', u.totalWon)}
+          ${field('st-lost', 'Total lost', u.totalLost)}
+          ${field('st-profit', 'Profit', u.profit)}
+        </div>
+        <button class="btn" id="st-save" style="width:100%">Save stats</button>
+        <p class="hint">Rank is calculated from total bet. Every change is written to the server log.</p>
+      </div>`;
+
+    $('adm-stats').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  $('adm-stats').onclick = async e => {
+    if (e.target.closest('#st-close')) { $('adm-stats').innerHTML = ''; statsUser = null; return; }
+    if (!e.target.closest('#st-save') || !statsUser) return;
+
+    try {
+      await api('/api/admin/stats', {
+        method: 'POST',
+        body: {
+          id: statsUser,
+          totalBet: $('st-bet').value, totalWon: $('st-won').value,
+          totalLost: $('st-lost').value, profit: $('st-profit').value
+        }
+      });
+      toast('Stats saved', 'ok');
+      await load();
+      openStats(statsUser);
     } catch (err) { toast(err.message, 'err'); }
   };
 
@@ -1942,6 +2259,7 @@ io.use((socket, next) => {
 
 io.on('connection', socket => {
   if (socket.user) socket.join(`u:${socket.user.id}`);
+  if (socket.user && isAdmin(socket.user)) socket.join('admins');
   io.emit('online', io.engine.clientsCount);
 
   socket.on('chat:send', (payload, ack) => {
@@ -2002,6 +2320,7 @@ app.get('/health', (req, res) => {
 
 (async () => {
   await initDb();
+  newJackpot();
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`AMP ROLL running on port ${PORT}`);
     console.log(mongoColl ? 'Storage: MongoDB' : 'Storage: MEMORY ONLY (resets on restart)');
