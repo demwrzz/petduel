@@ -87,12 +87,51 @@ function isAdmin(user) {
     ADMIN_NAMES.includes(String(user.username).toLowerCase());
 }
 
+/* 30 ranks, based on total wagered value */
+const RANKS = [
+  { name: 'Rookie',      min: 0,        color: '#8d909a' },
+  { name: 'Beginner',    min: 100,      color: '#a3a6b0' },
+  { name: 'Amateur',     min: 250,      color: '#9ad1ff' },
+  { name: 'Casual',      min: 500,      color: '#7cc4ff' },
+  { name: 'Roller',      min: 1000,     color: '#4da3ff' },
+  { name: 'Bronze',      min: 2500,     color: '#cd7f32' },
+  { name: 'Silver',      min: 5000,     color: '#c0c7d1' },
+  { name: 'Gold',        min: 7500,     color: '#ffd24a' },
+  { name: 'Highroller',  min: 10000,    color: '#ff5968' },
+  { name: 'Platinum',    min: 15000,    color: '#7fe6e0' },
+  { name: 'Emerald',     min: 20000,    color: '#2bd67b' },
+  { name: 'Ruby',        min: 30000,    color: '#e0115f' },
+  { name: 'Sapphire',    min: 40000,    color: '#2d6bff' },
+  { name: 'Diamond',     min: 50000,    color: '#6fe3ff' },
+  { name: 'Master',      min: 65000,    color: '#b57bff' },
+  { name: 'Grandmaster', min: 80000,    color: '#9b5cff' },
+  { name: 'Whale',       min: 100000,   color: '#ffb52e' },
+  { name: 'Elite',       min: 150000,   color: '#ff8a3d' },
+  { name: 'Champion',    min: 200000,   color: '#ff6b6b' },
+  { name: 'Legend',      min: 300000,   color: '#ffcf33' },
+  { name: 'Mythic',      min: 400000,   color: '#d946ef' },
+  { name: 'Titan',       min: 500000,   color: '#f97316' },
+  { name: 'Overlord',    min: 750000,   color: '#ef4444' },
+  { name: 'Immortal',    min: 1000000,  color: '#a78bfa' },
+  { name: 'Celestial',   min: 1500000,  color: '#38bdf8' },
+  { name: 'Divine',      min: 2000000,  color: '#fde68a' },
+  { name: 'Cosmic',      min: 3000000,  color: '#818cf8' },
+  { name: 'Eternal',     min: 5000000,  color: '#34d399' },
+  { name: 'Omega',       min: 7500000,  color: '#fb7185' },
+  { name: 'Godlike',     min: 10000000, color: '#f0abfc' }
+];
+
+const rankIndex = name => RANKS.findIndex(r => r.name === name);
+
 function rankOf(totalBet) {
-  if (totalBet >= 100000) return 'Whale';
-  if (totalBet >= 10000) return 'Highroller';
-  if (totalBet >= 1000) return 'Roller';
-  return 'Rookie';
+  let result = RANKS[0].name;
+  for (const r of RANKS) {
+    if (totalBet >= r.min) result = r.name;
+  }
+  return result;
 }
+
+const MUTE_FOREVER = Number.MAX_SAFE_INTEGER;
 
 function addTransaction(user, type, id, amount) {
   user.tx.unshift({ type, id, ts: now(), amount: round2(amount) });
@@ -116,6 +155,7 @@ function meView(user) {
     profit: round2(user.profit),
     rank: rankOf(user.totalBet),
     wagerLeft: round2(user.wagerLeft || 0),
+    mutedUntil: user.mutedUntil || 0,
     inventory: user.inventory.map(inventoryView)
   };
 }
@@ -495,7 +535,7 @@ function publicMatch(match) {
 function publicGiveaway(g) {
   return {
     id: g.id, host: g.host, items: g.items.map(publicItem), value: g.value,
-    endsAt: g.endsAt, minBet: g.minBet, entrantCount: g.entrants.length
+    endsAt: g.endsAt, minBet: g.minBet, minRank: g.minRank || '', entrantCount: g.entrants.length
   };
 }
 
@@ -509,7 +549,7 @@ app.get('/api/state', (req, res) => {
     announcement: S.announcement,
     event: publicEvent(EVENT),
     discord: DISCORD_INVITE,
-    config: { range: RANGE, maxItems: MAX_ITEMS }
+    config: { range: RANGE, maxItems: MAX_ITEMS, ranks: RANKS }
   });
 });
 
@@ -812,6 +852,9 @@ app.post('/api/giveaway/create', auth, actionLimit, (req, res) => {
     return bad(res, 'Invalid mode');
   }
 
+  const minRank = String(req.body.minRank || '');
+  if (minRank && rankIndex(minRank) < 0) return bad(res, 'Invalid rank');
+
   if (Object.values(S.giveaways).filter(g => g.host.id === user.id).length >= 3) {
     return bad(res, 'Max 3 active giveaways');
   }
@@ -824,6 +867,7 @@ app.post('/api/giveaway/create', auth, actionLimit, (req, res) => {
     id: rid(8), host: publicUser(user), items, value: valueOf(items),
     endsAt: now() + duration * 1000,
     minBet: mode === 'advanced' ? round2(minBet) : 0,
+    minRank,
     entrants: []
   };
 
@@ -839,6 +883,7 @@ app.post('/api/giveaway/create', auth, actionLimit, (req, res) => {
       { name: 'Mode', value: mode, inline: true },
       { name: 'Ends', value: `<t:${Math.floor(g.endsAt / 1000)}:R>`, inline: true },
       { name: 'Min total bet', value: String(g.minBet), inline: true },
+      { name: 'Min rank', value: g.minRank || 'None', inline: true },
       { name: 'Items', value: itemLine(g.items) }
     ],
     timestamp: new Date().toISOString()
@@ -857,6 +902,10 @@ app.post('/api/giveaway/enter', auth, actionLimit, (req, res) => {
   if (g.host.id === user.id) return bad(res, 'You cannot enter your own giveaway');
   if (g.entrants.includes(user.id)) return bad(res, 'Already entered');
   if (user.totalBet < g.minBet) return bad(res, `You need ${g.minBet} total bet to enter`);
+
+  if (g.minRank && rankIndex(rankOf(user.totalBet)) < rankIndex(g.minRank)) {
+    return bad(res, `You need the ${g.minRank} rank (or higher) to enter`);
+  }
 
   g.entrants.push(user.id);
   io.emit('giveaway:update', publicGiveaway(g));
@@ -1302,7 +1351,8 @@ app.get('/api/admin/data', auth, adminOnly, (req, res) => {
       value: valueOf(u.inventory), totalBet: round2(u.totalBet),
       banned: Boolean(u.banned), wagerLeft: round2(u.wagerLeft || 0),
       isAdmin: isAdmin(u),
-      adminTag: isAdmin(u) && u.adminTag !== false
+      adminTag: isAdmin(u) && u.adminTag !== false,
+      muted: (u.mutedUntil || 0) > now()
     })),
     withdrawals: S.withdrawals.filter(w => w.status === 'pending')
   });
@@ -1386,6 +1436,34 @@ app.post('/api/admin/inventory/delete', auth, adminOnly, (req, res) => {
   addTransaction(user, 'Item Removed (admin)', item.name, -safeNumber(item.value));
   console.log(`[ADMIN] ${req.user.username} deleted "${item.name}" (${item.value}) from ${user.username}`);
 
+  emitMe(user);
+  res.json({ ok: true });
+});
+
+/* Mute: minutes = 0 unmutes, -1 is permanent. All chat messages of the user are deleted. */
+app.post('/api/admin/mute', auth, adminOnly, (req, res) => {
+  const user = S.users[String(req.body.id || '')];
+  if (!user) return bad(res, 'User not found', 404);
+  if (isAdmin(user)) return bad(res, 'You cannot mute an admin');
+
+  const minutes = Math.floor(Number(req.body.minutes));
+
+  if (minutes === 0) {
+    user.mutedUntil = 0;
+  } else if (minutes === -1) {
+    user.mutedUntil = MUTE_FOREVER;
+  } else if (minutes >= 1 && minutes <= 60 * 24 * 365) {
+    user.mutedUntil = now() + minutes * 60000;
+  } else {
+    return bad(res, 'Invalid duration');
+  }
+
+  if (user.mutedUntil > 0) {
+    S.chat = S.chat.filter(m => !(m.user && m.user.id === user.id));
+    io.emit('chat:purge', { userId: user.id });
+  }
+
+  markDirty();
   emitMe(user);
   res.json({ ok: true });
 });
@@ -1614,9 +1692,10 @@ function adminUI() {
     $('adm-users').innerHTML = data.users.length
       ? data.users.map(u => `
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px;border-bottom:1px solid #e0edfb">
-          <b>${esc(u.username)}${u.banned ? ' 🚫' : ''}</b>
+          <b>${esc(u.username)}${u.banned ? ' 🚫' : ''}${u.muted ? ' 🔇' : ''}</b>
           <span>${u.items} items · ${fmt(u.value)}${u.wagerLeft > 0 ? ' · wager left ' + fmt(u.wagerLeft) : ''}</span>
           <span style="display:flex;gap:6px">
+            ${!u.isAdmin ? `<button class="btn sm gray" data-mute="${esc(u.id)}" data-state="${u.muted ? '0' : '1'}">${u.muted ? 'Unmute' : 'Mute'}</button>` : ''}
             <button class="btn sm gray" data-inv="${esc(u.id)}">Items</button>
             ${u.isAdmin ? `<button class="btn sm gray" data-tag="${esc(u.id)}" data-state="${u.adminTag ? '0' : '1'}">Tag: ${u.adminTag ? 'ON' : 'OFF'}</button>` : ''}
             <button class="btn sm gray" data-role="${esc(u.id)}" data-state="${u.isAdmin ? '0' : '1'}">${u.isAdmin ? 'Remove admin' : 'Make admin'}</button>
@@ -1694,6 +1773,31 @@ function adminUI() {
   };
 
   $('adm-users').onclick = async e => {
+    const mu = e.target.closest('[data-mute]');
+    if (mu) {
+      const doMute = mu.dataset.state === '1';
+      const answer = await confirmBox({
+        title: doMute ? 'Mute user' : 'Unmute user',
+        text: doMute
+          ? 'The user will not be able to chat, and all of their chat messages will be deleted.'
+          : 'Allow this user to chat again?',
+        ok: doMute ? 'Mute' : 'Unmute',
+        danger: doMute,
+        select: doMute ? {
+          label: 'Duration',
+          value: '60',
+          options: [['10', '10 minutes'], ['60', '1 hour'], ['360', '6 hours'], ['1440', '24 hours'], ['10080', '7 days'], ['-1', 'Permanent']]
+        } : null
+      });
+      if (!answer) return;
+      try {
+        await api('/api/admin/mute', { method: 'POST', body: { id: mu.dataset.mute, minutes: doMute ? Number(answer.value) : 0 } });
+        toast(doMute ? 'User muted' : 'User unmuted', 'ok');
+        await load();
+      } catch (err) { toast(err.message, 'err'); }
+      return;
+    }
+
     const iv = e.target.closest('[data-inv]');
     if (iv) { openInv(iv.dataset.inv); return; }
 
@@ -1844,6 +1948,12 @@ io.on('connection', socket => {
     const callback = typeof ack === 'function' ? ack : () => {};
     const user = userFromToken(socket.token);
     if (!user) return callback({ error: 'Login to chat' });
+
+    if ((user.mutedUntil || 0) > now()) {
+      if (user.mutedUntil >= MUTE_FOREVER) return callback({ error: 'You are muted.' });
+      const mins = Math.max(1, Math.ceil((user.mutedUntil - now()) / 60000));
+      return callback({ error: `You are muted for ${mins} more minute(s).` });
+    }
 
     let text = typeof payload === 'string' ? payload : payload && payload.text;
     if (typeof text !== 'string') return callback({ error: 'Invalid message' });
