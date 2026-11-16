@@ -83,7 +83,7 @@ function sendWebhook(url, embed) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      username: 'AMP ROLL',
+      username: 'Pet Duel',
       allowed_mentions: { parse: [] },
       embeds: [embed]
     }),
@@ -542,6 +542,11 @@ function publicMatch(match) {
     countdownEnd: match.startedAt ? match.startedAt + 3000 : null
   };
 
+  if (match.state === 'flipping') {
+    /* both sides are already locked in: clients play the same flip animation as the replay */
+    result.winnerSide = match.winnerSide;
+  }
+
   if (match.state === 'finished') {
     result.winnerSide = match.winnerSide;
     result.result = match.winnerSide;
@@ -942,7 +947,7 @@ app.post('/api/giveaway/enter', auth, actionLimit, (req, res) => {
    The winner is picked by value share: roll = HMAC(seed, roundId), published after the round.
    The winner and roll are hidden from the clients until the round is finished. */
 
-const JP_TIME = 120;
+const JP_TIME = 60;
 const JP_ROLL_MS = 4500;
 const JP_RESULT_MS = 9000;
 const JP_MAX_PLAYERS = 25;
@@ -2322,7 +2327,7 @@ app.get('/health', (req, res) => {
   await initDb();
   newJackpot();
   server.listen(PORT, '0.0.0.0', () => {
-    console.log(`AMP ROLL running on port ${PORT}`);
+    console.log(`Pet Duel running on port ${PORT}`);
     console.log(mongoColl ? 'Storage: MongoDB' : 'Storage: MEMORY ONLY (resets on restart)');
     loadBot();
   });
