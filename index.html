@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AMP ROLL | The LEADING Adopt Me item coinflip</title>
+  <title>Pet Duel | Adopt Me pet coinflip</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%2300efa0'/%3E%3Ccircle cx='50' cy='50' r='38' fill='%23101218'/%3E%3Cellipse cx='50' cy='62' rx='14' ry='11' fill='%2300efa0'/%3E%3Cellipse cx='33' cy='46' rx='6' ry='8' fill='%2300efa0'/%3E%3Cellipse cx='45' cy='36' rx='6' ry='8' fill='%2300efa0'/%3E%3Cellipse cx='57' cy='36' rx='6' ry='8' fill='%2300efa0'/%3E%3Cellipse cx='69' cy='46' rx='6' ry='8' fill='%2300efa0'/%3E%3C/svg%3E">
 
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
@@ -67,7 +67,7 @@
 
     /* chroma glowing NEW!! tag */
     .new-tag {
-      margin-top: -1px; font-size: 11px; font-weight: 800; letter-spacing: 1.5px;
+      align-self: center; margin-top: 1px; font-size: 9px; font-weight: 800; letter-spacing: 1px; line-height: 1;
       background: linear-gradient(90deg, #ff0080, #ff8c00, #ffe600, #00ff6a, #00cfff, #8a2be2, #ff0080);
       background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
       filter: drop-shadow(0 0 5px rgba(140, 200, 255, .85)); animation: chroma 2.5s linear infinite;
@@ -220,6 +220,8 @@
     .coin-wrap.tossing { animation: toss .9s ease-in-out infinite; }
     .coin-wrap.hop { animation: hop-long 2.2s ease-out forwards; }
     .coin-wrap.hop-short { animation: hop-short 1.2s ease-out forwards; }
+    .coin-wrap.hop-sm { animation: hop-sm 2.2s ease-out forwards; }
+    @keyframes hop-sm { 0% { transform: translateY(0); } 22% { transform: translateY(-14px); } 72%, 100% { transform: translateY(0); } }
     .coin-wrap.shrunk { transform: scale(.62); }
 
     @keyframes toss { 50% { transform: translateY(-16px); } }
@@ -804,6 +806,42 @@
       .coin.big { --s: 130px; }
     }
 
+    .sidebar-top, .chat-close, .chat-fab { display: none; }
+    .sub-total { margin-top: 4px; color: var(--muted); font-size: 12px; font-weight: 700; }
+    .sub-total b { color: var(--green); }
+
+    .site-footer { max-width: 900px; margin: 10px auto 0; padding: 26px 18px 34px; border-top: 1px solid var(--border); color: #7d808b; font-size: 12px; line-height: 1.7; text-align: center; }
+    .site-footer p { margin: 8px 0 0; }
+    .foot-brand { font-size: 18px; font-weight: 800; letter-spacing: -.5px; color: #cfd2db; }
+    .foot-brand span { color: var(--green); }
+
+    @media (max-width: 1050px) {
+      .sidebar { position: fixed; inset: 0; z-index: 90; display: none; height: auto; min-height: 0; padding: 12px; background: var(--bg); overflow-y: auto; }
+      .sidebar.open { display: flex; }
+      .sidebar-top { display: flex; align-items: center; justify-content: space-between; font-size: 18px; font-weight: 800; }
+      .chat-close { display: block; width: 42px; height: 42px; border-radius: 8px; color: #fff; background: #2a2d38; font-size: 28px; line-height: 1; }
+      .chat { flex: 1; min-height: 360px; }
+      .chat-fab {
+        position: fixed; right: 16px; bottom: 16px; z-index: 80; display: grid; place-items: center; width: 58px; height: 58px;
+        border-radius: 50%; color: #04120b; background: var(--green); box-shadow: 0 8px 24px rgba(0, 239, 160, .35);
+      }
+      .chat-fab svg { width: 28px; height: 28px; }
+      .fab-badge {
+        position: absolute; top: -4px; right: -4px; display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px;
+        border-radius: 10px; color: #fff; background: var(--red); font-size: 11px; font-weight: 800;
+      }
+      body.chat-open { overflow: hidden; }
+      body.chat-open .chat-fab { display: none; }
+    }
+
+    @media (max-width: 650px) {
+      .nav { display: flex !important; order: 3; flex: 0 0 100%; height: 46px; gap: 2px; overflow-x: auto; border-top: 1px solid var(--border); }
+      .nav-item { flex: none; padding: 0 12px; font-size: 13px; white-space: nowrap; }
+      .nav .discord-btn { flex: none; margin: auto 0 auto 6px; padding: 6px 10px; }
+      .nav .discord-btn span { display: inline; font-size: 13px; }
+      .section-head .btn { min-height: 36px; padding: 0 12px; }
+    }
+
     @media (prefers-reduced-motion: reduce) {
       * { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
     }
@@ -843,7 +881,7 @@
 
   <div id="boot">
     <div class="loader"></div>
-    <div id="bootMessage">Connecting to AMP ROLL…</div>
+    <div id="bootMessage">Connecting to Pet Duel…</div>
     <button class="btn gray" onclick="location.reload()">Retry</button>
   </div>
 
@@ -857,7 +895,7 @@
     <header class="topbar">
       <div class="logo" data-action="home">
         <svg viewBox="0 0 100 100"><use href="#logo-mark"/></svg>
-        <div>AMP<span>ROLL</span></div>
+        <div>PET<span>DUEL</span></div>
       </div>
 
       <nav class="nav">
@@ -883,6 +921,8 @@
 
     <main class="main" id="homePage">
       <aside class="sidebar">
+        <div class="sidebar-top"><span>Chat</span><button class="chat-close" data-action="chat-close" aria-label="Close chat">×</button></div>
+
         <div class="giveaways" id="giveaways"></div>
 
         <div class="chat">
@@ -905,11 +945,11 @@
         </div>
       </aside>
 
-      <section class="content">
+      <section class="content" id="homeContent">
         <div id="eventStrip"></div>
         <div class="banner" id="banner">
           <div>
-            <h1 id="bannerTitle">AMP ROLL Coinflip</h1>
+            <h1 id="bannerTitle">Pet Duel Coinflip</h1>
             <p id="bannerText">Create a game, pick a coin and watch it flip.</p>
           </div>
           <div class="chips" id="bannerChips"></div>
@@ -922,7 +962,7 @@
         </div>
 
         <div class="section-head">
-          <h2>COINFLIP GAMES</h2>
+          <div style="flex:1;min-width:0"><h2>COINFLIP GAMES</h2><div class="sub-total" id="activeValue"></div></div>
           <span class="pill" id="gameCount">0 GAMES</span>
           <button class="btn gray" data-action="history">History</button>
           <button class="btn" data-action="create">+ Create Game</button>
@@ -930,20 +970,22 @@
 
         <div class="match-list" id="lobby"></div>
       </section>
+
+      <section class="content" id="profileContent" style="display:none"><div id="profile"></div></section>
+      <section class="content" id="eventContent" style="display:none"><div id="eventView"></div></section>
+      <section class="content" id="jackpotContent" style="display:none"><div id="jackpotView"></div></section>
     </main>
 
-    <main class="main" id="profilePage" style="display:none;grid-template-columns:1fr">
-      <div id="profile"></div>
-    </main>
-
-    <main class="main" id="eventPage" style="display:none;grid-template-columns:1fr">
-      <div id="eventView"></div>
-    </main>
-
-    <main class="main" id="jackpotPage" style="display:none;grid-template-columns:1fr">
-      <div id="jackpotView"></div>
-    </main>
+    <footer class="site-footer">
+      <div class="foot-brand">PET<span>DUEL</span></div>
+      <p>Pet Duel is an independent project. It is not affiliated with, endorsed by, sponsored by, or in any way associated with Adopt Me!, Uplift Games or Roblox Corporation. All game names, logos, pet images and trademarks belong to their respective owners.</p>
+    </footer>
   </div>
+
+  <button class="chat-fab" id="chatFab" data-action="chat-open" aria-label="Open chat">
+    <svg viewBox="0 0 24 24"><path d="M4 4h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-5 4v-4H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" fill="currentColor"/></svg>
+    <span class="fab-badge" id="chatBadge" style="display:none"></span>
+  </button>
 
   <script>
     "use strict";
@@ -1334,6 +1376,7 @@
 
       if (mode === "spin") { cls = "spinning"; wrap = "tossing"; }
       else if (mode === "land") { cls = side === "cat" ? "land-cat" : "land-dog"; wrap = "hop"; }
+      else if (mode === "landsm") { cls = side === "cat" ? "land-cat" : "land-dog"; wrap = "hop-sm"; }
       else if (mode === "settle") { cls = side === "cat" ? "settle-cat" : "settle-dog"; wrap = "hop-short"; }
       else if (mode === "final") { cls = side === "cat" ? "cat" : ""; wrap = "shrunk"; }
       else if (side === "cat") cls = "cat";
@@ -1367,6 +1410,9 @@
       $("#gameCount").textContent = matches.length + " GAMES";
       $("#summaryValue").textContent = fmt(matches.reduce((s, m) => s + Number(m.hostValue || 0) + Number(m.oppValue || 0), 0));
 
+      const active = matches.filter(m => m.state !== "finished").reduce((s, m) => s + Number(m.hostValue || 0) + Number(m.oppValue || 0), 0);
+      $("#activeValue").innerHTML = `${GEM}<b>${fmt(active)}</b> in active games`;
+
       const sig = JSON.stringify([
         matches.map(m => [m.id, m.state, m.joiner && m.joiner.id, m.winnerId]),
         ME && ME.id
@@ -1394,7 +1440,7 @@
         } else if (match.state === "countdown") {
           middle = countdownHTML(match.countdownEnd);
         } else if (match.state === "flipping") {
-          middle = coinHTML("spin");
+          middle = match.winnerSide ? coinHTML("landsm", match.winnerSide) : coinHTML("spin");
         } else {
           middle = `${coinHTML("idle", match.winnerSide)}<small>${GEM}${short(Number(match.hostValue || 0) + Number(match.oppValue || 0))}</small>`;
         }
@@ -1485,7 +1531,7 @@
         const end = replay ? REPLAY.end : match.countdownEnd;
         center = `<div class="big-count ticker-countdown" data-end="${Number(end || 0)}">3</div>`;
       } else if (phase === "flip") {
-        center = replay ? coinHTML("land", match.winnerSide, "big") : coinHTML("spin", "dog", "big");
+        center = (replay || match.winnerSide) ? coinHTML("land", match.winnerSide, "big") : coinHTML("spin", "dog", "big");
       } else if (settling) {
         center = coinHTML("settle", match.winnerSide, "big");
       } else if (finished) {
@@ -1543,7 +1589,7 @@
       return `
         <div class="vw-top">
           <span class="status ${status[0]}">${status[1]}</span>
-          <div class="view-logo">${LOGO_MARK}<div>AMP<span>ROLL</span></div></div>
+          <div class="view-logo">${LOGO_MARK}<div>PET<span>DUEL</span></div></div>
           <button class="x" data-action="${replay ? "replay-back" : "close"}">×</button>
         </div>
 
@@ -1605,20 +1651,12 @@
 
       const phase = { waiting: "wait", countdown: "count", flipping: "flip", finished: "done" }[match.state] || "wait";
 
-      /* if the viewer watched the flip, let the coin land first and reveal the winner after */
-      const settle = phase === "done" && (viewPrev === "flip" || viewPrev === "count");
+      /* the flip animation is identical to the replay; the ring draws when the match is done */
+      const animated = phase === "done" && (viewPrev === "flip" || viewPrev === "count");
       viewPrev = phase;
 
       clearTimeout(viewTimer);
-      $("#modal").innerHTML = buildView(match, phase, false, settle ? "settle" : "reveal");
-
-      if (settle) {
-        const id = match.id;
-        viewTimer = setTimeout(() => {
-          if (viewMatchId !== id || REPLAY || !$("#overlay").classList.contains("open")) return;
-          $("#modal").innerHTML = buildView(match, "done", false, "revealanim");
-        }, 1200);
-      }
+      $("#modal").innerHTML = buildView(match, phase, false, animated ? "revealanim" : "reveal");
     }
 
     function lookupMatch(id) {
@@ -1740,7 +1778,7 @@
         $("#bannerText").textContent = a.text || "";
         banner.classList.add("announce");
       } else {
-        $("#bannerTitle").textContent = "AMP ROLL Coinflip";
+        $("#bannerTitle").textContent = "Pet Duel Coinflip";
         $("#bannerText").textContent = "Create a game, pick a coin and watch it flip.";
         banner.classList.remove("announce");
       }
@@ -2008,6 +2046,11 @@
           STATE.chat.push(m);
           STATE.chat = STATE.chat.slice(-60);
           renderChat();
+
+          if (window.innerWidth <= 1050 && !$(".sidebar").classList.contains("open")) {
+            chatUnread += 1;
+            updateChatBadge();
+          }
         }
       });
 
@@ -2533,10 +2576,12 @@
     function showPage(page) {
       currentPage = page;
       document.querySelectorAll(".nav-item[data-nav]").forEach(n => n.classList.toggle("active", n.dataset.nav === page));
-      $("#jackpotPage").style.display = page === "jackpot" ? "grid" : "none";
-      $("#homePage").style.display = page === "home" ? "grid" : "none";
-      $("#profilePage").style.display = page === "profile" ? "grid" : "none";
-      $("#eventPage").style.display = page === "event" ? "grid" : "none";
+
+      const sections = { home: "#homeContent", profile: "#profileContent", event: "#eventContent", jackpot: "#jackpotContent" };
+      for (const [name, selector] of Object.entries(sections)) {
+        $(selector).style.display = name === page ? "block" : "none";
+      }
+
       window.scrollTo(0, 0);
     }
 
@@ -2973,6 +3018,30 @@
       } catch (error) { fail(error); }
     }
 
+    /* ---------- mobile chat (floating button) ---------- */
+    let chatUnread = 0;
+
+    function updateChatBadge() {
+      const badge = $("#chatBadge");
+      badge.textContent = chatUnread > 9 ? "9+" : chatUnread;
+      badge.style.display = chatUnread ? "grid" : "none";
+    }
+
+    function openChat() {
+      $(".sidebar").classList.add("open");
+      document.body.classList.add("chat-open");
+      chatUnread = 0;
+      updateChatBadge();
+
+      const box = $("#messages");
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function closeChat() {
+      $(".sidebar").classList.remove("open");
+      document.body.classList.remove("chat-open");
+    }
+
     /* ---------- Jackpot ---------- */
     const JP_COLORS = ["#0dfb99", "#f08a00", "#3b82f6", "#a855f7", "#ef4444", "#14b8a6", "#eab308", "#ec4899", "#6366f1", "#84cc16"];
     let jpSig = "";
@@ -2991,17 +3060,37 @@
         return `<svg viewBox="0 0 400 400"><circle cx="200" cy="200" r="${R}" fill="none" stroke="#0dfb99" stroke-width="44"/></svg>`;
       }
 
-      let offset = 0;
+      let offset = 0, acc = 0, rings = "", faces = "", defs = "";
 
-      const rings = entries.map((e, i) => {
+      entries.forEach((e, i) => {
         const len = (e.value / total) * C;
-        const c = `<circle cx="200" cy="200" r="${R}" fill="none" stroke="${JP_COLORS[i % JP_COLORS.length]}" stroke-width="44"
+
+        rings += `<circle cx="200" cy="200" r="${R}" fill="none" stroke="${JP_COLORS[i % JP_COLORS.length]}" stroke-width="44"
           stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-offset}" transform="rotate(-90 200 200)"/>`;
         offset += len;
-        return c;
-      }).join("");
 
-      return `<svg viewBox="0 0 400 400">${rings}</svg>`;
+        /* the player's Roblox avatar sits in their own slice */
+        const mid = (acc + e.value / 2) / total;
+        acc += e.value;
+
+        if (e.value / total >= 0.045 || entries.length === 1) {
+          const angle = mid * Math.PI * 2 - Math.PI / 2;
+          const x = 200 + R * Math.cos(angle);
+          const y = 200 + R * Math.sin(angle);
+          const image = e.user.avatar;
+
+          if (image) {
+            defs += `<clipPath id="jpc${i}"><circle cx="${x}" cy="${y}" r="18"/></clipPath>`;
+            faces += `<circle cx="${x}" cy="${y}" r="20.5" fill="#14171f"/>
+              <image href="${esc(image)}" x="${x - 18}" y="${y - 18}" width="36" height="36" clip-path="url(#jpc${i})" preserveAspectRatio="xMidYMid slice"/>`;
+          } else {
+            faces += `<circle cx="${x}" cy="${y}" r="18" fill="#3a4050"/>
+              <text x="${x}" y="${y + 5}" text-anchor="middle" fill="#fff" font-weight="800" font-size="15">${esc(getUsername(e.user).charAt(0).toUpperCase())}</text>`;
+          }
+        }
+      });
+
+      return `<svg viewBox="0 0 400 400"><defs>${defs}</defs>${rings}${faces}</svg>`;
     }
 
     function jackpotHTML(j) {
@@ -3030,7 +3119,7 @@
         .map(({ e, i }) => `
           <div class="jp-row" data-uid="${esc(e.user.id)}">
             <span class="jp-dot" style="background:${JP_COLORS[i % JP_COLORS.length]}"></span>
-            ${avatar(e.user, "sm")}
+            ${avatar(e.user, "md")}
             <div class="jp-name">
               <b>${esc(getUsername(e.user))}</b>
               <div class="jp-mini">
@@ -3329,6 +3418,8 @@
       "select-all": selectAll,
       "select-none"() { selected.clear(); renderGrid(); },
 
+      "chat-open": openChat,
+      "chat-close": closeChat,
       send: sendChat,
       emoji() { $("#emojiPop").classList.toggle("open"); },
       "emoji-pick"(el) {
@@ -3368,7 +3459,8 @@
 
       if ($("#overlay3").classList.contains("open") && confirmCancel) confirmCancel();
       else if ($("#overlay2").classList.contains("open")) closeModal2();
-      else closeModal();
+      else if ($("#overlay").classList.contains("open")) closeModal();
+      else if (document.body.classList.contains("chat-open")) closeChat();
     });
 
     renderHeader();
