@@ -1,8 +1,8 @@
 {
-  "name": "amp-roll",
+  "name": "pet-duel",
   "version": "1.1.0",
   "private": true,
-  "description": "AMP ROLL server",
+  "description": "Pet Duel server",
   "main": "server.js",
   "engines": {
     "node": ">=18"
