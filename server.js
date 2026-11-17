@@ -21,6 +21,19 @@ const BOT_NAME = 'DedokAmp';
 const BOT_LINK = 'https://www.roblox.com/share?code=a0dd8a7bc68f034b99e078f454d4e903&type=Server';
 const MAX_ITEMS = 8;
 
+/* Two games, each with its own catalog, coinflip lobby and jackpot. Items can only be used in their own game. */
+const GAMES = [
+  { id: 'adoptme', name: 'Adopt Me' },
+  { id: 'ctd', name: 'CTD' }
+];
+const GAME_IDS = GAMES.map(g => g.id);
+const gameOf = item => (item && item.game === 'ctd' ? 'ctd' : 'adoptme');
+const gameName = id => (GAMES.find(g => g.id === id) || GAMES[0]).name;
+
+/* Cameraman Tower Defense deposit bot (set these in Render > Environment) */
+const CTD_BOT_NAME = E.CTD_BOT_NAME || '';
+const CTD_BOT_LINK = E.CTD_BOT_LINK || '';
+
 const DISCORD_INVITE = E.DISCORD_INVITE || 'https://discord.gg/TaPXaAseP';
 /* Put the webhook URLs in Render > Environment, NOT in the code */
 const WEBHOOK_GW = E.DISCORD_GW_WEBHOOK || '';
@@ -41,7 +54,8 @@ const S = {
   chat: [],
   withdrawals: [],
   announcement: null,
-  notifications: []
+  notifications: [],
+  bounties: []
 };
 
 const pending = new Map();
@@ -174,7 +188,7 @@ function meView(user) {
 function newItem(c) {
   return {
     uid: rid(12), catalogId: c.id, name: c.name, image: c.image,
-    value: c.value, age: c.age, fly: c.fly, ride: c.ride
+    value: c.value, age: c.age, fly: c.fly, ride: c.ride, game: gameOf(c)
   };
 }
 
@@ -227,6 +241,7 @@ function ensureUser(u) {
   u.totalLost = u.totalLost || 0;
   u.profit = u.profit || 0;
   u.wagerLeft = u.wagerLeft || 0;
+  u.inventory.forEach(i => { i.game = gameOf(i); });
   return u;
 }
 
@@ -252,9 +267,11 @@ function snapshot() {
   }
 
   /* items sitting in an unfinished jackpot round go back to their owners */
-  if (JP && JP.state !== 'finished') {
-    for (const e of JP.entries) {
-      if (users[e.user.id]) users[e.user.id].inventory.push(...JSON.parse(JSON.stringify(e.items)));
+  for (const j of Object.values(JPS)) {
+    if (j && j.state !== 'finished') {
+      for (const e of j.entries) {
+        if (users[e.user.id]) users[e.user.id].inventory.push(...JSON.parse(JSON.stringify(e.items)));
+      }
     }
   }
 
@@ -265,7 +282,8 @@ function snapshot() {
     history: S.history.slice(0, 200),
     withdrawals: S.withdrawals.slice(0, 500),
     announcement: S.announcement,
-    notifications: S.notifications.slice(0, 50)
+    notifications: S.notifications.slice(0, 50),
+    bounties: S.bounties
   };
 }
 
@@ -287,10 +305,12 @@ async function initDb() {
       Object.values(S.users).forEach(ensureUser);
       S.sessions = d.sessions || {};
       S.catalog = d.catalog || [];
+      S.catalog.forEach(c => { c.game = gameOf(c); });
       S.history = d.history || [];
       S.withdrawals = d.withdrawals || [];
       S.announcement = d.announcement || null;
       S.notifications = d.notifications || [];
+      S.bounties = d.bounties || [];
       console.log('State loaded from MongoDB.');
     }
   } catch (err) {
@@ -383,6 +403,26 @@ async function loadBot() {
   } catch (error) {
     console.error('Bot profile could not be loaded:', error.message);
   }
+}
+
+const ctdBot = { username: CTD_BOT_NAME, id: null, avatar: null, link: CTD_BOT_LINK, joinLink: CTD_BOT_LINK };
+
+async function loadCtdBot() {
+  if (!CTD_BOT_NAME) return;
+  try {
+    const user = await robloxLookup(CTD_BOT_NAME);
+    if (!user) return;
+    ctdBot.id = user.id;
+    ctdBot.username = user.username;
+    ctdBot.avatar = await robloxAvatar(user.id);
+  } catch (error) {
+    console.error('CTD bot profile could not be loaded:', error.message);
+  }
+}
+
+async function loadBots() {
+  await loadBot();
+  await loadCtdBot();
 }
 
 /* ================= EXPRESS + SOCKET ================= */
@@ -524,6 +564,7 @@ setInterval(() => {
 function publicMatch(match) {
   const result = {
     id: match.id,
+    game: match.game || 'adoptme',
     state: match.state,
     status: match.state,
     hash: match.hash,
@@ -573,9 +614,12 @@ app.get('/api/state', (req, res) => {
     chat: S.chat,
     online: io.engine.clientsCount,
     bot,
+    bots: { adoptme: bot, ctd: ctdBot },
+    games: GAMES,
+    bounties: publicBounties(),
     announcement: S.announcement,
     event: publicEvent(EVENT),
-    jackpot: publicJackpot(JP),
+    jackpots: { adoptme: publicJackpot(JPS.adoptme), ctd: publicJackpot(JPS.ctd) },
     discord: DISCORD_INVITE,
     config: { range: RANGE, maxItems: MAX_ITEMS, ranks: RANKS }
   });
@@ -692,12 +736,15 @@ function finishMatch(match) {
   S.history.unshift(publicMatch(match));
   if (S.history.length > 500) S.history.length = 500;
 
+  claimBounty(winner, loser, match);
+
   sendWebhook(WEBHOOK_CF, {
     title: '🪙 Coinflip finished',
     color: 0x00efa0,
     fields: [
       { name: 'Winner', value: clip(winner.username, 100), inline: true },
       { name: 'Loser', value: clip(loser.username, 100), inline: true },
+      { name: 'Game', value: gameName(match.game), inline: true },
       { name: 'Pot', value: String(round2(match.hostValue + match.oppValue)), inline: true },
       { name: clip(`${match.host.username} (${match.hostSide}) - ${match.hostValue}`, 250), value: itemLine(match.hostItems) },
       { name: clip(`${match.opp.username} - ${match.oppValue}`, 250), value: itemLine(match.oppItems) },
@@ -730,12 +777,15 @@ app.post('/api/match/create', auth, actionLimit, (req, res) => {
 
   if (side !== 'dog' && side !== 'cat') return bad(res, 'Pick a side');
 
+  const game = GAME_IDS.includes(req.body.game) ? req.body.game : 'adoptme';
+
   const open = Object.values(S.matches).filter(m => m.host.id === user.id && m.state === 'waiting');
   if (open.length >= 3) return bad(res, 'Max 3 open matches');
   if (Object.keys(S.matches).length >= 150) return bad(res, 'Lobby is full');
 
   const selected = pickItems(user, uids, MAX_ITEMS);
   if (!selected) return bad(res, 'Invalid item selection');
+  if (!selected.every(i => gameOf(i) === game)) return bad(res, `Only ${gameName(game)} items can be used in this game`);
   if (valueOf(selected) <= 0) return bad(res, 'Value too low');
 
   const items = takeItems(user, uids, MAX_ITEMS);
@@ -743,7 +793,7 @@ app.post('/api/match/create', auth, actionLimit, (req, res) => {
   const id = rid(10);
 
   const match = {
-    id, state: 'waiting', seed, hash: sha(seed),
+    id, game, state: 'waiting', seed, hash: sha(seed),
     host: publicUser(user), opp: null, hostSide: side,
     hostItems: items, oppItems: [],
     hostValue: valueOf(items), oppValue: 0,
@@ -767,6 +817,9 @@ app.post('/api/match/join', auth, actionLimit, (req, res) => {
 
   const selected = pickItems(user, uids, MAX_ITEMS);
   if (!selected) return bad(res, 'Invalid item selection');
+  if (!selected.every(i => gameOf(i) === (match.game || 'adoptme'))) {
+    return bad(res, `Only ${gameName(match.game)} items can be used in this game`);
+  }
 
   const value = valueOf(selected);
   const min = match.hostValue * (1 - RANGE);
@@ -942,8 +995,129 @@ app.post('/api/giveaway/enter', auth, actionLimit, (req, res) => {
   res.json({ ok: true });
 });
 
-/* ================= JACKPOT =================
-   Players put items in the pot. When a second player joins a 120s countdown starts.
+/* ================= BOUNTY =================
+   An admin puts a bounty on a player. The first player who beats them in a coinflip wins the prize
+   (created from a catalog item when claimed) and everyone sees a congratulation popup. */
+
+function publicBounty(b) {
+  return { id: b.id, target: b.target, prize: publicItem(b.prize), createdAt: b.createdAt };
+}
+
+function publicBounties() {
+  return S.bounties.map(publicBounty);
+}
+
+function claimBounty(winner, loser, match) {
+  if (!winner || !loser || winner.id === loser.id) return;
+
+  const index = S.bounties.findIndex(b => b.target.id === loser.id && b.createdBy !== winner.id);
+  if (index < 0) return;
+
+  const [b] = S.bounties.splice(index, 1);
+
+  b.prize.game = gameOf(b.prize);
+  winner.inventory.push(b.prize);
+  winner.wagerLeft = round2((winner.wagerLeft || 0) + safeNumber(b.prize.value));
+  addTransaction(winner, 'Bounty Win', b.id, b.prize.value);
+
+  markDirty();
+  emitMe(winner);
+
+  io.emit('bounty:update', publicBounties());
+  io.emit('bounty:claimed', {
+    winner: publicUser(winner),
+    target: b.target,
+    prize: publicItem(b.prize)
+  });
+
+  pushChat({
+    id: rid(4),
+    user: { username: '🎯 Bounty', avatar: null },
+    text: `${winner.username} claimed the bounty on ${b.target.username} and won ${b.prize.name}! Congratulations!`,
+    ts: now()
+  });
+
+  sendWebhook(WEBHOOK_CF, {
+    title: '🎯 Bounty claimed',
+    color: 0xff5968,
+    fields: [
+      { name: 'Winner', value: clip(winner.username, 100), inline: true },
+      { name: 'Target', value: clip(b.target.username, 100), inline: true },
+      { name: 'Prize', value: itemLine([b.prize]) },
+      { name: 'Match', value: clip(match.id, 100), inline: true }
+    ],
+    timestamp: new Date().toISOString()
+  });
+}
+
+app.post('/api/admin/bounty', auth, adminOnly, (req, res) => {
+  const name = String(req.body.username || '').trim().toLowerCase();
+  const target = Object.values(S.users).find(u => u.username.toLowerCase() === name);
+  const catalogItem = S.catalog.find(x => x.id === req.body.itemId);
+
+  if (!target) return bad(res, 'User not found. They must log in once.');
+  if (target.banned) return bad(res, 'This user is banned');
+  if (target.id === req.user.id) return bad(res, 'You cannot put a bounty on yourself');
+  if (!catalogItem) return bad(res, 'Pick a prize item');
+  if (S.bounties.some(b => b.target.id === target.id)) return bad(res, 'This player already has a bounty');
+  if (S.bounties.length >= 10) return bad(res, 'Too many active bounties');
+
+  const b = {
+    id: rid(6),
+    target: publicUser(target),
+    prize: newItem(catalogItem),
+    createdBy: req.user.id,
+    createdAt: now()
+  };
+
+  S.bounties.push(b);
+  markDirty();
+
+  io.emit('bounty:update', publicBounties());
+
+  pushChat({
+    id: rid(4),
+    user: { username: '🎯 Bounty', avatar: null },
+    text: `A bounty was placed on ${target.username}! Be the first to beat them in a coinflip and win ${b.prize.name}!`,
+    ts: now()
+  });
+
+  sendWebhook(WEBHOOK_CF, {
+    title: '🎯 New bounty',
+    color: 0xffb52e,
+    fields: [
+      { name: 'Target', value: clip(target.username, 100), inline: true },
+      { name: 'Placed by', value: clip(req.user.username, 100), inline: true },
+      { name: 'Prize', value: itemLine([b.prize]) }
+    ],
+    timestamp: new Date().toISOString()
+  });
+
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/bounty/cancel', auth, adminOnly, (req, res) => {
+  const index = S.bounties.findIndex(b => b.id === String(req.body.id || ''));
+  if (index < 0) return bad(res, 'Bounty not found', 404);
+
+  S.bounties.splice(index, 1);
+  markDirty();
+  io.emit('bounty:update', publicBounties());
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/catalog/game', auth, adminOnly, (req, res) => {
+  const item = S.catalog.find(x => x.id === req.body.id);
+  if (!item) return bad(res, 'Item not found', 404);
+  if (!GAME_IDS.includes(req.body.game)) return bad(res, 'Invalid game');
+
+  item.game = req.body.game;
+  markDirty();
+  res.json({ ok: true });
+});
+
+/* ================= JACKPOT (one round per game) =================
+   Players put items in the pot. When a second player joins a 60s countdown starts.
    The winner is picked by value share: roll = HMAC(seed, roundId), published after the round.
    The winner and roll are hidden from the clients until the round is finished. */
 
@@ -954,16 +1128,17 @@ const JP_MAX_PLAYERS = 25;
 const JP_MAX_JOIN_ITEMS = 8;
 const JP_MAX_USER_ITEMS = 24;
 
-let JP = null;
-let jpTimers = [];
+const JPS = { adoptme: null, ctd: null };
+const jpTimers = { adoptme: [], ctd: [] };
 
-function jpLater(fn, ms) { jpTimers.push(setTimeout(fn, ms)); }
+function jpLater(game, fn, ms) { jpTimers[game].push(setTimeout(fn, ms)); }
 
 function publicJackpot(j) {
   if (!j) return null;
 
   const out = {
     id: j.id,
+    game: j.game,
     state: j.state,
     hash: j.hash,
     entries: j.entries.map(e => ({ user: e.user, value: e.value, items: e.items.map(publicItem) })),
@@ -982,20 +1157,21 @@ function publicJackpot(j) {
   return out;
 }
 
-function emitJackpot() { io.emit('jackpot:update', publicJackpot(JP)); }
+function emitJackpot(j) { io.emit('jackpot:update', publicJackpot(j)); }
 
-function newJackpot() {
-  jpTimers.forEach(clearTimeout);
-  jpTimers = [];
+function newJackpot(game) {
+  jpTimers[game].forEach(clearTimeout);
+  jpTimers[game] = [];
 
   const seed = rid(32);
-  JP = {
-    id: rid(8), state: 'waiting', seed, hash: sha(seed),
+  const j = {
+    id: rid(8), game, state: 'waiting', seed, hash: sha(seed),
     entries: [], total: 0, endsAt: 0, rollEndsAt: 0,
     winnerId: null, roll: null, winner: null
   };
 
-  emitJackpot();
+  JPS[game] = j;
+  emitJackpot(j);
 }
 
 function jpRecalc(j) {
@@ -1004,7 +1180,7 @@ function jpRecalc(j) {
 }
 
 function rollJackpot(j) {
-  if (JP !== j || j.state !== 'countdown') return;
+  if (JPS[j.game] !== j || j.state !== 'countdown') return;
 
   const digest = crypto.createHmac('sha256', j.seed).update(j.id).digest('hex');
   j.roll = parseInt(digest.slice(0, 8), 16) / 0x100000000;
@@ -1020,13 +1196,13 @@ function rollJackpot(j) {
 
   j.state = 'rolling';
   j.rollEndsAt = now() + JP_ROLL_MS;
-  emitJackpot();
+  emitJackpot(j);
 
-  jpLater(() => finishJackpot(j), JP_ROLL_MS);
+  jpLater(j.game, () => finishJackpot(j), JP_ROLL_MS);
 }
 
 function finishJackpot(j) {
-  if (JP !== j || j.state !== 'rolling') return;
+  if (JPS[j.game] !== j || j.state !== 'rolling') return;
 
   const winEntry = j.winner;
   const winner = S.users[winEntry.user.id];
@@ -1062,6 +1238,7 @@ function finishJackpot(j) {
     title: '💣 Jackpot finished',
     color: 0xff5968,
     fields: [
+      { name: 'Game', value: gameName(j.game), inline: true },
       { name: 'Winner', value: clip(winEntry.user.username, 100), inline: true },
       { name: 'Pot', value: String(j.total), inline: true },
       { name: 'Chance', value: `${round2((winEntry.value / j.total) * 100)}%`, inline: true },
@@ -1071,13 +1248,14 @@ function finishJackpot(j) {
     timestamp: new Date().toISOString()
   });
 
-  emitJackpot();
-  jpLater(() => newJackpot(), JP_RESULT_MS);
+  emitJackpot(j);
+  jpLater(j.game, () => newJackpot(j.game), JP_RESULT_MS);
 }
 
 app.post('/api/jackpot/join', auth, actionLimit, (req, res) => {
   const user = req.user;
-  const j = JP;
+  const game = GAME_IDS.includes(req.body.game) ? req.body.game : 'adoptme';
+  const j = JPS[game];
 
   if (!j || (j.state !== 'waiting' && j.state !== 'countdown')) {
     return bad(res, 'This round is already rolling. Join the next round.');
@@ -1087,6 +1265,7 @@ app.post('/api/jackpot/join', auth, actionLimit, (req, res) => {
   const selected = pickItems(user, uids, JP_MAX_JOIN_ITEMS);
 
   if (!selected) return bad(res, 'Select 1–8 valid items');
+  if (!selected.every(i => gameOf(i) === game)) return bad(res, `Only ${gameName(game)} items can be used here`);
   if (valueOf(selected) <= 0) return bad(res, 'Value too low');
 
   let entry = j.entries.find(e => e.user.id === user.id);
@@ -1107,17 +1286,18 @@ app.post('/api/jackpot/join', auth, actionLimit, (req, res) => {
   if (j.state === 'waiting' && j.entries.length >= 2) {
     j.state = 'countdown';
     j.endsAt = now() + JP_TIME * 1000;
-    jpLater(() => rollJackpot(j), JP_TIME * 1000);
+    jpLater(game, () => rollJackpot(j), JP_TIME * 1000);
   }
 
-  emitJackpot();
+  emitJackpot(j);
   emitMe(user);
   res.json({ ok: true });
 });
 
 /* a lone player can take their items back while nobody else has joined */
 app.post('/api/jackpot/leave', auth, actionLimit, (req, res) => {
-  const j = JP;
+  const game = GAME_IDS.includes(req.body.game) ? req.body.game : 'adoptme';
+  const j = JPS[game];
 
   if (!j || j.state !== 'waiting') return bad(res, 'You can only leave while waiting for a second player');
 
@@ -1128,7 +1308,7 @@ app.post('/api/jackpot/leave', auth, actionLimit, (req, res) => {
   req.user.inventory.push(...entry.items);
   jpRecalc(j);
 
-  emitJackpot();
+  emitJackpot(j);
   emitMe(req.user);
   res.json({ ok: true });
 });
@@ -1557,7 +1737,8 @@ function cleanItem(body) {
     name, image, value,
     age: ['normal', 'neon', 'mega'].includes(body.age) ? body.age : 'normal',
     fly: Boolean(body.fly),
-    ride: Boolean(body.ride)
+    ride: Boolean(body.ride),
+    game: body.game === 'ctd' ? 'ctd' : 'adoptme'
   };
 }
 
@@ -1577,7 +1758,8 @@ app.get('/api/admin/data', auth, adminOnly, (req, res) => {
       adminTag: isAdmin(u) && u.adminTag !== false,
       muted: (u.mutedUntil || 0) > now()
     })),
-    withdrawals: S.withdrawals.filter(w => w.status === 'pending')
+    withdrawals: S.withdrawals.filter(w => w.status === 'pending'),
+    bounties: publicBounties()
   });
 });
 
@@ -1641,7 +1823,7 @@ app.get('/api/admin/inventory', auth, adminOnly, (req, res) => {
   res.json({
     username: user.username,
     items: user.inventory.map(i => ({
-      uid: i.uid, name: i.name, image: i.image, value: i.value,
+      uid: i.uid, name: i.name, image: i.image, value: i.value, game: gameOf(i),
       age: i.age, fly: i.fly, ride: i.ride
     }))
   });
@@ -1857,6 +2039,7 @@ function adminUI() {
           <input id="a-name" class="in" style="width:100%;margin-bottom:8px" placeholder="Item name">
           <input id="a-val" class="in" style="width:100%;margin-bottom:8px" type="number" min="0" step="0.01" placeholder="Value">
           <div class="row">
+            <select id="a-game"><option value="adoptme">Adopt Me</option><option value="ctd">CTD</option></select>
             <select id="a-age"><option value="normal">Normal</option><option value="neon">Neon</option><option value="mega">Mega</option></select>
             <label><input id="a-fly" type="checkbox"> Fly</label>
             <label><input id="a-ride" type="checkbox"> Ride</label>
@@ -1871,6 +2054,15 @@ function adminUI() {
           <input id="g-qty" class="in" style="width:100%;margin-bottom:8px" type="number" min="1" max="50" value="1">
           <p class="hint">User must have logged in once. Enter the username, then press Give on an item.</p>
         </div>
+      </div>
+
+      <h4 style="margin:16px 0 8px">🎯 Bounty</h4>
+      <div style="background:#f5faff;padding:14px;border-radius:12px">
+        <input id="bt-user" list="g-users" class="in" style="width:100%;margin-bottom:8px" placeholder="Roblox username of the target">
+        <select id="bt-item" class="in" style="width:100%;margin-bottom:8px"></select>
+        <button id="bt-add" class="btn" style="width:100%">🎯 Place bounty</button>
+        <div id="bt-list" style="margin-top:10px"></div>
+        <p class="hint">The first player to beat the target in a coinflip wins the prize. Everyone sees a congratulation popup with the winner's avatar and name. The target must have logged in once.</p>
       </div>
 
       <h4 style="margin:16px 0 8px">🎉 Events</h4>
@@ -1903,7 +2095,7 @@ function adminUI() {
       </div>
 
       <h4 style="margin:16px 0 8px">📦 Catalog</h4>
-      <div id="adm-cat" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:10px"></div>
+      <div id="adm-cat" style="display:block"></div>
 
       <h4 style="margin:16px 0 8px">👥 Users</h4>
       <div id="adm-users"></div>
@@ -1937,13 +2129,14 @@ function adminUI() {
             </span>
           </div>
           <div style="margin-top:6px;font-size:12px">
-            ${w.items.map(i => esc(i.name) + (i.age !== 'normal' ? ' (' + esc(i.age) + ')' : '') + (i.fly ? ' F' : '') + (i.ride ? ' R' : '')).join(' · ')}
+            ${w.items.map(i => (i.game === 'ctd' ? '[CTD] ' : '') + esc(i.name) + (i.age !== 'normal' ? ' (' + esc(i.age) + ')' : '') + (i.fly ? ' F' : '') + (i.ride ? ' R' : '')).join(' · ')}
           </div>
         </div>`).join('')
       : '<p class="hint">No pending withdrawals.</p>';
 
-    $('adm-cat').innerHTML = data.catalog.length
-      ? data.catalog.map(item => `
+    const catCard = item => {
+      const other = item.game === 'ctd' ? 'adoptme' : 'ctd';
+      return `
         <div style="border:2px solid #e0edfb;border-radius:12px;padding:10px;text-align:center">
           <img src="${esc(item.image)}" alt="" style="width:70px;height:70px;object-fit:contain">
           <div style="font-weight:700">${esc(item.name)}</div>
@@ -1953,8 +2146,19 @@ function adminUI() {
             <button class="btn mint sm" data-action="give" data-id="${esc(item.id)}" style="flex:1">Give</button>
             <button class="btn red sm" data-action="delete" data-id="${esc(item.id)}">🗑</button>
           </div>
-        </div>`).join('')
-      : '<p class="hint">No items yet.</p>';
+          <button class="btn gray sm" data-action="move" data-id="${esc(item.id)}" data-to="${other}" style="width:100%;margin-top:5px">Move to ${other === 'ctd' ? 'CTD' : 'Adopt Me'}</button>
+        </div>`;
+    };
+
+    const gameBlock = (id, title) => {
+      const list = data.catalog.filter(i => (i.game === 'ctd' ? 'ctd' : 'adoptme') === id);
+      return `<h5 style="margin:12px 0 8px">${title} (${list.length})</h5>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:10px">
+          ${list.map(catCard).join('') || '<p class="hint">No items yet.</p>'}
+        </div>`;
+    };
+
+    $('adm-cat').innerHTML = gameBlock('adoptme', 'Adopt Me catalog') + gameBlock('ctd', 'CTD catalog');
 
     $('adm-users').innerHTML = data.users.length
       ? data.users.map(u => `
@@ -1977,9 +2181,21 @@ function adminUI() {
 
     const prevItem = $('ev-item').value;
     $('ev-item').innerHTML = data.catalog.length
-      ? data.catalog.map(i => `<option value="${esc(i.id)}">${esc(i.name)} (${fmt(i.value)})</option>`).join('')
+      ? data.catalog.map(i => `<option value="${esc(i.id)}">${i.game === 'ctd' ? '[CTD] ' : '[Adopt Me] '}${esc(i.name)} (${fmt(i.value)})</option>`).join('')
       : '<option value="">No catalog items</option>';
     if (prevItem) $('ev-item').value = prevItem;
+
+    const prevBounty = $('bt-item').value;
+    $('bt-item').innerHTML = $('ev-item').innerHTML;
+    if (prevBounty) $('bt-item').value = prevBounty;
+
+    $('bt-list').innerHTML = (data.bounties || []).length
+      ? data.bounties.map(b => `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px;border-bottom:1px solid #e0edfb">
+          <span>🎯 <b>${esc(b.target.username)}</b> — ${esc(b.prize.name)} (${fmt(b.prize.value)})</span>
+          <button class="btn red sm" data-bt-cancel="${esc(b.id)}">Cancel</button>
+        </div>`).join('')
+      : '<p class="hint">No active bounties.</p>';
   }
 
   $('adm-wd').onclick = async e => {
@@ -1998,7 +2214,7 @@ function adminUI() {
         method: 'POST',
         body: {
           image: $('a-img').value, name: $('a-name').value, value: $('a-val').value,
-          age: $('a-age').value, fly: $('a-fly').checked, ride: $('a-ride').checked
+          game: $('a-game').value, age: $('a-age').value, fly: $('a-fly').checked, ride: $('a-ride').checked
         }
       });
       $('a-img').value = ''; $('a-name').value = ''; $('a-val').value = '';
@@ -2013,6 +2229,12 @@ function adminUI() {
     if (!button) return;
     const id = button.dataset.id;
     try {
+      if (button.dataset.action === 'move') {
+        await api('/api/admin/catalog/game', { method: 'POST', body: { id, game: button.dataset.to } });
+        toast('Item moved', 'ok');
+        await load();
+      }
+
       if (button.dataset.action === 'give') {
         await api('/api/admin/grant', {
           method: 'POST',
@@ -2183,7 +2405,7 @@ function adminUI() {
             ${data.items.length ? data.items.map(i => `
               <div style="border:2px solid #e0edfb;border-radius:10px;padding:8px;text-align:center">
                 <img src="${esc(i.image)}" alt="" style="width:60px;height:60px;object-fit:contain">
-                <div style="font-weight:700;font-size:12px">${esc(i.name)}</div>
+                <div style="font-weight:700;font-size:12px">${i.game === 'ctd' ? '[CTD] ' : ''}${esc(i.name)}</div>
                 ${tags(i)}
                 <div>${fmt(i.value)}</div>
                 <button class="btn red sm" data-delitem="${esc(i.uid)}" data-name="${esc(i.name)}" style="margin-top:6px;width:100%">Delete</button>
@@ -2227,6 +2449,26 @@ function adminUI() {
       toast(clear ? 'Announcement removed' : 'Announcement published', 'ok');
     } catch (err) { toast(err.message, 'err'); }
   }
+
+  $('bt-add').onclick = async () => {
+    try {
+      await api('/api/admin/bounty', { method: 'POST', body: { username: $('bt-user').value, itemId: $('bt-item').value } });
+      $('bt-user').value = '';
+      toast('Bounty placed!', 'ok');
+      await load();
+    } catch (err) { toast(err.message, 'err'); }
+  };
+
+  $('bt-list').onclick = async e => {
+    const b = e.target.closest('[data-bt-cancel]');
+    if (!b) return;
+    if (!(await confirmBox({ title: 'Cancel bounty', text: 'Remove this bounty?', ok: 'Remove', danger: true }))) return;
+    try {
+      await api('/api/admin/bounty/cancel', { method: 'POST', body: { id: b.dataset.btCancel } });
+      toast('Bounty removed', 'ok');
+      await load();
+    } catch (err) { toast(err.message, 'err'); }
+  };
 
   async function startEvent(kind) {
     try {
@@ -2325,12 +2567,12 @@ app.get('/health', (req, res) => {
 
 (async () => {
   await initDb();
-  newJackpot();
+  GAME_IDS.forEach(g => newJackpot(g));
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`Pet Duel running on port ${PORT}`);
     console.log(mongoColl ? 'Storage: MongoDB' : 'Storage: MEMORY ONLY (resets on restart)');
-    loadBot();
+    loadBots();
   });
 })();
 
-setInterval(loadBot, 10 * 60 * 1000);
+setInterval(loadBots, 10 * 60 * 1000);
