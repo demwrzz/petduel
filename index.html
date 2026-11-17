@@ -806,6 +806,56 @@
       .coin.big { --s: 130px; }
     }
 
+    /* ---- game tabs ---- */
+    .game-tabs-wrap { margin-bottom: 14px; }
+    .game-tabs { display: flex; gap: 6px; width: max-content; max-width: 100%; padding: 6px; border-radius: 8px; background: #14171f; }
+    .game-tab { padding: 9px 18px; border-radius: 6px; color: #cfd2db; background: transparent; font-weight: 800; transition: background .2s, color .2s; }
+    .game-tab:hover { color: #fff; }
+    .game-tab.on { color: #04120b; background: var(--green); }
+    .game-pill { position: absolute; top: 6px; left: 6px; padding: 1px 6px; border-radius: 4px; color: #fff; background: #0f6e8c; font-size: 9px; font-weight: 800; }
+
+    /* ---- deposit cards ---- */
+    .deposit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .deposit-grid .game-card { max-width: none; }
+    .game-card.ctd {
+      border-color: #1f6d8f;
+      background: radial-gradient(circle at 20% 20%, rgba(80, 200, 255, .45), transparent 45%), linear-gradient(135deg, #123a5a, #0a1a2e);
+    }
+    .game-card.ctd:hover { border-color: #5fd0ff; box-shadow: 0 10px 28px -8px rgba(60, 170, 255, .6); }
+    .ctd-logo { display: flex; flex-direction: column; align-items: center; gap: 4px; font-family: Fredoka, "Baloo 2", Arial, sans-serif; font-weight: 700; font-size: clamp(34px, 8vw, 54px); line-height: 1; color: #fff; text-shadow: 0 4px 0 rgba(0, 30, 60, .45); pointer-events: none; }
+    .ctd-logo small { font-size: 11px; letter-spacing: .6px; text-transform: uppercase; opacity: .85; text-shadow: none; }
+    @media (max-width: 650px) { .deposit-grid { grid-template-columns: 1fr; } }
+
+    /* ---- bounty ---- */
+    .bounty-strip {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 10px; padding: 12px 16px;
+      border: 1px solid #a8323f; border-radius: 8px; background: linear-gradient(100deg, #3a1a1f, #1f1e22);
+    }
+    .bounty-strip .bt-ico { font-size: 28px; }
+    .bounty-strip .bt-text { flex: 1; min-width: 0; line-height: 1.5; }
+    .bounty-strip small { color: #e0c4c7; font-size: 12px; }
+    .bt-badge { margin-left: 4px; }
+
+    .bounty-pop {
+      position: fixed; inset: 0; z-index: 350; display: flex; align-items: center; justify-content: center;
+      padding: 18px; overflow: hidden; background: rgba(0, 0, 0, .82); cursor: pointer; animation: fade .3s both;
+    }
+    .bounty-card {
+      position: relative; z-index: 2; width: min(480px, 100%); padding: 30px 24px 22px; border: 2px solid var(--orange); border-radius: 16px;
+      background: linear-gradient(160deg, #2b2418, #14171f 70%); text-align: center; animation: pop .45s cubic-bezier(.2, .8, .2, 1) both;
+    }
+    .bp-title { color: var(--orange); font-size: 14px; font-weight: 800; letter-spacing: 2px; }
+    .bp-avatar { display: inline-block; margin: 18px 0 10px; border-radius: 50%; box-shadow: 0 0 0 4px var(--orange); }
+    .bp-avatar .av { box-shadow: none; }
+    .bp-name { font-size: 28px; font-weight: 800; }
+    .bp-text { margin: 10px 0 4px; color: #ffe2a8; font-size: 18px; font-weight: 800; line-height: 1.4; }
+    .bp-sub { margin-bottom: 12px; color: #bfc1c9; font-size: 14px; }
+    .bp-sub b { color: #fff; }
+    .bounty-card .ev-prize { margin: 0 auto 12px; }
+    .bounty-card small { color: var(--muted); }
+    .confetti { position: absolute; top: -20px; z-index: 1; width: 10px; height: 14px; border-radius: 2px; animation: confetti-fall var(--d) linear infinite; }
+    @keyframes confetti-fall { to { transform: translateY(115vh) rotate(720deg); } }
+
     .sidebar-top, .chat-close, .chat-fab { display: none; }
     .sub-total { margin-top: 4px; color: var(--muted); font-size: 12px; font-weight: 700; }
     .sub-total b { color: var(--green); }
@@ -946,6 +996,7 @@
       </aside>
 
       <section class="content" id="homeContent">
+        <div id="bountyStrip"></div>
         <div id="eventStrip"></div>
         <div class="banner" id="banner">
           <div>
@@ -955,10 +1006,12 @@
           <div class="chips" id="bannerChips"></div>
         </div>
 
+        <div id="gameTabsHome" class="game-tabs-wrap"></div>
+
         <div class="summary">
-          <div><b id="summaryGames">0</b><small>Live Games</small></div>
-          <div><b id="summaryValue">0</b><small>Total Lobby Value</small></div>
-          <div><b id="summaryOnline">0</b><small>Players Online</small></div>
+          <div><b id="summaryItems">0</b><small>Total Items</small></div>
+          <div><b><svg class="gem-i" viewBox="0 0 24 24"><use href="#gem"/></svg><span id="summaryValue">0</span></b><small>Total Value</small></div>
+          <div><b id="summaryGames">0</b><small>Active Games</small></div>
         </div>
 
         <div class="section-head">
@@ -1083,6 +1136,10 @@
     let loginData = null, createSide = "dog";
     let giveawayMode = "easy", giveawayDur = 30;
 
+    /* ---- games: every game has its own coinflip lobby, jackpot and items ---- */
+    const GAMES = [{ id: "adoptme", name: "Adopt Me" }, { id: "ctd", name: "CTD" }];
+    let currentGame = localStorage.getItem("pd_game") === "ctd" ? "ctd" : "adoptme";
+
     let HISTORY = [], REPLAY = null, replayTimers = [];
 
     const seenMatches = new Set(), seenChat = new Set();
@@ -1156,6 +1213,29 @@
     const itemId = item => String(item.uid || item.id || item.catalogId || "");
     const itemImage = item => item.image || item.imageUrl || "";
     const inventory = () => ME ? asArray(ME.inventory) : [];
+    const itemGame = item => item && item.game === "ctd" ? "ctd" : "adoptme";
+    const gameNameOf = id => (GAMES.find(g => g.id === id) || GAMES[0]).name;
+    /* selection grids only show items of the game they are for (null = everything, e.g. the wallet) */
+    const gridItems = () => inventory().filter(i => !gridContext || !gridContext.game || itemGame(i) === gridContext.game);
+
+    const gameTabsHTML = () => `<div class="game-tabs">${GAMES.map(g =>
+      `<button class="game-tab ${g.id === currentGame ? "on" : ""}" data-action="game" data-game="${g.id}">${g.name}</button>`).join("")}</div>`;
+
+    const renderGameTabs = () => { const el = $("#gameTabsHome"); if (el) el.innerHTML = gameTabsHTML(); };
+
+    function setGame(id) {
+      if (!GAMES.some(g => g.id === id) || id === currentGame) return;
+      currentGame = id;
+      localStorage.setItem("pd_game", id);
+      renderGameTabs();
+      lobbySig = "";
+      renderLobby();
+      jpSig = "";
+      if (currentPage === "jackpot") renderJackpot(true);
+    }
+
+    const bountyBadge = id => asArray(STATE.bounties).some(b => b.target && b.target.id === id)
+      ? ' <span class="bt-badge" title="Bounty! Beat this player in a coinflip to win a prize">🎯</span>' : "";
     const totalValue = items => items.reduce((t, i) => t + Number(i.value || 0), 0);
     const selectedItems = () => inventory().filter(i => selected.has(itemId(i)));
     const selectedUids = () => selectedItems().map(itemId);
@@ -1400,22 +1480,24 @@
 
     function renderLobby() {
       const matches = asArray(STATE.matches)
-        .filter(m => m.state !== "cancelled")
+        .filter(m => m.state !== "cancelled" && (m.game || "adoptme") === currentGame)
         .slice()
         .sort((a, b) =>
           (Number(a.state === "finished") - Number(b.state === "finished")) ||
           (Number(b.hostValue) - Number(a.hostValue)));
 
-      $("#summaryGames").textContent = matches.length;
+      const liveMatches = matches.filter(m => m.state !== "finished");
+      $("#summaryGames").textContent = liveMatches.length;
+      $("#summaryItems").textContent = liveMatches.reduce((n, m) => n + asArray(m.hostItems).length + asArray(m.joinerItems || m.oppItems).length, 0);
       $("#gameCount").textContent = matches.length + " GAMES";
-      $("#summaryValue").textContent = fmt(matches.reduce((s, m) => s + Number(m.hostValue || 0) + Number(m.oppValue || 0), 0));
+      $("#summaryValue").textContent = fmt(liveMatches.reduce((s, m) => s + Number(m.hostValue || 0) + Number(m.oppValue || 0), 0));
 
       const active = matches.filter(m => m.state !== "finished").reduce((s, m) => s + Number(m.hostValue || 0) + Number(m.oppValue || 0), 0);
       $("#activeValue").innerHTML = `${GEM}<b>${fmt(active)}</b> in active games`;
 
       const sig = JSON.stringify([
         matches.map(m => [m.id, m.state, m.joiner && m.joiner.id, m.winnerId]),
-        ME && ME.id
+        ME && ME.id, currentGame, asArray(STATE.bounties).map(b => b.id)
       ]);
 
       if (sig === lobbySig) return;
@@ -1448,7 +1530,7 @@
         const opponent = match.joiner
           ? `<div class="player clickable" data-action="user" data-id="${esc(match.joiner.id)}">
               ${playerAvatar(match.joiner, match.joinSide, "", finished && !hostWon ? "ring-orange" : "")}
-              <div class="player-name">${esc(getUsername(match.joiner))}</div>
+              <div class="player-name">${esc(getUsername(match.joiner))}${bountyBadge(match.joiner.id)}</div>
             </div>`
           : `<div class="player muted">Waiting for player…</div>`;
 
@@ -1465,7 +1547,7 @@
             <div class="m-left">
               <div class="player clickable" data-action="user" data-id="${esc(match.host?.id)}">
                 ${playerAvatar(match.host, match.hostSide, "", finished && hostWon ? "ring-orange" : "")}
-                <div class="player-name">${esc(getUsername(match.host))}</div>
+                <div class="player-name">${esc(getUsername(match.host))}${bountyBadge(match.host && match.host.id)}</div>
               </div>
               <div class="items">${thumbs(match.hostItems)}</div>
             </div>
@@ -2038,7 +2120,6 @@
 
       socket.on("online", count => {
         $("#online").textContent = count + " online";
-        $("#summaryOnline").textContent = count;
       });
 
       socket.on("chat:msg", m => {
@@ -2061,9 +2142,21 @@
         renderChat();
       });
 
+      socket.on("bounty:update", list => {
+        STATE.bounties = list;
+        renderBountyStrip();
+        lobbySig = "";
+        renderLobby();
+      });
+
+      socket.on("bounty:claimed", showBountyPopup);
+
       socket.on("jackpot:update", j => {
-        STATE.jackpot = j;
-        if (currentPage === "jackpot") renderJackpot();
+        if (j) {
+          STATE.jackpots = STATE.jackpots || {};
+          STATE.jackpots[j.game] = j;
+        }
+        if (currentPage === "jackpot" && j && j.game === currentGame) renderJackpot();
       });
 
       socket.on("admin:notify", n => {
@@ -2124,11 +2217,11 @@
         renderEventStrip();
         if (currentPage === "event") renderEventPage();
         if (currentPage === "jackpot") renderJackpot();
+        renderBountyStrip();
         if (ME && ME.isAdmin && notifUser !== ME.id) { notifUser = ME.id; loadNotifs(); }
         renderChat();
 
         $("#online").textContent = Number(STATE.online || 0) + " online";
-        $("#summaryOnline").textContent = Number(STATE.online || 0);
 
         renderView();
 
@@ -2281,7 +2374,7 @@
 
       const query = ($("#gridSearch")?.value || "").toLowerCase();
       const sort = $("#gridSort")?.value || "value-desc";
-      const all = inventory();
+      const all = gridItems();
 
       const items = all.filter(i => String(i.name || "").toLowerCase().includes(query));
 
@@ -2301,6 +2394,7 @@
         return `
           <div class="inventory-item ${checked ? "selected" : ""}" data-action="pick" data-id="${esc(id)}">
             ${checked ? '<span class="check">✓</span>' : ""}
+            ${!gridContext.game && itemGame(item) === "ctd" ? '<span class="game-pill">CTD</span>' : ""}
             <img src="${esc(itemImage(item))}" alt="">
             <div class="name">${esc(item.name)}</div>
             <div class="value">${GEM}${fmt(item.value)}</div>
@@ -2348,7 +2442,7 @@
       if (!gridContext) return;
       selected.clear();
 
-      for (const item of inventory()) {
+      for (const item of gridItems()) {
         if (selected.size >= gridContext.max) break;
         selected.add(itemId(item));
       }
@@ -2431,14 +2525,26 @@
 
       openModal2(`
         ${modalHeader("Deposit", "close2")}
-        <div class="game-card" data-action="bots" title="Adopt Me"><span class="adopt-logo">ADOPT ME!</span></div>`);
+        <div class="deposit-grid">
+          <div class="game-card" data-action="bots" data-game="adoptme" title="Adopt Me"><span class="adopt-logo">ADOPT ME!</span></div>
+          <div class="game-card ctd" data-action="bots" data-game="ctd" title="Cameraman Tower Defense"><span class="ctd-logo">CTD<small>Cameraman Tower Defense</small></span></div>
+        </div>`);
     }
 
-    function openBotsModal() {
-      const bot = STATE.bot || {};
+    function openBotsModal(game = "adoptme") {
+      const bot = (STATE.bots && STATE.bots[game]) || (game === "adoptme" ? STATE.bot : null) || {};
+      const title = game === "ctd" ? "Cameraman Tower Defense" : "Adopt Me";
+      const name = bot.username || (game === "adoptme" ? BOT_NAME : "");
+
+      if (!name) {
+        openModal2(`
+          ${modalHeader(title, "close2")}
+          <div class="empty">Deposits for this game are not set up yet.<br>Please try again later.</div>`);
+        return;
+      }
 
       openModal2(`
-        ${modalHeader("Adopt Me", "close2")}
+        ${modalHeader(title, "close2")}
 
         <div class="warn">
           <i>!</i>
@@ -2447,14 +2553,14 @@
 
         <div class="bot-row">
           <div class="bot-main">
-            ${avatar({ username: bot.username || BOT_NAME, avatar: bot.avatar }, "sm")}
-            <span>${esc(bot.username || BOT_NAME)}</span>
+            ${avatar({ username: name, avatar: bot.avatar }, "sm")}
+            <span>${esc(name)}</span>
             <span class="dot"></span>
           </div>
-          <button class="join" data-action="bot-join">Join</button>
+          <button class="join" data-action="bot-join" data-game="${esc(game)}">Join</button>
         </div>
 
-        <p class="hint">To initiate a trade with the bot, send the bot a trade request.</p>`);
+        <p class="hint">To initiate a trade with the bot, send the bot a trade request in ${esc(title)}. Items you deposit can only be used in ${esc(title)}.</p>`);
     }
 
     /* ---------- Create / Join ---------- */
@@ -2467,6 +2573,7 @@
 
       gridContext = {
         max: 8,
+        game: currentGame,
         info() {
           const items = selectedItems();
           const value = totalValue(items);
@@ -2482,7 +2589,8 @@
       };
 
       openModal(`
-        ${modalHeader("Create Coinflip")}
+        ${modalHeader("Create Coinflip · " + gameNameOf(currentGame))}
+        <p class="hint">Only ${gameNameOf(currentGame)} items can be used in this game.</p>
 
         <div class="sides" id="sides">
           <div class="side-choice selected" data-action="side" data-side="dog"><div>${chip("dog")}</div></div>
@@ -2506,7 +2614,7 @@
       if (!uids.length) return toast("Select items first", "err");
 
       try {
-        await api("/api/match/create", { body: { uids, side: createSide } });
+        await api("/api/match/create", { body: { uids, side: createSide, game: currentGame } });
         closeModal();
         toast("Game created!", "ok");
         await refresh();
@@ -2526,6 +2634,7 @@
 
       gridContext = {
         max: 8,
+        game: match.game || "adoptme",
         info() {
           const value = totalValue(selectedItems());
           const valid = value >= low - 0.001 && value <= high + 0.001;
@@ -3018,6 +3127,58 @@
       } catch (error) { fail(error); }
     }
 
+    /* ---------- Bounty ---------- */
+    let bountySig = "", bountyTimer = null;
+
+    function renderBountyStrip() {
+      const list = asArray(STATE.bounties);
+      const sig = JSON.stringify(list.map(b => b.id));
+      if (sig === bountySig) return;
+      bountySig = sig;
+
+      $("#bountyStrip").innerHTML = list.map(b => `
+        <div class="bounty-strip enter">
+          <div class="bt-ico">🎯</div>
+          ${avatar(b.target, "md", "ring-orange")}
+          <div class="bt-text">
+            <b>BOUNTY on ${esc(getUsername(b.target))}</b><br>
+            <small>Be the first to beat them in a coinflip and win <b>${esc(b.prize.name)}</b> (${GEM}${fmt(b.prize.value)})</small>
+          </div>
+          <div class="item-thumb" style="margin-left:0"><img src="${esc(itemImage(b.prize))}" alt=""></div>
+        </div>`).join("");
+    }
+
+    function showBountyPopup(d) {
+      clearTimeout(bountyTimer);
+      const old = $("#bountyPop");
+      if (old) old.remove();
+
+      const colors = ["#ffb52e", "#00efa0", "#ff5968", "#4da3ff", "#a855f7", "#ffd35a"];
+      let confetti = "";
+      for (let i = 0; i < 48; i++) {
+        confetti += `<span class="confetti" style="left:${Math.random() * 100}%;background:${colors[i % colors.length]};--d:${3 + Math.random() * 3}s;animation-delay:${Math.random() * 2}s"></span>`;
+      }
+
+      const el = document.createElement("div");
+      el.id = "bountyPop";
+      el.className = "bounty-pop";
+      el.innerHTML = `
+        ${confetti}
+        <div class="bounty-card">
+          <div class="bp-title">🎯 BOUNTY CLAIMED!</div>
+          <div class="bp-avatar">${avatar(d.winner, "xl")}</div>
+          <div class="bp-name">${esc(getUsername(d.winner))}</div>
+          <div class="bp-text">Congratulations, our king! We are proud of you! 👑</div>
+          <div class="bp-sub">beat <b>${esc(getUsername(d.target))}</b> and won</div>
+          ${prizeHTML(d.prize)}
+          <small>Click anywhere to close</small>
+        </div>`;
+
+      el.onclick = () => el.remove();
+      document.body.appendChild(el);
+      bountyTimer = setTimeout(() => el.remove(), 12000);
+    }
+
     /* ---------- mobile chat (floating button) ---------- */
     let chatUnread = 0;
 
@@ -3137,7 +3298,7 @@
 
       return `
         <div class="jp-page enter">
-          <div class="jp-tag"><span>Adopt Me</span></div>
+          <div class="jp-tag">${gameTabsHTML()}</div>
 
           <div class="jp-grid">
             <div>
@@ -3190,7 +3351,7 @@
 
     function renderJackpot(force) {
       const box = $("#jackpotView");
-      const j = STATE.jackpot;
+      const j = STATE.jackpots && STATE.jackpots[currentGame];
       if (!box || !j) return;
 
       const sig = [j.id, j.state, asArray(j.entries).length, j.total, j.winnerId, ME && ME.id].join("|");
@@ -3205,7 +3366,7 @@
     function showJpJoin() {
       if (!requireLogin()) return;
 
-      const j = STATE.jackpot;
+      const j = STATE.jackpots && STATE.jackpots[currentGame];
       if (!j || (j.state !== "waiting" && j.state !== "countdown")) {
         return toast("This round is already rolling. Join the next round.", "err");
       }
@@ -3217,6 +3378,7 @@
 
       gridContext = {
         max: 8,
+        game: currentGame,
         info() {
           const items = selectedItems();
           const value = totalValue(items);
@@ -3234,7 +3396,7 @@
 
       openModal(`
         ${modalHeader("Join Jackpot")}
-        <p class="hint">Your chance is your share of the total pot. The winner takes everything.</p>
+        <p class="hint">Your chance is your share of the total pot. The winner takes everything. Only ${gameNameOf(currentGame)} items can be used here.</p>
 
         ${selectionGridHTML()}
 
@@ -3253,7 +3415,7 @@
       if (!uids.length) return toast("Select items first", "err");
 
       try {
-        await api("/api/jackpot/join", { body: { uids } });
+        await api("/api/jackpot/join", { body: { uids, game: currentGame } });
         closeModal();
         toast("You joined the jackpot!", "ok");
         await refresh();
@@ -3262,14 +3424,14 @@
 
     async function jpLeave() {
       try {
-        await api("/api/jackpot/leave", { body: {} });
+        await api("/api/jackpot/leave", { body: { game: currentGame } });
         toast("Items returned", "ok");
         await refresh();
       } catch (error) { fail(error); }
     }
 
     async function verifyJackpot() {
-      const j = STATE.jackpot;
+      const j = STATE.jackpots && STATE.jackpots[currentGame];
       if (!j || j.state !== "finished") return;
 
       try {
@@ -3375,8 +3537,15 @@
 
       wallet: showWallet,
       deposit: showDeposit,
-      bots() { openBotsModal(); },
-      "bot-join"() { window.open(BOT_LINK, "_blank", "noopener,noreferrer"); },
+      bots(el) { openBotsModal(el.dataset.game || "adoptme"); },
+      "bot-join"(el) {
+        const game = el.dataset.game || "adoptme";
+        const bot = (STATE.bots && STATE.bots[game]) || {};
+        const link = bot.link || (game === "adoptme" ? BOT_LINK : "");
+        if (!link) return toast("The bot link is not set yet", "err");
+        window.open(link, "_blank", "noopener,noreferrer");
+      },
+      game(el) { setGame(el.dataset.game); },
       withdraw,
 
       create: showCreate,
@@ -3463,6 +3632,7 @@
       else if (document.body.classList.contains("chat-open")) closeChat();
     });
 
+    renderGameTabs();
     renderHeader();
     renderLobby();
     refresh();
