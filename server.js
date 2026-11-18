@@ -31,8 +31,9 @@ const gameOf = item => (item && item.game === 'ctd' ? 'ctd' : 'adoptme');
 const gameName = id => (GAMES.find(g => g.id === id) || GAMES[0]).name;
 
 /* Cameraman Tower Defense deposit bot (set these in Render > Environment) */
-const CTD_BOT_NAME = E.CTD_BOT_NAME || '';
-const CTD_BOT_LINK = E.CTD_BOT_LINK || '';
+const CTD_BOT_NAME = E.CTD_BOT_NAME || 'CTDdepo1';
+const CTD_BOT_LINK = E.CTD_BOT_LINK ||
+  'https://www.roblox.com/share?code=0a10f5ec5f9fee4faf9ebb4362873dd0&type=Server';
 
 const DISCORD_INVITE = E.DISCORD_INVITE || 'https://discord.gg/TaPXaAseP';
 /* Put the webhook URLs in Render > Environment, NOT in the code */
@@ -45,17 +46,18 @@ let RANGE = Number(E.JOIN_RANGE || 0.10);
 if (!Number.isFinite(RANGE) || RANGE < 0 || RANGE > 1) RANGE = 0.10;
 
 const S = {
-  users: {},
-  sessions: {},
+  users: Object.create(null),
+  sessions: Object.create(null),
   catalog: [],
-  matches: {},
+  matches: Object.create(null),
   history: [],
-  giveaways: {},
+  giveaways: Object.create(null),
   chat: [],
   withdrawals: [],
   announcement: null,
   notifications: [],
-  bounties: []
+  bounties: [],
+  botStatus: { adoptme: true, ctd: true }
 };
 
 const pending = new Map();
@@ -158,6 +160,33 @@ function rankOf(totalBet) {
 
 const MUTE_FOREVER = Number.MAX_SAFE_INTEGER;
 
+/* every stat change goes through here so the per-game numbers and the totals always match */
+function bump(user, game, d) {
+  const g = user.gstats[game] || user.gstats.adoptme;
+
+  if (d.bet)    { g.bet    = round2(g.bet + d.bet);       user.totalBet  = round2(user.totalBet + d.bet); }
+  if (d.won)    { g.won    = round2(g.won + d.won);       user.totalWon  = round2(user.totalWon + d.won); }
+  if (d.lost)   { g.lost   = round2(g.lost + d.lost);     user.totalLost = round2((user.totalLost || 0) + d.lost); }
+  if (d.profit) { g.profit = round2(g.profit + d.profit); user.profit    = round2(user.profit + d.profit); }
+}
+
+function recalcTotals(user) {
+  const sum = key => round2(GAME_IDS.reduce((t, g) => t + safeNumber(user.gstats[g][key]), 0));
+  user.totalBet = sum('bet');
+  user.totalWon = sum('won');
+  user.totalLost = sum('lost');
+  user.profit = sum('profit');
+}
+
+function statsByGame(user) {
+  const out = {};
+  for (const g of GAME_IDS) {
+    const x = user.gstats[g];
+    out[g] = { totalBet: round2(x.bet), totalWon: round2(x.won), totalLost: round2(x.lost), profit: round2(x.profit) };
+  }
+  return out;
+}
+
 function addTransaction(user, type, id, amount) {
   user.tx.unshift({ type, id, ts: now(), amount: round2(amount) });
   if (user.tx.length > 300) user.tx.length = 300;
@@ -242,6 +271,14 @@ function ensureUser(u) {
   u.profit = u.profit || 0;
   u.wagerLeft = u.wagerLeft || 0;
   u.inventory.forEach(i => { i.game = gameOf(i); });
+
+  /* stats are kept per game; everything played before CTD existed counts as Adopt Me */
+  const zero = () => ({ bet: 0, won: 0, lost: 0, profit: 0 });
+  if (!u.gstats) {
+    u.gstats = { adoptme: { bet: u.totalBet, won: u.totalWon, lost: u.totalLost, profit: u.profit }, ctd: zero() };
+  }
+  for (const g of GAME_IDS) u.gstats[g] = Object.assign(zero(), u.gstats[g]);
+
   return u;
 }
 
@@ -249,6 +286,8 @@ function ensureUser(u) {
 
 let mongoColl = null;
 let dirty = false;
+let dbRev = 0;
+let dbDocExists = false;
 
 function markDirty() { dirty = true; }
 
@@ -283,7 +322,8 @@ function snapshot() {
     withdrawals: S.withdrawals.slice(0, 500),
     announcement: S.announcement,
     notifications: S.notifications.slice(0, 50),
-    bounties: S.bounties
+    bounties: S.bounties,
+    botStatus: S.botStatus
   };
 }
 
@@ -299,11 +339,14 @@ async function initDb() {
     mongoColl = client.db(E.MONGODB_DB || 'amproll').collection('state');
 
     const doc = await mongoColl.findOne({ _id: 'main' });
+    dbDocExists = Boolean(doc);
+    dbRev = doc && doc.rev ? doc.rev : 0;
+
     if (doc && doc.data) {
       const d = doc.data;
-      S.users = d.users || {};
+      S.users = Object.assign(Object.create(null), d.users || {});
       Object.values(S.users).forEach(ensureUser);
-      S.sessions = d.sessions || {};
+      S.sessions = Object.assign(Object.create(null), d.sessions || {});
       S.catalog = d.catalog || [];
       S.catalog.forEach(c => { c.game = gameOf(c); });
       S.history = d.history || [];
@@ -311,6 +354,7 @@ async function initDb() {
       S.announcement = d.announcement || null;
       S.notifications = d.notifications || [];
       S.bounties = d.bounties || [];
+      S.botStatus = { adoptme: true, ctd: true, ...(d.botStatus || {}) };
       console.log('State loaded from MongoDB.');
     }
   } catch (err) {
@@ -319,11 +363,32 @@ async function initDb() {
   }
 }
 
+/* The database keeps a revision number. If another server instance saved in the meantime
+   (for example while Render swaps instances), this instance stops instead of overwriting newer data. */
 async function saveNow() {
   if (!mongoColl || !dirty) return;
   dirty = false;
+
   try {
-    await mongoColl.updateOne({ _id: 'main' }, { $set: { data: snapshot() } }, { upsert: true });
+    const data = snapshot();
+    let ok = true;
+
+    if (!dbDocExists) {
+      try {
+        await mongoColl.insertOne({ _id: 'main', rev: 1, data });
+        dbRev = 1;
+        dbDocExists = true;
+      } catch { ok = false; }
+    } else {
+      const filter = dbRev === 0 ? { _id: 'main', rev: { $exists: false } } : { _id: 'main', rev: dbRev };
+      const result = await mongoColl.updateOne(filter, { $set: { data, rev: dbRev + 1 } });
+      if (result.matchedCount === 1) dbRev += 1; else ok = false;
+    }
+
+    if (!ok) {
+      console.error('[SECURITY] The database was changed by another server instance. Stopping this instance to protect the data.');
+      process.exit(1);
+    }
   } catch (err) {
     dirty = true;
     console.error('Save failed:', err.message);
@@ -405,6 +470,11 @@ async function loadBot() {
   }
 }
 
+const botsPublic = () => ({
+  adoptme: { ...bot, online: S.botStatus.adoptme !== false },
+  ctd: { ...ctdBot, online: S.botStatus.ctd !== false }
+});
+
 const ctdBot = { username: CTD_BOT_NAME, id: null, avatar: null, link: CTD_BOT_LINK, joinLink: CTD_BOT_LINK };
 
 async function loadCtdBot() {
@@ -430,20 +500,132 @@ async function loadBots() {
 const app = express();
 app.set('trust proxy', 1);
 
+/* ---------- abuse / DDoS protection ----------
+   Layers: per-IP rate limits (page, API, bursts, login), automatic 15 minute block for IPs that keep
+   hitting the limits, request size and timeout limits, socket connection and event limits,
+   and a short cache for the public state endpoint. For large attacks also put Cloudflare in front of the site. */
+const strikes = new Map();
+const blockedIps = new Map();
+
+function strike(ip) {
+  const t = now();
+  const e = strikes.get(ip) || { n: 0, t };
+
+  if (t - e.t > 10 * 60 * 1000) { e.n = 0; e.t = t; }
+  e.n += 1;
+  strikes.set(ip, e);
+
+  if (e.n >= 8) {
+    blockedIps.set(ip, t + 15 * 60 * 1000);
+    strikes.delete(ip);
+    console.warn(`[SECURITY] ${ip} blocked for 15 minutes (too many requests)`);
+  }
+}
+
+app.use((req, res, next) => {
+  const until = blockedIps.get(req.ip);
+
+  if (until) {
+    if (until > now()) {
+      res.set('Retry-After', '900');
+      return res.status(429).type('text/plain').send('Too many requests. Try again later.');
+    }
+    blockedIps.delete(req.ip);
+  }
+
+  next();
+});
+
 app.use(helmet({
-  contentSecurityPolicy: false,
+  contentSecurityPolicy: {
+    useDefaults: false,
+    directives: {
+      defaultSrc: ["'self'"],
+      /* unsafe-inline / unsafe-eval are needed because the pages use inline scripts and the admin panel is loaded after login */
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: ["'self'", 'ws:', 'wss:'],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'none'"]
+    }
+  },
   crossOriginResourcePolicy: { policy: 'cross-origin' }
 }));
 
+const limiter = (windowMs, max, extra = {}) => rateLimit({
+  windowMs, max,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    strike(req.ip);
+    res.status(429).json({ error: 'Too many requests. Slow down.' });
+  },
+  ...extra
+});
+
+app.use(limiter(60 * 1000, 500, { skip: req => req.path === '/health' }));   // everything, per IP
 app.use(express.json({ limit: '20kb' }));
 app.use('/assets', express.static(path.join(__dirname, 'assets'), { maxAge: '7d' }));
 
-app.use('/api/', rateLimit({ windowMs: 60000, max: 300, standardHeaders: true, legacyHeaders: false }));
-const authLimit = rateLimit({ windowMs: 60000, max: 15, standardHeaders: true, legacyHeaders: false });
-const actionLimit = rateLimit({ windowMs: 60000, max: 40, standardHeaders: true, legacyHeaders: false });
+app.use('/api/', limiter(60 * 1000, 400));        // API per minute
+app.use('/api/', limiter(10 * 1000, 150));        // API bursts
+
+const authLimit = limiter(60 * 1000, 10);                                        // login attempts per IP
+const authGlobal = limiter(60 * 1000, 150, { keyGenerator: () => 'global' });    // protects the Roblox API from floods
+const actionLimit = limiter(60 * 1000, 30);                                      // item / game actions per IP
 
 const server = http.createServer(app);
-const io = new Server(server, { maxHttpBufferSize: 10000 });
+server.headersTimeout = 15000;
+server.requestTimeout = 20000;
+server.keepAliveTimeout = 10000;
+server.maxHeadersCount = 50;
+
+const io = new Server(server, {
+  maxHttpBufferSize: 10000,
+  pingInterval: 25000,
+  pingTimeout: 20000,
+  connectTimeout: 10000,
+  perMessageDeflate: false
+});
+
+/* limit sockets per IP */
+const socketsByIp = new Map();
+
+const socketIp = socket => {
+  const xff = String(socket.handshake.headers['x-forwarded-for'] || '').split(',').map(x => x.trim()).filter(Boolean);
+  return xff.length ? xff[xff.length - 1] : socket.handshake.address;
+};
+
+io.use((socket, next) => {
+  const ip = socketIp(socket);
+  const count = socketsByIp.get(ip) || 0;
+
+  if (blockedIps.has(ip) || count >= 12) return next(new Error('Too many connections'));
+
+  socket._ip = ip;
+  socketsByIp.set(ip, count + 1);
+
+  socket.on('disconnect', () => {
+    const left = (socketsByIp.get(ip) || 1) - 1;
+    if (left <= 0) socketsByIp.delete(ip); else socketsByIp.set(ip, left);
+  });
+
+  next();
+});
+
+/* the online counter is broadcast at most every 2 seconds, so connect / disconnect floods cannot spam everyone */
+let onlineTimer = null;
+function emitOnlineSoon() {
+  if (onlineTimer) return;
+  onlineTimer = setTimeout(() => {
+    onlineTimer = null;
+    io.emit('online', io.engine.clientsCount);
+  }, 2000);
+}
 
 function tokenFromRequest(req) {
   const v = String(req.headers.authorization || '');
@@ -478,7 +660,9 @@ function emitMe(user) {
 
 /* ================= AUTH ================= */
 
-app.post('/api/auth/start', authLimit, async (req, res) => {
+app.post('/api/auth/start', authLimit, authGlobal, async (req, res) => {
+  if (pending.size > 5000) return bad(res, 'The server is busy. Try again in a minute.', 503);
+
   const username = String(req.body.username || '').trim();
   if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return bad(res, 'Invalid Roblox username');
 
@@ -607,14 +791,14 @@ function publicGiveaway(g) {
   };
 }
 
-app.get('/api/state', (req, res) => {
-  res.json({
+function buildState() {
+  return {
     matches: Object.values(S.matches).map(publicMatch),
     giveaways: Object.values(S.giveaways).map(publicGiveaway),
     chat: S.chat,
     online: io.engine.clientsCount,
     bot,
-    bots: { adoptme: bot, ctd: ctdBot },
+    bots: botsPublic(),
     games: GAMES,
     bounties: publicBounties(),
     announcement: S.announcement,
@@ -622,7 +806,16 @@ app.get('/api/state', (req, res) => {
     jackpots: { adoptme: publicJackpot(JPS.adoptme), ctd: publicJackpot(JPS.ctd) },
     discord: DISCORD_INVITE,
     config: { range: RANGE, maxItems: MAX_ITEMS, ranks: RANKS }
-  });
+  };
+}
+
+/* every browser polls this endpoint, so it is built at most every 400 ms */
+let stateCache = { t: 0, body: '' };
+
+app.get('/api/state', (req, res) => {
+  const t = now();
+  if (t - stateCache.t > 400) stateCache = { t, body: JSON.stringify(buildState()) };
+  res.type('application/json').send(stateCache.body);
 });
 
 app.get('/api/me', auth, (req, res) => res.json({ user: meView(req.user) }));
@@ -639,7 +832,8 @@ app.get('/api/profile', auth, (req, res) => {
       totalBet: round2(user.totalBet),
       totalWon: round2(user.totalWon),
       totalLost: round2(user.totalLost || 0),
-      profit: round2(user.profit)
+      profit: round2(user.profit),
+      games: statsByGame(user)
     },
     rows: user.tx.slice((page - 1) * perPage, page * perPage),
     page, pages
@@ -659,29 +853,34 @@ app.get('/api/user/:id', (req, res) => {
       totalBet: round2(user.totalBet),
       totalWon: round2(user.totalWon),
       totalLost: round2(user.totalLost || 0),
-      profit: round2(user.profit)
+      profit: round2(user.profit),
+      games: statsByGame(user)
     }
   });
 });
 
 app.get('/api/leaderboard', (req, res) => {
   const by = req.query.by === 'profit' ? 'profit' : 'totalBet';
+  const game = GAME_IDS.includes(req.query.game) ? req.query.game : 'all';
+  const key = by === 'profit' ? 'profit' : 'bet';
+
+  const valueFor = u => (game === 'all' ? u[by] : u.gstats[game][key]) || 0;
 
   const list = Object.values(S.users)
-    .filter(u => !u.banned && (u[by] || 0) > 0)
-    .sort((a, b) => (b[by] || 0) - (a[by] || 0))
+    .filter(u => !u.banned && valueFor(u) > 0)
+    .sort((a, b) => valueFor(b) - valueFor(a))
     .slice(0, 20)
     .map(u => ({
       id: u.id,
       username: u.username,
       avatar: u.avatar || null,
       rank: rankOf(u.totalBet),
-      value: round2(u[by] || 0),
+      value: round2(valueFor(u)),
       totalBet: round2(u.totalBet),
       totalWon: round2(u.totalWon)
     }));
 
-  res.json({ by, list });
+  res.json({ by, game, list });
 });
 
 app.get('/api/history/me', auth, (req, res) => {
@@ -719,16 +918,16 @@ function finishMatch(match) {
 
   winner.inventory.push(...match.hostItems, ...match.oppItems);
 
-  host.totalBet = round2(host.totalBet + match.hostValue);
-  opponent.totalBet = round2(opponent.totalBet + match.oppValue);
+  const game = match.game || 'adoptme';
+
+  bump(host, game, { bet: match.hostValue });
+  bump(opponent, game, { bet: match.oppValue });
 
   /* wager requirement goes down by what each player staked */
   host.wagerLeft = Math.max(0, round2((host.wagerLeft || 0) - match.hostValue));
   opponent.wagerLeft = Math.max(0, round2((opponent.wagerLeft || 0) - match.oppValue));
-  winner.totalWon = round2(winner.totalWon + loserStake);
-  loser.totalLost = round2((loser.totalLost || 0) + loserStake);
-  winner.profit = round2(winner.profit + loserStake);
-  loser.profit = round2(loser.profit - loserStake);
+  bump(winner, game, { won: loserStake, profit: loserStake });
+  bump(loser, game, { lost: loserStake, profit: -loserStake });
 
   addTransaction(winner, 'Coinflip Win', match.id, loserStake);
   addTransaction(loser, 'Coinflip Loss', match.id, -loserStake);
@@ -1050,6 +1249,17 @@ function claimBounty(winner, loser, match) {
   });
 }
 
+app.post('/api/admin/bot', auth, adminOnly, (req, res) => {
+  const game = String(req.body.game || '');
+  if (!GAME_IDS.includes(game)) return bad(res, 'Invalid game');
+
+  S.botStatus[game] = Boolean(req.body.online);
+  markDirty();
+
+  io.emit('bots:update', botsPublic());
+  res.json({ ok: true });
+});
+
 app.post('/api/admin/bounty', auth, adminOnly, (req, res) => {
   const name = String(req.body.username || '').trim().toLowerCase();
   const target = Object.values(S.users).find(u => u.username.toLowerCase() === name);
@@ -1217,17 +1427,15 @@ function finishJackpot(j) {
     const u = S.users[e.user.id];
     if (!u) continue;
 
-    u.totalBet = round2(u.totalBet + e.value);
+    bump(u, j.game, { bet: e.value });
     u.wagerLeft = Math.max(0, round2((u.wagerLeft || 0) - e.value));
 
     if (e === winEntry) {
       const gain = round2(j.total - e.value);
-      u.totalWon = round2(u.totalWon + gain);
-      u.profit = round2(u.profit + gain);
+      bump(u, j.game, { won: gain, profit: gain });
       addTransaction(u, 'Jackpot Win', j.id, gain);
     } else {
-      u.totalLost = round2((u.totalLost || 0) + e.value);
-      u.profit = round2(u.profit - e.value);
+      bump(u, j.game, { lost: e.value, profit: -e.value });
       addTransaction(u, 'Jackpot Loss', j.id, -e.value);
     }
 
@@ -1753,13 +1961,15 @@ app.get('/api/admin/data', auth, adminOnly, (req, res) => {
       id: u.id, username: u.username, items: u.inventory.length,
       value: valueOf(u.inventory), totalBet: round2(u.totalBet),
       totalWon: round2(u.totalWon), totalLost: round2(u.totalLost || 0), profit: round2(u.profit),
+      gstats: u.gstats,
       banned: Boolean(u.banned), wagerLeft: round2(u.wagerLeft || 0),
       isAdmin: isAdmin(u),
       adminTag: isAdmin(u) && u.adminTag !== false,
       muted: (u.mutedUntil || 0) > now()
     })),
     withdrawals: S.withdrawals.filter(w => w.status === 'pending'),
-    bounties: publicBounties()
+    bounties: publicBounties(),
+    botStatus: S.botStatus
   });
 });
 
@@ -1860,29 +2070,32 @@ app.post('/api/admin/notifications/read', auth, adminOnly, (req, res) => {
   res.json({ ok: true });
 });
 
-/* Fix a player's stats (rank follows total bet automatically). Every change is logged. */
+/* Fix a player's stats for one game (totals and rank follow automatically). Every change is logged. */
 app.post('/api/admin/stats', auth, adminOnly, (req, res) => {
   const user = S.users[String(req.body.id || '')];
   if (!user) return bad(res, 'User not found', 404);
 
+  const game = GAME_IDS.includes(req.body.game) ? req.body.game : 'adoptme';
+  const fields = { totalBet: 'bet', totalWon: 'won', totalLost: 'lost', profit: 'profit' };
   const next = {};
 
-  for (const f of ['totalBet', 'totalWon', 'totalLost', 'profit']) {
-    const raw = req.body[f];
+  for (const [field, key] of Object.entries(fields)) {
+    const raw = req.body[field];
     if (raw === undefined || raw === null || raw === '') continue;
 
     const n = Number(raw);
-    if (!Number.isFinite(n) || Math.abs(n) > 1e12) return bad(res, `Invalid value for ${f}`);
-    if (f !== 'profit' && n < 0) return bad(res, `${f} cannot be negative`);
+    if (!Number.isFinite(n) || Math.abs(n) > 1e12) return bad(res, `Invalid value for ${field}`);
+    if (field !== 'profit' && n < 0) return bad(res, `${field} cannot be negative`);
 
-    next[f] = round2(n);
+    next[key] = round2(n);
   }
 
-  console.log(`[ADMIN] ${req.user.username} changed stats of ${user.username}:`, JSON.stringify({ before: {
-    totalBet: user.totalBet, totalWon: user.totalWon, totalLost: user.totalLost, profit: user.profit
-  }, after: next }));
+  console.log(`[ADMIN] ${req.user.username} changed ${gameName(game)} stats of ${user.username}:`,
+    JSON.stringify({ before: user.gstats[game], after: next }));
 
-  Object.assign(user, next);
+  Object.assign(user.gstats[game], next);
+  recalcTotals(user);
+
   markDirty();
   emitMe(user);
   res.json({ ok: true });
@@ -2056,6 +2269,9 @@ function adminUI() {
         </div>
       </div>
 
+      <h4 style="margin:16px 0 8px">🤖 Deposit bots</h4>
+      <div id="adm-bots" style="background:#f5faff;padding:14px;border-radius:12px"></div>
+
       <h4 style="margin:16px 0 8px">🎯 Bounty</h4>
       <div style="background:#f5faff;padding:14px;border-radius:12px">
         <input id="bt-user" list="g-users" class="in" style="width:100%;margin-bottom:8px" placeholder="Roblox username of the target">
@@ -2188,6 +2404,16 @@ function adminUI() {
     const prevBounty = $('bt-item').value;
     $('bt-item').innerHTML = $('ev-item').innerHTML;
     if (prevBounty) $('bt-item').value = prevBounty;
+
+    $('adm-bots').innerHTML = [['adoptme', 'Adopt Me'], ['ctd', 'CTD']].map(([g, name]) => {
+      const on = !data.botStatus || data.botStatus[g] !== false;
+      return `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0">
+          <b>${name} bot</b>
+          <span>${on ? '🟢 Online' : '🔴 Offline'}</span>
+          <button class="btn sm ${on ? 'red' : 'mint'}" data-bot="${g}" data-state="${on ? '0' : '1'}">${on ? 'Set offline' : 'Set online'}</button>
+        </div>`;
+    }).join('');
 
     $('bt-list').innerHTML = (data.bounties || []).length
       ? data.bounties.map(b => `
@@ -2341,10 +2567,14 @@ function adminUI() {
   let usersCache = [];
   let statsUser = null;
 
-  function openStats(userId) {
+  function openStats(userId, game) {
     const u = usersCache.find(x => x.id === userId);
     if (!u) return;
+
     statsUser = userId;
+    game = game || 'adoptme';
+
+    const g = (u.gstats && u.gstats[game]) || { bet: 0, won: 0, lost: 0, profit: 0 };
 
     const field = (id, label, value) => `
       <div><small>${label}</small>
@@ -2352,39 +2582,49 @@ function adminUI() {
 
     $('adm-stats').innerHTML = `
       <div style="background:#f5faff;padding:14px;border-radius:12px;margin-top:10px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px">
           <b>${esc(u.username)}'s stats</b>
+          <select id="st-game" class="in">
+            <option value="adoptme" ${game === 'adoptme' ? 'selected' : ''}>Adopt Me</option>
+            <option value="ctd" ${game === 'ctd' ? 'selected' : ''}>CTD</option>
+          </select>
           <button class="btn gray sm" id="st-close">Close</button>
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:10px">
-          ${field('st-bet', 'Total bet', u.totalBet)}
-          ${field('st-won', 'Total won', u.totalWon)}
-          ${field('st-lost', 'Total lost', u.totalLost)}
-          ${field('st-profit', 'Profit', u.profit)}
+          ${field('st-bet', 'Total bet', g.bet)}
+          ${field('st-won', 'Total won', g.won)}
+          ${field('st-lost', 'Total lost', g.lost)}
+          ${field('st-profit', 'Profit', g.profit)}
         </div>
-        <button class="btn" id="st-save" style="width:100%">Save stats</button>
-        <p class="hint">Rank is calculated from total bet. Every change is written to the server log.</p>
+        <button class="btn" id="st-save" style="width:100%">Save ${game === 'ctd' ? 'CTD' : 'Adopt Me'} stats</button>
+        <p class="hint">Overall totals and rank are recalculated from both games. Every change is written to the server log.</p>
       </div>`;
 
     $('adm-stats').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
+  $('adm-stats').onchange = e => {
+    if (e.target.id === 'st-game' && statsUser) openStats(statsUser, e.target.value);
+  };
+
   $('adm-stats').onclick = async e => {
     if (e.target.closest('#st-close')) { $('adm-stats').innerHTML = ''; statsUser = null; return; }
     if (!e.target.closest('#st-save') || !statsUser) return;
+
+    const game = $('st-game').value;
 
     try {
       await api('/api/admin/stats', {
         method: 'POST',
         body: {
-          id: statsUser,
+          id: statsUser, game,
           totalBet: $('st-bet').value, totalWon: $('st-won').value,
           totalLost: $('st-lost').value, profit: $('st-profit').value
         }
       });
       toast('Stats saved', 'ok');
       await load();
-      openStats(statsUser);
+      openStats(statsUser, game);
     } catch (err) { toast(err.message, 'err'); }
   };
 
@@ -2450,6 +2690,16 @@ function adminUI() {
     } catch (err) { toast(err.message, 'err'); }
   }
 
+  $('adm-bots').onclick = async e => {
+    const b = e.target.closest('[data-bot]');
+    if (!b) return;
+    try {
+      await api('/api/admin/bot', { method: 'POST', body: { game: b.dataset.bot, online: b.dataset.state === '1' } });
+      toast(b.dataset.state === '1' ? 'Bot is now online' : 'Bot is now offline', 'ok');
+      await load();
+    } catch (err) { toast(err.message, 'err'); }
+  };
+
   $('bt-add').onclick = async () => {
     try {
       await api('/api/admin/bounty', { method: 'POST', body: { username: $('bt-user').value, itemId: $('bt-item').value } });
@@ -2507,7 +2757,18 @@ io.use((socket, next) => {
 io.on('connection', socket => {
   if (socket.user) socket.join(`u:${socket.user.id}`);
   if (socket.user && isAdmin(socket.user)) socket.join('admins');
-  io.emit('online', io.engine.clientsCount);
+  emitOnlineSoon();
+
+  /* a socket that floods events is dropped and the IP gets a strike */
+  let eventCount = 0;
+  const floodTimer = setInterval(() => { eventCount = 0; }, 10000);
+  socket.onAny(() => {
+    if (++eventCount > 40) {
+      strike(socket._ip);
+      socket.disconnect(true);
+    }
+  });
+  socket.on('disconnect', () => clearInterval(floodTimer));
 
   socket.on('chat:send', (payload, ack) => {
     const callback = typeof ack === 'function' ? ack : () => {};
@@ -2552,7 +2813,7 @@ io.on('connection', socket => {
     callback({ ok: true });
   });
 
-  socket.on('disconnect', () => io.emit('online', io.engine.clientsCount));
+  socket.on('disconnect', () => emitOnlineSoon());
 });
 
 /* ================= FRONTEND ================= */
@@ -2563,11 +2824,84 @@ app.get('/health', (req, res) => {
   res.json({ ok: true, storage: mongoColl ? 'mongodb' : 'memory-only' });
 });
 
+/* ================= ITEM AUDIT (no dupes, ever) =================
+   Items are removed from one place and added to another inside the same synchronous step, so a race
+   cannot duplicate them. As a second safety net every item has a unique id and this audit checks that
+   no id exists in two places. If it ever finds one, the extra copy in the inventory is removed and admins are notified. */
+
+function auditItems() {
+  const places = new Map();
+  const add = (uid, where, isInventory, holder) => {
+    if (!uid) return;
+    if (!places.has(uid)) places.set(uid, []);
+    places.get(uid).push({ where, isInventory, holder });
+  };
+
+  for (const u of Object.values(S.users)) {
+    for (const i of u.inventory) add(i.uid, `inventory of ${u.username}`, true, u);
+  }
+
+  for (const m of Object.values(S.matches)) {
+    if (m.state === 'finished') continue;
+    [...m.hostItems, ...m.oppItems].forEach(i => add(i.uid, `match ${m.id}`, false));
+  }
+
+  for (const j of Object.values(JPS)) {
+    if (j && j.state !== 'finished') j.entries.forEach(e => e.items.forEach(i => add(i.uid, `jackpot ${j.id}`, false)));
+  }
+
+  for (const g of Object.values(S.giveaways)) g.items.forEach(i => add(i.uid, `giveaway ${g.id}`, false));
+  for (const w of S.withdrawals) {
+    if (w.status === 'pending') w.items.forEach(i => add(i.uid, `withdraw ${w.id}`, false));
+  }
+
+  let removed = 0;
+
+  for (const [uid, list] of places) {
+    if (list.length < 2) continue;
+
+    const keep = list.find(x => !x.isInventory) || list[0];
+
+    for (const entry of list) {
+      if (entry === keep || !entry.isInventory) continue;
+      const user = entry.holder;
+      const index = user.inventory.findIndex(i => i.uid === uid);
+      if (index >= 0) { user.inventory.splice(index, 1); removed += 1; emitMe(user); }
+    }
+
+    console.error(`[SECURITY] Duplicate item ${uid} found in: ${list.map(x => x.where).join(' | ')}`);
+  }
+
+  if (removed) {
+    notifyAdmins('security', `Item audit removed ${removed} duplicated item(s). Check the server logs.`);
+    markDirty();
+  }
+}
+
+setInterval(auditItems, 30 * 1000);
+
+/* clean up small in-memory maps */
+setInterval(() => {
+  const t = now();
+  for (const [k, v] of lastChat) if (t - v > 10 * 60 * 1000) lastChat.delete(k);
+  for (const [k, v] of lastGuess) if (t - v > 10 * 60 * 1000) lastGuess.delete(k);
+  for (const [k, v] of blockedIps) if (v <= t) blockedIps.delete(k);
+  for (const [k, v] of strikes) if (t - v.t > 10 * 60 * 1000) strikes.delete(k);
+}, 60 * 1000);
+
+/* never show stack traces to visitors */
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  const status = Number(err.status || err.statusCode);
+  res.status(status >= 400 && status < 600 ? status : 400).json({ error: 'Bad request' });
+});
+
 /* ================= START ================= */
 
 (async () => {
   await initDb();
   GAME_IDS.forEach(g => newJackpot(g));
+  auditItems();
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`Pet Duel running on port ${PORT}`);
     console.log(mongoColl ? 'Storage: MongoDB' : 'Storage: MEMORY ONLY (resets on restart)');
