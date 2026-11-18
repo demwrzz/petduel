@@ -856,6 +856,9 @@
     .confetti { position: absolute; top: -20px; z-index: 1; width: 10px; height: 14px; border-radius: 2px; animation: confetti-fall var(--d) linear infinite; }
     @keyframes confetti-fall { to { transform: translateY(115vh) rotate(720deg); } }
 
+    .dot.off { background: #6b7280; box-shadow: none; }
+    .bot-row .join:disabled { color: #9a9da8; background: #2f333e; cursor: not-allowed; filter: none; }
+
     .sidebar-top, .chat-close, .chat-fab { display: none; }
     .sub-total { margin-top: 4px; color: var(--muted); font-size: 12px; font-weight: 700; }
     .sub-total b { color: var(--green); }
@@ -2068,35 +2071,49 @@
     $("#chatInput").addEventListener("keydown", e => { if (e.key === "Enter") sendChat(); });
 
     /* ---------- User card (profile popup) ---------- */
+    let ucUser = null, ucTab = "adoptme";
+
+    function ucRender() {
+      const user = ucUser;
+      if (!user) return;
+
+      const rank = user.rank || "Rookie";
+      const st = (user.games && user.games[ucTab]) || { totalBet: 0, totalWon: 0, totalLost: 0, profit: 0 };
+      const profit = Number(st.profit || 0);
+
+      $("#modal2").innerHTML = `
+        <div class="uc-head">
+          ${avatar(user, "lg", "ring-green")}
+          <div>
+            <div class="uc-name">${esc(user.username)}</div>
+            <div class="uc-rank" style="color:${rankColor(rank)}">${esc(rank)} ${rankBadge(rank)}</div>
+          </div>
+          <button class="x" data-action="close2">×</button>
+        </div>
+
+        <div class="game-tabs" style="width:100%;margin-bottom:10px">
+          ${GAMES.map(g => `<button class="game-tab ${g.id === ucTab ? "on" : ""}" style="flex:1" data-action="uc-tab" data-game="${g.id}">${g.name}</button>`).join("")}
+        </div>
+
+        <div class="uc-grid">
+          <div class="uc-stat"><b>${GEM}${fmt(st.totalBet)}</b><small>Total Bet</small></div>
+          <div class="uc-stat"><b class="${profit >= 0 ? "positive" : "negative"}">${GEM}${profit > 0 ? "+" : ""}${fmt(profit)}</b><small>Total Profit</small></div>
+          <div class="uc-stat"><b>${GEM}${fmt(st.totalWon)}</b><small>Total Won</small></div>
+          <div class="uc-stat"><b>${GEM}${fmt(st.totalLost)}</b><small>Total Lost</small></div>
+        </div>
+
+        ${ME && ME.id !== user.id ? `<button class="btn tip-btn" data-action="tip" data-id="${esc(user.id)}" data-name="${esc(user.username)}">Tip</button>` : ""}`;
+    }
+
     async function showUserCard(id) {
       if (!id) return;
       openModal2(`<div class="empty">Loading…</div>`, "card-user");
 
       try {
         const { user } = await api("/api/user/" + encodeURIComponent(id));
-        const rank = user.rank || "Rookie";
-        const profit = Number(user.profit || 0);
-
-        $("#modal2").innerHTML = `
-          <div class="uc-head">
-            ${avatar(user, "lg", "ring-green")}
-            <div>
-              <div class="uc-name">${esc(user.username)}</div>
-              <div class="uc-rank" style="color:${rankColor(rank)}">${esc(rank)} ${rankBadge(rank)}</div>
-            </div>
-            <button class="x" data-action="close2">×</button>
-          </div>
-
-          <div class="uc-game">Adopt Me</div>
-
-          <div class="uc-grid">
-            <div class="uc-stat"><b>${GEM}${fmt(user.totalBet)}</b><small>Total Bet</small></div>
-            <div class="uc-stat"><b class="${profit >= 0 ? "positive" : "negative"}">${GEM}${profit > 0 ? "+" : ""}${fmt(profit)}</b><small>Total Profit</small></div>
-            <div class="uc-stat"><b>${GEM}${fmt(user.totalWon)}</b><small>Total Won</small></div>
-            <div class="uc-stat"><b>${GEM}${fmt(user.totalLost)}</b><small>Total Lost</small></div>
-          </div>
-
-          ${ME && ME.id !== user.id ? `<button class="btn tip-btn" data-action="tip" data-id="${esc(user.id)}" data-name="${esc(user.username)}">Tip</button>` : ""}`;
+        ucUser = user;
+        ucTab = currentGame;
+        ucRender();
       } catch (error) {
         closeModal2();
         fail(error);
@@ -2141,6 +2158,8 @@
         STATE.chat = asArray(STATE.chat).filter(m => !(m.user && String(m.user.id) === String(d.userId)));
         renderChat();
       });
+
+      socket.on("bots:update", bots => { STATE.bots = bots; });
 
       socket.on("bounty:update", list => {
         STATE.bounties = list;
@@ -2535,6 +2554,7 @@
       const bot = (STATE.bots && STATE.bots[game]) || (game === "adoptme" ? STATE.bot : null) || {};
       const title = game === "ctd" ? "Cameraman Tower Defense" : "Adopt Me";
       const name = bot.username || (game === "adoptme" ? BOT_NAME : "");
+      const online = bot.online !== false;
 
       if (!name) {
         openModal2(`
@@ -2555,10 +2575,14 @@
           <div class="bot-main">
             ${avatar({ username: name, avatar: bot.avatar }, "sm")}
             <span>${esc(name)}</span>
-            <span class="dot"></span>
+            <span class="dot ${online ? "" : "off"}"></span>
+            <span class="muted" style="font-size:12px">${online ? "Online" : "Offline"}</span>
           </div>
-          <button class="join" data-action="bot-join" data-game="${esc(game)}">Join</button>
+          ${online
+            ? `<button class="join" data-action="bot-join" data-game="${esc(game)}">Join</button>`
+            : '<button class="join" disabled>Offline</button>'}
         </div>
+        ${online ? "" : '<p class="hint" style="color:#ffc65a">This bot is offline right now. Please wait until it is back online before depositing.</p>'}
 
         <p class="hint">To initiate a trade with the bot, send the bot a trade request in ${esc(title)}. Items you deposit can only be used in ${esc(title)}.</p>`);
     }
@@ -2694,6 +2718,26 @@
       window.scrollTo(0, 0);
     }
 
+    let profileGames = {}, profileTab = "adoptme";
+
+    function pfRender() {
+      const tabs = $("#pfTabs");
+      const grid = $("#pfStats");
+      if (!tabs || !grid) return;
+
+      const st = profileGames[profileTab] || { totalBet: 0, totalWon: 0, totalLost: 0, profit: 0 };
+      const profit = Number(st.profit || 0);
+
+      tabs.innerHTML = `<div class="game-tabs" style="margin:14px 0 0">${GAMES.map(g =>
+        `<button class="game-tab ${g.id === profileTab ? "on" : ""}" data-action="pf-tab" data-game="${g.id}">${g.name}</button>`).join("")}</div>`;
+
+      grid.innerHTML = `
+        <div class="stat"><small>Total Bet</small><b>${GEM}${fmt(st.totalBet)}</b></div>
+        <div class="stat"><small>Won</small><b>${GEM}${fmt(st.totalWon)}</b></div>
+        <div class="stat"><small>Lost</small><b>${GEM}${fmt(st.totalLost)}</b></div>
+        <div class="stat"><small>Profit</small><b class="${profit >= 0 ? "positive" : "negative"}">${profit >= 0 ? "+" : ""}${fmt(profit)}</b></div>`;
+    }
+
     async function showProfile(page = 1) {
       if (!requireLogin()) return;
 
@@ -2722,12 +2766,8 @@
               <button class="btn gray" data-action="home">← Back</button>
             </div>
 
-            <div class="stats">
-              <div class="stat"><small>Total Bet</small><b>${GEM}${fmt(stats.totalBet)}</b></div>
-              <div class="stat"><small>Won</small><b>${GEM}${fmt(stats.totalWon)}</b></div>
-              <div class="stat"><small>Lost</small><b>${GEM}${fmt(stats.totalLost)}</b></div>
-              <div class="stat"><small>Profit</small><b class="${profit >= 0 ? "positive" : "negative"}">${profit >= 0 ? "+" : ""}${fmt(profit)}</b></div>
-            </div>
+            <div id="pfTabs"></div>
+            <div class="stats" id="pfStats"></div>
 
             <div class="section-head">
               <h2>Transactions</h2>
@@ -2753,6 +2793,9 @@
                 <button class="${i + 1 === Number(result.page) ? "on" : ""}" data-action="profile-page" data-page="${i + 1}">${i + 1}</button>`).join("")}
             </div>
           </div>`;
+        profileGames = stats.games || {};
+        profileTab = currentGame;
+        pfRender();
       } catch (error) {
         fail(error);
         showPage("home");
@@ -3464,10 +3507,15 @@
     }
 
     /* ---------- Leaderboard ---------- */
+    let lbBy = "totalBet", lbGame = "all";
+
     async function showLeaderboard(by = "totalBet") {
       gridContext = null;
       viewMatchId = null;
       clearReplay();
+
+      lbBy = by;
+      lbGame = "all";
 
       openModal(`
         ${modalHeader("Leaderboard")}
@@ -3475,16 +3523,21 @@
           <button data-action="lb-tab" data-by="totalBet">Most Wagered</button>
           <button data-action="lb-tab" data-by="profit">Top Profit</button>
         </div>
+        <div class="seg" id="lbGames">
+          <button data-action="lb-game" data-game="all">All games</button>
+          ${GAMES.map(g => `<button data-action="lb-game" data-game="${g.id}">${g.name}</button>`).join("")}
+        </div>
         <div id="lbBody"><div class="empty">Loading…</div></div>`, "small");
 
-      loadLeaderboard(by);
+      loadLeaderboard();
     }
 
-    async function loadLeaderboard(by) {
-      document.querySelectorAll("#lbTabs button").forEach(b => b.classList.toggle("on", b.dataset.by === by));
+    async function loadLeaderboard() {
+      document.querySelectorAll("#lbTabs button").forEach(b => b.classList.toggle("on", b.dataset.by === lbBy));
+      document.querySelectorAll("#lbGames button").forEach(b => b.classList.toggle("on", b.dataset.game === lbGame));
 
       try {
-        const { list } = await api("/api/leaderboard?by=" + encodeURIComponent(by));
+        const { list } = await api("/api/leaderboard?by=" + encodeURIComponent(lbBy) + "&game=" + encodeURIComponent(lbGame));
         const body = $("#lbBody");
         if (!body) return;
 
@@ -3499,7 +3552,7 @@
                 <span class="n">${esc(u.username)}</span>
                 ${rankBadge(u.rank)}
               </div>
-              <div class="lb-val ${by === "profit" ? (u.value >= 0 ? "positive" : "negative") : ""}">${GEM}${by === "profit" && u.value > 0 ? "+" : ""}${fmt(u.value)}</div>
+              <div class="lb-val ${lbBy === "profit" ? (u.value >= 0 ? "positive" : "negative") : ""}">${GEM}${lbBy === "profit" && u.value > 0 ? "+" : ""}${fmt(u.value)}</div>
             </div>`).join("")
           : '<div class="empty">No players yet</div>';
       } catch (error) { fail(error); }
@@ -3509,7 +3562,10 @@
     const actions = {
       home() { closeModal(); closeModal2(); showPage("home"); },
       leaderboard() { showLeaderboard("totalBet"); },
-      "lb-tab"(el) { loadLeaderboard(el.dataset.by); },
+      "lb-tab"(el) { lbBy = el.dataset.by; loadLeaderboard(); },
+      "lb-game"(el) { lbGame = el.dataset.game; loadLeaderboard(); },
+      "uc-tab"(el) { ucTab = el.dataset.game; ucRender(); },
+      "pf-tab"(el) { profileTab = el.dataset.game; pfRender(); },
       jackpot: openJackpot,
       "jp-join": showJpJoin,
       "jp-submit": submitJpJoin,
@@ -3541,6 +3597,7 @@
       "bot-join"(el) {
         const game = el.dataset.game || "adoptme";
         const bot = (STATE.bots && STATE.bots[game]) || {};
+        if (bot.online === false) return toast("This bot is offline right now", "err");
         const link = bot.link || (game === "adoptme" ? BOT_LINK : "");
         if (!link) return toast("The bot link is not set yet", "err");
         window.open(link, "_blank", "noopener,noreferrer");
