@@ -19,7 +19,7 @@ const ADMIN_IDS = (E.ADMIN_IDS || '').split(',').map(x => x.trim()).filter(Boole
 
 const BOT_NAME = 'DedokAmp';
 const BOT_LINK = 'https://www.roblox.com/share?code=a0dd8a7bc68f034b99e078f454d4e903&type=Server';
-const MAX_ITEMS = 8;
+const MAX_ITEMS = 20;
 
 /* Two games, each with its own catalog, coinflip lobby and jackpot. Items can only be used in their own game. */
 const GAMES = [
@@ -57,7 +57,9 @@ const S = {
   announcement: null,
   notifications: [],
   bounties: [],
-  botStatus: { adoptme: true, ctd: true }
+  botStatus: { adoptme: true, ctd: true },
+  settings: { taxPercent: 0, taxReceiver: 'auto', taxIdx: 0 },
+  updateNotes: []
 };
 
 const pending = new Map();
@@ -323,7 +325,9 @@ function snapshot() {
     announcement: S.announcement,
     notifications: S.notifications.slice(0, 50),
     bounties: S.bounties,
-    botStatus: S.botStatus
+    botStatus: S.botStatus,
+    settings: S.settings,
+    updateNotes: S.updateNotes
   };
 }
 
@@ -355,6 +359,8 @@ async function initDb() {
       S.notifications = d.notifications || [];
       S.bounties = d.bounties || [];
       S.botStatus = { adoptme: true, ctd: true, ...(d.botStatus || {}) };
+      S.settings = { taxPercent: 0, taxReceiver: 'auto', taxIdx: 0, ...(d.settings || {}) };
+      S.updateNotes = d.updateNotes || [];
       console.log('State loaded from MongoDB.');
     }
   } catch (err) {
@@ -542,7 +548,8 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       /* unsafe-inline / unsafe-eval are needed because the pages use inline scripts and the admin panel is loaded after login */
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://challenges.cloudflare.com'],
+      frameSrc: ["'self'", 'https://challenges.cloudflare.com'],
       styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
       imgSrc: ["'self'", 'data:', 'https:'],
@@ -594,6 +601,8 @@ const io = new Server(server, {
 
 /* limit sockets per IP */
 const socketsByIp = new Map();
+const socketsByUser = new Map();
+const onlineCount = () => socketsByUser.size;
 
 const socketIp = socket => {
   const xff = String(socket.handshake.headers['x-forwarded-for'] || '').split(',').map(x => x.trim()).filter(Boolean);
@@ -623,7 +632,7 @@ function emitOnlineSoon() {
   if (onlineTimer) return;
   onlineTimer = setTimeout(() => {
     onlineTimer = null;
-    io.emit('online', io.engine.clientsCount);
+    io.emit('online', onlineCount());
   }, 2000);
 }
 
@@ -658,10 +667,98 @@ function emitMe(user) {
   io.to(`u:${user.id}`).emit('me:update', meView(user));
 }
 
+/* ================= CAPTCHA =================
+   Login and giveaway entries need a captcha. With TURNSTILE_SITE_KEY + TURNSTILE_SECRET set in Render
+   (free Cloudflare Turnstile) the real Turnstile widget is used. Without them a built-in image captcha is used. */
+
+const TURNSTILE_SITE_KEY = E.TURNSTILE_SITE_KEY || '';
+const TURNSTILE_SECRET = E.TURNSTILE_SECRET || '';
+
+const captchas = new Map();
+const CAPTCHA_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+function makeCaptcha() {
+  const rnd = (a, b) => round2(a + (crypto.randomInt(10001) / 10000) * (b - a));
+  const colors = ['#8bffd8', '#ffd35a', '#8ec5ff', '#ffb3c1', '#d6b8ff', '#ffffff'];
+  const pick = () => colors[crypto.randomInt(colors.length)];
+
+  const text = Array.from({ length: 5 }, () => CAPTCHA_CHARS[crypto.randomInt(CAPTCHA_CHARS.length)]).join('');
+
+  let svg = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="70" viewBox="0 0 200 70"><rect width="200" height="70" fill="#1b1e27"/>';
+
+  for (let i = 0; i < 7; i++) {
+    svg += `<line x1="${rnd(0, 200)}" y1="${rnd(0, 70)}" x2="${rnd(0, 200)}" y2="${rnd(0, 70)}" stroke="${pick()}" stroke-opacity="0.45" stroke-width="${rnd(1, 2.5)}"/>`;
+  }
+  for (let i = 0; i < 40; i++) {
+    svg += `<circle cx="${rnd(0, 200)}" cy="${rnd(0, 70)}" r="${rnd(0.6, 1.8)}" fill="${pick()}" opacity="0.5"/>`;
+  }
+
+  [...text].forEach((ch, i) => {
+    const x = round2(22 + i * 34 + rnd(-4, 4));
+    const y = round2(46 + rnd(-6, 6));
+    svg += `<text x="${x}" y="${y}" font-size="${Math.round(rnd(30, 38))}" font-family="Arial, Helvetica, sans-serif" font-weight="800" fill="${pick()}" transform="rotate(${rnd(-28, 28)} ${x} ${y})">${ch}</text>`;
+  });
+
+  return { text, svg: svg + '</svg>' };
+}
+
+app.get('/api/captcha', limiter(60 * 1000, 30), (req, res) => {
+  if (TURNSTILE_SECRET && TURNSTILE_SITE_KEY) return bad(res, 'The built-in captcha is not used');
+
+  if (captchas.size > 5000) {
+    const oldest = captchas.keys().next().value;
+    captchas.delete(oldest);
+  }
+
+  const c = makeCaptcha();
+  const id = rid(10);
+  captchas.set(id, { answer: c.text, exp: now() + 3 * 60 * 1000 });
+
+  res.json({ id, image: c.svg });
+});
+
+/* every captcha can be used only once, right or wrong */
+async function checkCaptcha(req, res) {
+  const body = req.body || {};
+
+  if (TURNSTILE_SECRET && TURNSTILE_SITE_KEY) {
+    const token = String(body.captchaToken || '');
+
+    if (token && token.length <= 4096) {
+      try {
+        const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ secret: TURNSTILE_SECRET, response: token, remoteip: String(req.ip || '') }),
+          signal: AbortSignal.timeout(8000)
+        });
+        const data = await response.json();
+        if (data && data.success) return true;
+      } catch { /* falls through to the error below */ }
+    }
+
+    res.status(400).json({ error: 'Captcha failed. Try again.', captcha: true });
+    return false;
+  }
+
+  const id = String(body.captchaId || '');
+  const answer = String(body.captchaAnswer || '').trim().toUpperCase();
+  const c = captchas.get(id);
+  captchas.delete(id);
+
+  if (!c || c.exp < now() || c.answer !== answer) {
+    res.status(400).json({ error: 'Wrong captcha. Try again.', captcha: true });
+    return false;
+  }
+
+  return true;
+}
+
 /* ================= AUTH ================= */
 
 app.post('/api/auth/start', authLimit, authGlobal, async (req, res) => {
   if (pending.size > 5000) return bad(res, 'The server is busy. Try again in a minute.', 503);
+  if (!(await checkCaptcha(req, res))) return;
 
   const username = String(req.body.username || '').trim();
   if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return bad(res, 'Invalid Roblox username');
@@ -779,6 +876,7 @@ function publicMatch(match) {
     result.winner = match.winnerId === match.host.id ? match.host : match.opp;
     result.seed = match.seed;
     result.finishedAt = match.finishedAt;
+    result.taxValue = match.taxValue || 0;
   }
   return result;
 }
@@ -796,7 +894,7 @@ function buildState() {
     matches: Object.values(S.matches).map(publicMatch),
     giveaways: Object.values(S.giveaways).map(publicGiveaway),
     chat: S.chat,
-    online: io.engine.clientsCount,
+    online: onlineCount(),
     bot,
     bots: botsPublic(),
     games: GAMES,
@@ -805,7 +903,11 @@ function buildState() {
     event: publicEvent(EVENT),
     jackpots: { adoptme: publicJackpot(JPS.adoptme), ctd: publicJackpot(JPS.ctd) },
     discord: DISCORD_INVITE,
-    config: { range: RANGE, maxItems: MAX_ITEMS, ranks: RANKS }
+    config: {
+      range: RANGE, maxItems: MAX_ITEMS, ranks: RANKS,
+      tax: Number(S.settings.taxPercent) || 0,
+      captcha: { mode: TURNSTILE_SECRET && TURNSTILE_SITE_KEY ? 'turnstile' : 'builtin', siteKey: TURNSTILE_SITE_KEY }
+    }
   };
 }
 
@@ -899,6 +1001,46 @@ function removeFinishedMatch(id) {
   io.emit('match:remove', { id });
 }
 
+/* The tax receiver is an admin account: either the one chosen in the admin panel or, in "auto" mode, admins in turn. */
+function pickTaxReceiver() {
+  const admins = Object.values(S.users).filter(u => isAdmin(u) && !u.banned).sort((a, b) => String(a.id).localeCompare(String(b.id)));
+  if (!admins.length) return null;
+
+  if (S.settings.taxReceiver !== 'auto') {
+    const chosen = S.users[S.settings.taxReceiver];
+    if (chosen && !chosen.banned && isAdmin(chosen)) return chosen;
+  }
+
+  const receiver = admins[(S.settings.taxIdx || 0) % admins.length];
+  S.settings.taxIdx = ((S.settings.taxIdx || 0) + 1) % 1000000;
+  return receiver;
+}
+
+/* Tax is taken in items from the pot, never more than the rate allows (largest items that still fit). */
+function takeTax(match) {
+  const none = { items: [], value: 0, receiver: null };
+  const rate = Math.min(20, Math.max(0, Number(S.settings.taxPercent) || 0)) / 100;
+  if (rate <= 0) return none;
+
+  const cap = (match.hostValue + match.oppValue) * rate;
+  const all = [...match.hostItems, ...match.oppItems].sort((a, b) => safeNumber(b.value) - safeNumber(a.value));
+
+  const items = [];
+  let total = 0;
+
+  for (const item of all) {
+    const v = safeNumber(item.value);
+    if (v > 0 && total + v <= cap + 1e-9) { items.push(item); total += v; }
+  }
+
+  if (!items.length) return none;
+
+  const receiver = pickTaxReceiver();
+  if (!receiver) return none;
+
+  return { items, value: round2(total), receiver };
+}
+
 function finishMatch(match) {
   if (!match || match.state !== 'flipping') return;
   if (!match.host || !match.opp) return;
@@ -916,7 +1058,14 @@ function finishMatch(match) {
   match.finishedAt = now();
   match.winnerId = winner.id;
 
-  winner.inventory.push(...match.hostItems, ...match.oppItems);
+  /* tax items go to the admin account, the rest of the pot to the winner (each item moves exactly once) */
+  const tax = takeTax(match);
+  const taxIds = new Set(tax.items.map(i => i.uid));
+
+  winner.inventory.push(...[...match.hostItems, ...match.oppItems].filter(i => !taxIds.has(i.uid)));
+  if (tax.receiver) tax.receiver.inventory.push(...tax.items);
+
+  match.taxValue = tax.value;
 
   const game = match.game || 'adoptme';
 
@@ -926,10 +1075,17 @@ function finishMatch(match) {
   /* wager requirement goes down by what each player staked */
   host.wagerLeft = Math.max(0, round2((host.wagerLeft || 0) - match.hostValue));
   opponent.wagerLeft = Math.max(0, round2((opponent.wagerLeft || 0) - match.oppValue));
-  bump(winner, game, { won: loserStake, profit: loserStake });
+  bump(winner, game, { won: round2(loserStake - tax.value), profit: round2(loserStake - tax.value) });
   bump(loser, game, { lost: loserStake, profit: -loserStake });
 
-  addTransaction(winner, 'Coinflip Win', match.id, loserStake);
+  addTransaction(winner, 'Coinflip Win', match.id, round2(loserStake - tax.value));
+
+  if (tax.receiver && tax.items.length) {
+    addTransaction(winner, 'Coinflip Tax', match.id, -tax.value);
+    addTransaction(tax.receiver, 'Tax Received', match.id, tax.value);
+    notifyAdmins('tax', `💰 Tax: ${tax.items.length} item(s) worth ${tax.value} from a ${gameName(game)} coinflip went to ${tax.receiver.username}`);
+    emitMe(tax.receiver);
+  }
   addTransaction(loser, 'Coinflip Loss', match.id, -loserStake);
 
   S.history.unshift(publicMatch(match));
@@ -1176,7 +1332,9 @@ app.post('/api/giveaway/create', auth, actionLimit, (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/giveaway/enter', auth, actionLimit, (req, res) => {
+app.post('/api/giveaway/enter', auth, actionLimit, async (req, res) => {
+  if (!(await checkCaptcha(req, res))) return;
+
   const user = req.user;
   const g = S.giveaways[String(req.body.id || '')];
 
@@ -1248,6 +1406,87 @@ function claimBounty(winner, loser, match) {
     timestamp: new Date().toISOString()
   });
 }
+
+app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
+  const percent = Number(req.body.percent);
+  if (!Number.isFinite(percent) || percent < 0 || percent > 20) return bad(res, 'Tax must be between 0 and 20 percent');
+
+  const receiver = String(req.body.receiver || 'auto');
+
+  if (receiver !== 'auto') {
+    const user = S.users[receiver];
+    if (!user || !isAdmin(user) || user.banned) return bad(res, 'The tax receiver must be an admin');
+  }
+
+  console.log(`[ADMIN] ${req.user.username} set the coinflip tax to ${percent}% (receiver: ${receiver})`);
+
+  S.settings.taxPercent = round2(percent);
+  S.settings.taxReceiver = receiver;
+  markDirty();
+  res.json({ ok: true });
+});
+
+const UPDATE_LOG = [
+  { version: '1.8', title: 'Tax, captcha, auto select and online counter', changes: [
+    'Coinflip tax: admins set a rate (0–20%) and the receiver; taxed items go to an admin account and a bell notification is sent',
+    'Captcha when logging in and when entering a giveaway (Cloudflare Turnstile if configured, built-in image captcha otherwise)',
+    'Join match: "Auto select" picks the smallest items that fit the required value range',
+    'Coinflip item limit raised from 8 to 20; "Select All" removed from create/join and kept in the wallet',
+    'Online counter counts each logged-in player once (not tabs) and is shown only after login',
+    'Admin panel: update log'
+  ] },
+  { version: '1.7', title: 'CTD deposit bot, security and per-game stats', changes: [
+    'CTD deposit bot (CTDdepo1) with its own join link; admins can set each bot online or offline',
+    'Per-IP rate limits, automatic temporary IP blocks, request timeouts, socket limits and a short cache for the public state',
+    'Content security policy, safer lookups and no stack traces for visitors',
+    'Item audit every 30 seconds: no item id may exist in two places; database revision lock against double instances',
+    'Profile, user card, leaderboard and admin stats are split into Adopt Me and CTD'
+  ] },
+  { version: '1.6', title: 'Cameraman Tower Defense and bounty', changes: [
+    'Second game: CTD, with its own catalog, coinflip lobby and jackpot; items cannot be used in the other game',
+    'Game tabs on the coinflip and jackpot pages, stat cards for total items, value and active games',
+    'Bounty: admins put a bounty on a player, the first player who beats them wins the prize and everyone sees a congratulation popup',
+    'Admin catalog split into Adopt Me and CTD with a move button'
+  ] },
+  { version: '1.5', title: 'Pet Duel, mobile and jackpot', changes: [
+    'Site renamed to Pet Duel and an independence notice added in the footer',
+    'Mobile: floating chat button, chat opens full screen, menu row with Jackpot, Leaderboard and Discord',
+    'Coinflip animation is the same as the replay; the result is shown when the coin stops',
+    'Jackpot: 60 second rounds, avatars on the ring, provably fair verify button',
+    'Gems fall when the wallet changes; circular item previews; active games value'
+  ] },
+  { version: '1.4', title: 'Moderation, ranks and events', changes: [
+    'Mute (all chat messages of the player are deleted), ban, item delete, stats editing and admin roles with a chat tag option',
+    '30 ranks and a minimum rank for giveaways',
+    'Wheel and word scramble events with an announcement banner',
+    'Tips from the profile card and the admin notification bell'
+  ] },
+  { version: '1.0', title: 'Launch', changes: [
+    'Roblox login, coinflip with provably fair hash, 3D coin, history and replay',
+    'Giveaways, live chat, leaderboard, announcements and admin panel with catalog and item grants',
+    'Manual withdraw requests with a wager requirement for items from giveaways, events and tips',
+    'Discord webhooks for giveaways and coinflips'
+  ] }
+];
+
+app.post('/api/admin/updatelog', auth, adminOnly, (req, res) => {
+  const title = String(req.body.title || '').trim().slice(0, 80);
+  const text = String(req.body.text || '').trim().slice(0, 500);
+  if (!title || !text) return bad(res, 'Write a title and a text');
+  if (S.updateNotes.length >= 100) return bad(res, 'Too many notes. Delete an old one first.');
+
+  S.updateNotes.unshift({ id: rid(4), title, text, ts: now(), by: req.user.username });
+  markDirty();
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/updatelog/delete', auth, adminOnly, (req, res) => {
+  const index = S.updateNotes.findIndex(n => n.id === String(req.body.id || ''));
+  if (index < 0) return bad(res, 'Note not found', 404);
+  S.updateNotes.splice(index, 1);
+  markDirty();
+  res.json({ ok: true });
+});
 
 app.post('/api/admin/bot', auth, adminOnly, (req, res) => {
   const game = String(req.body.game || '');
@@ -1335,8 +1574,8 @@ const JP_TIME = 60;
 const JP_ROLL_MS = 4500;
 const JP_RESULT_MS = 9000;
 const JP_MAX_PLAYERS = 25;
-const JP_MAX_JOIN_ITEMS = 8;
-const JP_MAX_USER_ITEMS = 24;
+const JP_MAX_JOIN_ITEMS = 20;
+const JP_MAX_USER_ITEMS = 40;
 
 const JPS = { adoptme: null, ctd: null };
 const jpTimers = { adoptme: [], ctd: [] };
@@ -1472,7 +1711,7 @@ app.post('/api/jackpot/join', auth, actionLimit, (req, res) => {
   const uids = selectionToUids(req.body);
   const selected = pickItems(user, uids, JP_MAX_JOIN_ITEMS);
 
-  if (!selected) return bad(res, 'Select 1–8 valid items');
+  if (!selected) return bad(res, `Select 1–${JP_MAX_JOIN_ITEMS} valid items`);
   if (!selected.every(i => gameOf(i) === game)) return bad(res, `Only ${gameName(game)} items can be used here`);
   if (valueOf(selected) <= 0) return bad(res, 'Value too low');
 
@@ -1969,7 +2208,11 @@ app.get('/api/admin/data', auth, adminOnly, (req, res) => {
     })),
     withdrawals: S.withdrawals.filter(w => w.status === 'pending'),
     bounties: publicBounties(),
-    botStatus: S.botStatus
+    botStatus: S.botStatus,
+    settings: S.settings,
+    admins: Object.values(S.users).filter(u => isAdmin(u)).map(u => ({ id: u.id, username: u.username })),
+    updateLog: UPDATE_LOG,
+    updateNotes: S.updateNotes
   });
 });
 
@@ -2269,6 +2512,16 @@ function adminUI() {
         </div>
       </div>
 
+      <h4 style="margin:16px 0 8px">💰 Coinflip tax</h4>
+      <div style="background:#f5faff;padding:14px;border-radius:12px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div><small>Tax rate (%), 0–20</small><input id="tax-pct" class="in" type="number" min="0" max="20" step="0.5" style="width:100%"></div>
+          <div><small>Receiver</small><select id="tax-rcv" class="in" style="width:100%"></select></div>
+        </div>
+        <button id="tax-save" class="btn" style="width:100%">Save tax settings</button>
+        <p class="hint">The tax is taken in items from the pot of every finished coinflip (the largest items that still fit under the rate, so it is never more than the rate). It goes to the chosen admin, or to the admins in turn when "Auto" is selected, and you get a bell notification each time. 0 turns the tax off.</p>
+      </div>
+
       <h4 style="margin:16px 0 8px">🤖 Deposit bots</h4>
       <div id="adm-bots" style="background:#f5faff;padding:14px;border-radius:12px"></div>
 
@@ -2317,6 +2570,9 @@ function adminUI() {
       <div id="adm-users"></div>
       <div id="adm-inv"></div>
       <div id="adm-stats"></div>
+
+      <h4 style="margin:16px 0 8px">📋 Update log</h4>
+      <div id="adm-log"></div>
     </div>`;
 
   document.body.appendChild(overlay);
@@ -2404,6 +2660,32 @@ function adminUI() {
     const prevBounty = $('bt-item').value;
     $('bt-item').innerHTML = $('ev-item').innerHTML;
     if (prevBounty) $('bt-item').value = prevBounty;
+
+    $('tax-pct').value = data.settings ? data.settings.taxPercent : 0;
+    $('tax-rcv').innerHTML = '<option value="auto">Auto (admins in turn)</option>' +
+      (data.admins || []).map(a => `<option value="${esc(a.id)}">${esc(a.username)}</option>`).join('');
+    $('tax-rcv').value = data.settings ? data.settings.taxReceiver : 'auto';
+
+    const logBuiltIn = (data.updateLog || []).map(v => `
+      <details style="border:1px solid #343842;border-radius:8px;padding:8px 12px;margin-bottom:8px">
+        <summary style="cursor:pointer;font-weight:800">v${esc(v.version)} — ${esc(v.title)}</summary>
+        <ul style="margin:8px 0 0 18px;line-height:1.6">${v.changes.map(c => `<li>${esc(c)}</li>`).join('')}</ul>
+      </details>`).join('');
+
+    const logNotes = (data.updateNotes || []).map(n => `
+      <div style="border:1px solid #343842;border-radius:8px;padding:8px 12px;margin-bottom:8px">
+        📝 <b>${esc(n.title)}</b> <small>${new Date(n.ts).toLocaleString()} · ${esc(n.by)}</small><br>
+        ${esc(n.text)}
+        <button class="btn red sm" data-note-del="${esc(n.id)}" style="margin-left:8px">Delete</button>
+      </div>`).join('');
+
+    $('adm-log').innerHTML = `
+      <div style="margin-bottom:10px">
+        <input id="ul-title" class="in" maxlength="80" placeholder="Note title" style="width:100%;margin-bottom:6px">
+        <input id="ul-text" class="in" maxlength="500" placeholder="What changed?" style="width:100%;margin-bottom:6px">
+        <button class="btn sm" id="ul-add">Add note</button>
+      </div>
+      ${logNotes}${logBuiltIn}`;
 
     $('adm-bots').innerHTML = [['adoptme', 'Adopt Me'], ['ctd', 'CTD']].map(([g, name]) => {
       const on = !data.botStatus || data.botStatus[g] !== false;
@@ -2690,6 +2972,35 @@ function adminUI() {
     } catch (err) { toast(err.message, 'err'); }
   }
 
+  $('tax-save').onclick = async () => {
+    try {
+      await api('/api/admin/tax', { method: 'POST', body: { percent: $('tax-pct').value, receiver: $('tax-rcv').value } });
+      toast('Tax settings saved', 'ok');
+      await load();
+    } catch (err) { toast(err.message, 'err'); }
+  };
+
+  $('adm-log').onclick = async e => {
+    if (e.target.closest('#ul-add')) {
+      try {
+        await api('/api/admin/updatelog', { method: 'POST', body: { title: $('ul-title').value, text: $('ul-text').value } });
+        toast('Note added', 'ok');
+        await load();
+      } catch (err) { toast(err.message, 'err'); }
+      return;
+    }
+
+    const d = e.target.closest('[data-note-del]');
+    if (!d) return;
+    if (!(await confirmBox({ title: 'Delete note', text: 'Delete this update note?', ok: 'Delete', danger: true }))) return;
+
+    try {
+      await api('/api/admin/updatelog/delete', { method: 'POST', body: { id: d.dataset.noteDel } });
+      toast('Note deleted', 'ok');
+      await load();
+    } catch (err) { toast(err.message, 'err'); }
+  };
+
   $('adm-bots').onclick = async e => {
     const b = e.target.closest('[data-bot]');
     if (!b) return;
@@ -2755,7 +3066,17 @@ io.use((socket, next) => {
 });
 
 io.on('connection', socket => {
-  if (socket.user) socket.join(`u:${socket.user.id}`);
+  if (socket.user) {
+    const uid = socket.user.id;
+    socket.join(`u:${uid}`);
+
+    /* the same player with several tabs counts once */
+    socketsByUser.set(uid, (socketsByUser.get(uid) || 0) + 1);
+    socket.on('disconnect', () => {
+      const left = (socketsByUser.get(uid) || 1) - 1;
+      if (left <= 0) socketsByUser.delete(uid); else socketsByUser.set(uid, left);
+    });
+  }
   if (socket.user && isAdmin(socket.user)) socket.join('admins');
   emitOnlineSoon();
 
@@ -2887,6 +3208,7 @@ setInterval(() => {
   for (const [k, v] of lastGuess) if (t - v > 10 * 60 * 1000) lastGuess.delete(k);
   for (const [k, v] of blockedIps) if (v <= t) blockedIps.delete(k);
   for (const [k, v] of strikes) if (t - v.t > 10 * 60 * 1000) strikes.delete(k);
+  for (const [k, v] of captchas) if (v.exp < t) captchas.delete(k);
 }, 60 * 1000);
 
 /* never show stack traces to visitors */
