@@ -981,7 +981,7 @@
         <div class="chat">
           <div class="chat-head">
             <span>LIVE CHAT</span>
-            <span class="online" id="online">Connecting…</span>
+            <span class="online" id="online"></span>
           </div>
 
           <div class="messages" id="messages"></div>
@@ -1237,6 +1237,9 @@
       if (currentPage === "jackpot") renderJackpot(true);
     }
 
+    const taxHint = () => Number(STATE.config && STATE.config.tax) > 0
+      ? `<p class="hint">A ${Number(STATE.config.tax)}% tax is taken from the pot (in items) when the game ends.</p>` : "";
+
     const bountyBadge = id => asArray(STATE.bounties).some(b => b.target && b.target.id === id)
       ? ' <span class="bt-badge" title="Bounty! Beat this player in a coinflip to win a prize">🎯</span>' : "";
     const totalValue = items => items.reduce((t, i) => t + Number(i.value || 0), 0);
@@ -1423,7 +1426,7 @@
             ${asArray(NOTIFS.list).length
               ? asArray(NOTIFS.list).map(n => `
                 <div class="bell-item ${n.ts > NOTIFS.seen ? "fresh" : ""}">
-                  <span>${n.type === "withdraw" ? "📤" : "👋"}</span>
+                  <span>${n.type === "withdraw" ? "📤" : n.type === "tax" ? "💰" : n.type === "security" ? "🛡️" : "👋"}</span>
                   <div>${esc(n.text)}<small>${timeAgo(n.ts)}</small></div>
                 </div>`).join("")
               : '<div class="empty" style="padding:24px">No notifications</div>'}
@@ -1699,7 +1702,7 @@
 
         ${footer ? `<div class="modal-footer">${footer}</div>` : ""}
 
-        <div class="fair"><b>Provably fair</b><br>Hash: <code>${esc(match.hash || "—")}</code><br>${verify}</div>`;
+        <div class="fair"><b>Provably fair</b><br>Hash: <code>${esc(match.hash || "—")}</code>${match.taxValue ? `<br>Tax: ${GEM}${fmt(match.taxValue)}` : ""}<br>${verify}</div>`;
     }
 
     function showView(id) {
@@ -2007,7 +2010,10 @@
     async function enterGiveaway(id) {
       if (!requireLogin()) return;
       try {
-        await api("/api/giveaway/enter", { body: { id } });
+        const captcha = await captchaBox("Verify to enter the giveaway");
+        if (!captcha) return;
+
+        await api("/api/giveaway/enter", { body: { id, ...captcha } });
         toast("You entered the giveaway!", "ok");
         await refresh();
       } catch (error) { fail(error); }
@@ -2133,10 +2139,10 @@
       socket = io(API_BASE, { auth: { token } });
 
       socket.on("connect", scheduleRefresh);
-      socket.on("disconnect", () => { $("#online").textContent = "Connecting…"; });
+      socket.on("disconnect", () => { $("#online").textContent = ME ? "Connecting…" : ""; });
 
       socket.on("online", count => {
-        $("#online").textContent = count + " online";
+        $("#online").textContent = ME ? count + " online" : "";
       });
 
       socket.on("chat:msg", m => {
@@ -2240,7 +2246,7 @@
         if (ME && ME.isAdmin && notifUser !== ME.id) { notifUser = ME.id; loadNotifs(); }
         renderChat();
 
-        $("#online").textContent = Number(STATE.online || 0) + " online";
+        $("#online").textContent = ME ? Number(STATE.online || 0) + " online" : "";
 
         renderView();
 
@@ -2308,7 +2314,10 @@
       if (!username) return toast("Enter your username", "err");
 
       try {
-        loginData = await api("/api/auth/start", { body: { username } });
+        const captcha = await captchaBox("Verify to continue");
+        if (!captcha) return;
+
+        loginData = await api("/api/auth/start", { body: { username, ...captcha } });
 
         const t = $("#loginStep");
         if (!t) return;
@@ -2442,6 +2451,56 @@
       $("#gridSearch")?.addEventListener("input", renderGrid);
       $("#gridSort")?.addEventListener("change", renderGrid);
       renderGrid();
+    }
+
+    /* Auto select: finds a combination inside the required range and prefers the smallest items. */
+    function autoSelect() {
+      if (!gridContext || !gridContext.range) return;
+
+      const [low, high] = gridContext.range;
+      const EPS = 0.001;
+      const items = gridItems().filter(i => Number(i.value) > 0).sort((a, b) => Number(a.value) - Number(b.value));
+      const n = items.length;
+
+      const suffix = new Array(n + 1).fill(0);
+      for (let i = n - 1; i >= 0; i--) suffix[i] = suffix[i + 1] + Number(items[i].value);
+
+      let nodes = 0;
+      let found = null;
+      const chosen = [];
+
+      const search = (start, sum) => {
+        if (found) return;
+
+        if (sum >= low - EPS) {
+          if (sum <= high + EPS) found = chosen.slice();
+          return;
+        }
+
+        if (chosen.length >= gridContext.max || ++nodes > 60000) return;
+
+        for (let i = start; i < n; i++) {
+          const v = Number(items[i].value);
+          if (sum + v > high + EPS) break;                 /* later items are bigger, so none can fit */
+          if (sum + suffix[i] < low - EPS) break;          /* not enough value left in the list */
+
+          chosen.push(items[i]);
+          search(i + 1, sum + v);
+          chosen.pop();
+          if (found) return;
+        }
+      };
+
+      search(0, 0);
+
+      if (!found) {
+        toast("No combination of your items fits the required range", "err");
+        return;
+      }
+
+      selected = new Set(found.map(itemId));
+      renderGrid();
+      toast(`Auto selected ${found.length} item(s) worth ${fmt(totalValue(found))}`, "ok");
     }
 
     function pickItem(id) {
@@ -2596,7 +2655,7 @@
       viewMatchId = null;
 
       gridContext = {
-        max: 8,
+        max: 20,
         game: currentGame,
         info() {
           const items = selectedItems();
@@ -2606,8 +2665,8 @@
 
           if (t) {
             t.innerHTML = items.length
-              ? `${items.length}/8 · ${GEM}${fmt(value)} · Join ${fmt(low)} – ${fmt(high)}`
-              : "Select up to 8 items";
+              ? `${items.length}/20 · ${GEM}${fmt(value)} · Join ${fmt(low)} – ${fmt(high)}`
+              : "Select up to 20 items";
           }
         }
       };
@@ -2615,6 +2674,7 @@
       openModal(`
         ${modalHeader("Create Coinflip · " + gameNameOf(currentGame))}
         <p class="hint">Only ${gameNameOf(currentGame)} items can be used in this game.</p>
+        ${taxHint()}
 
         <div class="sides" id="sides">
           <div class="side-choice selected" data-action="side" data-side="dog"><div>${chip("dog")}</div></div>
@@ -2625,7 +2685,6 @@
 
         <div class="modal-footer">
           <span id="createInfo" style="margin-right:auto;align-self:center"></span>
-          <button class="btn outline" data-action="select-all">Select All</button>
           <button class="btn gray" data-action="select-none">Clear</button>
           <button class="btn" data-action="submit-create">Create Game</button>
         </div>`, "wide");
@@ -2657,8 +2716,9 @@
       const [low, high] = matchRange(Number(match.hostValue || 0));
 
       gridContext = {
-        max: 8,
+        max: 20,
         game: match.game || "adoptme",
+        range: [low, high],
         info() {
           const value = totalValue(selectedItems());
           const valid = value >= low - 0.001 && value <= high + 0.001;
@@ -2673,6 +2733,7 @@
 
       openModal(`
         ${modalHeader("Join " + esc(getUsername(match.host)) + "'s Game")}
+        ${taxHint()}
 
         <div class="row">
           <span class="hint" style="margin:0">Your coin:</span>
@@ -2683,7 +2744,7 @@
 
         <div class="modal-footer">
           <span id="joinInfo" style="margin-right:auto;align-self:center"></span>
-          <button class="btn outline" data-action="select-all">Select All</button>
+          <button class="btn outline" data-action="auto-select" title="Picks the smallest items that fit the required range">Auto select</button>
           <button class="btn gray" data-action="select-none">Clear</button>
           <button class="btn" data-action="submit-join" data-id="${esc(match.id)}">Join</button>
         </div>`, "wide");
@@ -2814,6 +2875,90 @@
         window.AMP = { api, esc, toast, fmt, tags, confirmBox };
         new Function(script)();
       } catch (error) { fail(error); }
+    }
+
+    /* ---------- Captcha (login and giveaway entries) ---------- */
+    let turnstileLoading = null;
+
+    function loadTurnstile() {
+      if (window.turnstile) return Promise.resolve();
+
+      if (!turnstileLoading) {
+        turnstileLoading = new Promise((resolve, reject) => {
+          const script = document.createElement("script");
+          script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+          script.async = true;
+          script.onload = resolve;
+          script.onerror = () => { turnstileLoading = null; reject(new Error("The captcha could not be loaded")); };
+          document.head.appendChild(script);
+        });
+      }
+
+      return turnstileLoading;
+    }
+
+    /* resolves with the captcha fields to send to the server, or null when cancelled */
+    function captchaBox(title = "Verify you are human") {
+      const config = (STATE.config && STATE.config.captcha) || { mode: "builtin" };
+
+      return new Promise(resolve => {
+        const overlay = $("#overlay3");
+        const close = value => { overlay.classList.remove("open"); confirmCancel = null; resolve(value); };
+
+        confirmCancel = () => close(null);
+        overlay.onmousedown = e => { if (e.target === overlay) close(null); };
+
+        if (config.mode === "turnstile") {
+          $("#modal3").innerHTML = `
+            <div class="mh"><h3>${esc(title)}</h3></div>
+            <div id="tsBox" style="display:flex;justify-content:center;min-height:70px"></div>
+            <div class="modal-footer"><button class="btn gray" id="capNo">Cancel</button></div>`;
+
+          overlay.classList.add("open");
+          $("#capNo").onclick = () => close(null);
+
+          loadTurnstile()
+            .then(() => window.turnstile.render("#tsBox", { sitekey: config.siteKey, theme: "dark", callback: token => close({ captchaToken: token }) }))
+            .catch(error => { toast(error.message, "err"); close(null); });
+
+          return;
+        }
+
+        let captchaId = "";
+
+        const loadImage = async () => {
+          try {
+            const c = await api("/api/captcha");
+            captchaId = c.id;
+            $("#capImg").src = "data:image/svg+xml;utf8," + encodeURIComponent(c.image);
+            $("#capAns").value = "";
+            $("#capAns").focus();
+          } catch (error) { fail(error); }
+        };
+
+        $("#modal3").innerHTML = `
+          <div class="mh"><h3>${esc(title)}</h3></div>
+          <p class="hint">Type the characters you see in the image.</p>
+          <img id="capImg" alt="captcha" style="width:100%;border-radius:8px;background:#1b1e27;min-height:70px">
+          <input id="capAns" class="in" maxlength="8" autocomplete="off" placeholder="Characters" style="width:100%;margin-top:10px;text-transform:uppercase">
+          <div class="modal-footer">
+            <button class="btn gray" id="capNew">New image</button>
+            <button class="btn gray" id="capNo">Cancel</button>
+            <button class="btn" id="capYes">Verify</button>
+          </div>`;
+
+        overlay.classList.add("open");
+
+        $("#capNo").onclick = () => close(null);
+        $("#capNew").onclick = loadImage;
+        $("#capYes").onclick = () => {
+          const answer = $("#capAns").value.trim();
+          if (answer) close({ captchaId, captchaAnswer: answer });
+        };
+        $("#capAns").onkeydown = e => { if (e.key === "Enter") $("#capYes").click(); };
+
+        loadImage();
+      });
     }
 
     /* ---------- Confirm box (in-site, replaces the browser popup) ---------- */
@@ -3420,7 +3565,7 @@
       const mineNow = ME ? Number((asArray(j.entries).find(e => e.user.id === ME.id) || {}).value || 0) : 0;
 
       gridContext = {
-        max: 8,
+        max: 20,
         game: currentGame,
         info() {
           const items = selectedItems();
@@ -3431,8 +3576,8 @@
 
           if (t) {
             t.innerHTML = items.length
-              ? `${items.length}/8 · ${GEM}${fmt(value)} · your chance ~${chance}%`
-              : "Select up to 8 items";
+              ? `${items.length}/20 · ${GEM}${fmt(value)} · your chance ~${chance}%`
+              : "Select up to 20 items";
           }
         }
       };
@@ -3445,7 +3590,6 @@
 
         <div class="modal-footer">
           <span id="jpInfo" style="margin-right:auto;align-self:center"></span>
-          <button class="btn outline" data-action="select-all">Select All</button>
           <button class="btn gray" data-action="select-none">Clear</button>
           <button class="btn" data-action="jp-submit">Join Jackpot</button>
         </div>`, "wide");
@@ -3643,6 +3787,7 @@
       pick(el) { pickItem(el.dataset.id); },
       "select-all": selectAll,
       "select-none"() { selected.clear(); renderGrid(); },
+      "auto-select": autoSelect,
 
       "chat-open": openChat,
       "chat-close": closeChat,
