@@ -101,6 +101,11 @@
     }
     .wallet-bal { display: flex; align-items: center; gap: 8px; padding: 0 16px; cursor: pointer; font-weight: 800; font-size: 15px; }
     .wallet-bal .gem-i { width: 22px; height: 22px; margin: 0; }
+    .wallet-bal span { font-variant-numeric: tabular-nums; transition: color .3s, text-shadow .3s; }
+    .wallet-bal.count-up span { color: var(--green); text-shadow: 0 0 12px rgba(0, 239, 160, .6); }
+    .wallet-bal.count-down span { color: var(--red); text-shadow: 0 0 12px rgba(255, 89, 104, .5); }
+    .wallet-bal.count-up .gem-i { animation: gem-bump .5s cubic-bezier(.2, .9, .3, 1.4) 2; }
+    @keyframes gem-bump { 50% { transform: scale(1.25) rotate(-8deg); } }
     .wallet-btn { padding: 0 20px; color: #04120b; background: var(--green); font-weight: 800; transition: filter .2s; }
     .wallet-btn:hover { filter: brightness(1.1); }
     .user-menu-wrap { position: relative; }
@@ -978,6 +983,11 @@
     .upd ul { margin: 8px 0 0; padding-left: 18px; }
     .discord-btn svg { width: 20px; height: 20px; fill: currentColor; }
 
+    .banner.update { border-color: #2e5a4b; background: radial-gradient(circle at 90% 30%, rgba(0, 239, 160, .14), transparent 50%), linear-gradient(100deg, #14251f, #171a22 75%); }
+    .banner.update #bannerTitle { display: flex; align-items: center; gap: 10px; color: #fff; }
+    .upd-chip { padding: 3px 8px; border-radius: 6px; color: #04120b; background: var(--green); font-size: 11px; letter-spacing: 1px; box-shadow: 0 0 14px rgba(0, 239, 160, .55); animation: soon-pulse 1.8s ease-in-out infinite; }
+    .banner-btn { flex: none; margin-left: auto; margin-right: 10px; }
+    .banner.update .chips { display: none; }
     .banner.announce { border-color: var(--green); background: linear-gradient(100deg, #12332a, #1b2420); box-shadow: 0 0 26px -10px rgba(0, 239, 160, .5); }
     .banner.announce h1 { color: var(--green); }
     .banner.announce p { color: #d5e6df; font-size: 14px; }
@@ -1226,6 +1236,7 @@
             <h1 id="bannerTitle">Pet Duel Coinflip</h1>
             <p id="bannerText">Create a game, pick a coin and watch it flip.</p>
           </div>
+          <button class="btn sm banner-btn" id="bannerBtn" data-action="info" data-page="updates" hidden>See what's new</button>
           <div class="chips" id="bannerChips"></div>
         </div>
 
@@ -1629,38 +1640,45 @@
       }
     }
 
-    /* ---------- falling gems when the wallet changes ---------- */
+    /* ---------- wallet balance counts up / down when it changes ---------- */
     let lastWallet = null, lastWalletUser = null;
+    let walletShown = null, walletRaf = 0;
 
-    function walletFx(diff) {
-      const el = document.querySelector(".wallet-bal");
-      if (!el) return;
+    function animateWallet(from, to) {
+      cancelAnimationFrame(walletRaf);
+      const start = performance.now();
+      const dur = Math.min(1800, 900 + Math.log10(Math.abs(to - from) + 1) * 220);  /* 1 – 1.8 s */
+      const gain = to > from;
+      walletShown = from;
 
-      const r = el.getBoundingClientRect();
-      const gain = diff > 0;
-      const count = Math.min(18, Math.max(5, Math.round(Math.log10(Math.abs(diff) + 1) * 5)));
-      const cx = r.left + r.width / 2;
-
-      for (let i = 0; i < count; i++) {
-        const g = document.createElement("div");
-        g.className = "fx-gem " + (gain ? "gain" : "loss");
-        g.innerHTML = '<svg viewBox="0 0 24 24"><use href="#gem"/></svg>';
-        g.style.left = (cx + (Math.random() * 90 - 45)) + "px";
-        g.style.top = (gain ? r.top - 150 : r.bottom - 14) + "px";
-        g.style.setProperty("--dx", (Math.random() * 60 - 30) + "px");
-        g.style.setProperty("--rot", (Math.random() * 360 - 180) + "deg");
-        g.style.animationDelay = (i * 55) + "ms";
-        document.body.appendChild(g);
-        setTimeout(() => g.remove(), 1800 + i * 55);
-      }
+      const bal = document.querySelector(".wallet-bal");
+      if (bal) { bal.classList.remove("count-up", "count-down"); void bal.offsetWidth; bal.classList.add(gain ? "count-up" : "count-down"); }
 
       const label = document.createElement("div");
-      label.className = "fx-amount " + (gain ? "gain" : "loss");
-      label.textContent = (gain ? "+" : "−") + fmt(Math.abs(diff));
-      label.style.left = cx + "px";
-      label.style.top = (r.bottom + 6) + "px";
-      document.body.appendChild(label);
-      setTimeout(() => label.remove(), 1700);
+      const r = bal ? bal.getBoundingClientRect() : null;
+      if (r) {
+        label.className = "fx-amount " + (gain ? "gain" : "loss");
+        label.textContent = (gain ? "+" : "−") + fmt(Math.abs(to - from));
+        label.style.left = (r.left + r.width / 2) + "px";
+        label.style.top = (r.bottom + 6) + "px";
+        document.body.appendChild(label);
+        setTimeout(() => label.remove(), 1700);
+      }
+
+      const tick = t => {
+        const p = Math.min(1, (t - start) / dur);
+        const e = p * p * p;                         /* starts slow, speeds up */
+        walletShown = from + (to - from) * e;
+        const num = document.querySelector(".wallet-bal span");
+        if (num) num.textContent = fmt(walletShown);
+        if (p < 1) walletRaf = requestAnimationFrame(tick);
+        else {
+          walletShown = null;
+          const b = document.querySelector(".wallet-bal");
+          if (b) setTimeout(() => b.classList.remove("count-up", "count-down"), 350);
+        }
+      };
+      walletRaf = requestAnimationFrame(tick);
     }
 
     function renderHeader() {
@@ -1674,9 +1692,10 @@
         lastWalletUser = ME.id;
         lastWallet = value;
       } else if (Math.abs(value - lastWallet) >= 0.01) {
-        const diff = value - lastWallet;
+        const from = walletShown !== null ? walletShown : lastWallet;
         lastWallet = value;
-        setTimeout(() => walletFx(diff), 80);
+        walletShown = from;
+        setTimeout(() => animateWallet(from, value), 60);
       }
 
       const ci = $("#chatInput");
@@ -1717,7 +1736,7 @@
         ${bell}
 
         <div class="wallet">
-          <div class="wallet-bal" data-action="wallet">${GEM}<span>${fmt(value)}</span></div>
+          <div class="wallet-bal" data-action="wallet">${GEM}<span>${fmt(walletShown !== null ? walletShown : value)}</span></div>
           <button class="wallet-btn" data-action="wallet">Wallet</button>
         </div>
 
@@ -2148,10 +2167,16 @@
         $("#bannerTitle").textContent = "📢 " + (a.title || "Announcement");
         $("#bannerText").textContent = a.text || "";
         banner.classList.add("announce");
+        $("#bannerBtn").hidden = true;
+        banner.classList.remove("update");
       } else {
-        $("#bannerTitle").textContent = "Pet Duel Coinflip";
-        $("#bannerText").textContent = "Create a game, pick a coin and watch it flip.";
+        /* no admin announcement: show a short note about the latest update */
+        const u = PUBLIC_UPDATES[0];
+        $("#bannerTitle").innerHTML = `<span class="upd-chip">NEW</span> Update v${esc(u.v)} · ${esc(u.title)}`;
+        $("#bannerText").textContent = u.note || u.items[0];
+        $("#bannerBtn").hidden = false;
         banner.classList.remove("announce");
+        banner.classList.add("update");
       }
     }
 
@@ -2879,15 +2904,15 @@
       try {
         const { list } = await api("/api/withdrawals");
         if (!$("#wdBox")) return;
-        const rows = asArray(list);
-        if (!rows.length) { box.innerHTML = ""; return; }
-        const pending = rows.filter(w => w.status === "pending");
+        const pending = asArray(list).filter(w => w.status === "pending");
+        if (!pending.length) { box.innerHTML = ""; return; }
+        const rows = pending;
         const label = { pending: "Pending", done: "Sent", refunded: "Refunded" };
         box.innerHTML = `
           <div class="wd-panel ${wdOpen ? "open" : ""}">
             <button class="wd-head" data-action="wd-toggle">
-              <span class="wd-title">${pending.length ? '<span class="wd-pulse"></span>' : ""}Pending withdrawals
-                <b>${pending.length}</b>${pending.length ? `<span class="muted">· ${GEM}${fmt(pending.reduce((t, w) => t + Number(w.value || 0), 0))}</span>` : ""}</span>
+              <span class="wd-title"><span class="wd-pulse"></span>Pending withdrawals
+                <b>${pending.length}</b><span class="muted">· ${GEM}${fmt(pending.reduce((t, w) => t + Number(w.value || 0), 0))}</span></span>
               <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
             </button>
             <div class="wd-body"><div>
@@ -2897,7 +2922,7 @@
                   <div class="items">${thumbs(w.items, 6)}</div>
                   <div class="wd-meta"><b>${GEM}${fmt(w.value)}</b><small>${esc(ago(w.ts))}</small></div>
                 </div>`).join("")}
-              <p class="hint" style="margin:6px 0 0">Pending requests are sent to you in game by an admin. If something goes wrong the pets come back to your inventory.</p>
+              <p class="hint" style="margin:6px 0 0">An admin will send these pets to you in game soon. If something goes wrong they come back to your inventory.</p>
             </div></div>
           </div>`;
       } catch { box.innerHTML = ""; }
@@ -3225,8 +3250,14 @@
       `<span class="coin-logo"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="${color}"/>${glyph}</svg>${name}</span>`;
 
     /* public update log: only things players see and can be shared openly */
+    /* newest first; "note" is the short text shown in the banner in the middle of the home page */
     const PUBLIC_UPDATES = [
-      { v: "2.4", title: "Pet limits and withdraw status", items: [
+      { v: "2.5", title: "Smoother wallet", note: "Your balance now counts up when you win and only pending withdrawals are shown in your wallet. Good luck!", items: [
+        "Your wallet balance counts up (or down) smoothly when it changes",
+        "The wallet only lists withdrawals that are still pending",
+        "The latest update is now shown right here on the home page"
+      ] },
+      { v: "2.4", title: "Pet limits and withdraw status", note: "Limit how many pets your opponent can join with, and follow your withdrawals in the wallet.", items: [
         "When you create a coinflip you can limit how many pets your opponent may join with",
         "See your pending withdrawals right in your wallet",
         "Shorter page buttons in your transaction history"

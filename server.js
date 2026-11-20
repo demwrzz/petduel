@@ -1414,6 +1414,11 @@ app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
 });
 
 const UPDATE_LOG = [
+  { version: '2.5', title: 'Wallet counter and update banner', changes: [
+    'Wallet balance counts up / down (starts slow, speeds up, 1-1.8 s) instead of the falling gems',
+    'Wallet only shows pending withdrawals',
+    'Home banner shows a short note about the latest update when there is no admin announcement (admin announcements still win)'
+  ] },
   { version: '2.4', title: 'Pet limits, withdraw status and Discord pictures', changes: [
     'Create Coinflip: choose how many pets the opponent may join with (1, 2, 3, 5, 10 or any); the server enforces it',
     'Wallet: players see their withdraw requests (pending / sent / refunded); the wallet opens with an animation',
