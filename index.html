@@ -851,6 +851,30 @@
     .toast.err { background: #9e303d; }
     .toast.ok { color: #04120b; background: var(--green); }
 
+    /* ---------- maintenance: closed screen ---------- */
+    #closed {
+      position: fixed; inset: 0; z-index: 95; display: grid; place-items: center; overflow: hidden; padding: 24px;
+      background: radial-gradient(circle at 50% 40%, #10291f 0%, #0d0f15 60%, #090b10 100%);
+    }
+    #closed[hidden] { display: none; }
+    .cl-glow { position: absolute; width: 70vmin; height: 70vmin; border-radius: 50%; background: radial-gradient(circle, rgba(0, 239, 160, .22), transparent 65%); animation: cl-breathe 5s ease-in-out infinite; }
+    @keyframes cl-breathe { 50% { transform: scale(1.12); opacity: .7; } }
+    .cl-inner { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; animation: pop .7s cubic-bezier(.2, .9, .25, 1.1) both; }
+    .cl-logo { width: clamp(90px, 18vw, 150px); height: clamp(90px, 18vw, 150px); margin-bottom: 10px; filter: drop-shadow(0 0 30px rgba(0, 239, 160, .5)); animation: lg-float 6s ease-in-out infinite; }
+    .cl-logo svg { width: 100%; height: 100%; }
+    .cl-title { margin: 0; color: #fff; font-size: clamp(64px, 16vw, 180px); font-weight: 900; line-height: .95; letter-spacing: -.04em; text-shadow: 0 10px 40px rgba(0, 0, 0, .6); }
+    .cl-title span { color: var(--green); text-shadow: 0 0 40px rgba(0, 239, 160, .45); }
+    .cl-sub { margin: 18px 0 0; color: #fff; font-size: clamp(18px, 3.4vw, 28px); font-weight: 800; }
+    .cl-text { max-width: 560px; margin: 10px 0 0; color: #9aa0ad; font-size: 16px; line-height: 1.6; }
+    .cl-text:empty { display: none; }
+    .cl-discord { margin-top: 28px; padding: 12px 20px; border-radius: 10px; color: #fff; background: #5865f2; font-weight: 800; text-decoration: none; transition: filter .2s; }
+    .cl-discord:hover { filter: brightness(1.1); }
+    .cl-staff { margin-top: 18px; color: #5f6472; background: none; font-size: 12px; font-weight: 700; }
+    .cl-staff:hover { color: #cfd2db; }
+    body.site-closed { overflow: hidden; }
+    .maint-bar { position: sticky; top: 0; z-index: 45; padding: 8px 14px; color: #fff; background: #b4232f; font-size: 13px; font-weight: 800; text-align: center; }
+    .maint-bar[hidden] { display: none; }
+
     #boot { position: fixed; inset: 0; z-index: 500; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 15px; padding: 20px; background: #11141b; text-align: center; font-weight: 700; }
     .loader { width: 42px; height: 42px; border: 4px solid #323844; border-top-color: var(--green); border-radius: 50%; animation: spin 1s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -1221,6 +1245,19 @@
       </symbol>
     </defs>
   </svg>
+
+  <div id="closed" hidden>
+    <div class="cl-glow"></div>
+    <div class="cl-inner">
+      <div class="cl-logo"><svg viewBox="0 0 100 100"><use href="#logo-mark"/></svg></div>
+      <h1 class="cl-title">PET<span>DUEL</span></h1>
+      <p class="cl-sub">Pet Duel is officially closed.</p>
+      <p class="cl-text" id="closedText"></p>
+      <a class="cl-discord" href="https://discord.gg/TaPXaAseP" target="_blank" rel="noopener noreferrer">Join our Discord for news</a>
+      <button class="cl-staff" data-action="login">Staff login</button>
+    </div>
+  </div>
+  <div class="maint-bar" id="maintBar" hidden>🔒 Maintenance mode is ON: only admins can see the site. Players see the closed screen.</div>
 
   <div id="boot">
     <div class="loader"></div>
@@ -2522,6 +2559,8 @@
       socket = io(API_BASE, { auth: { token } });
 
       socket.on("connect", scheduleRefresh);
+      socket.on("maintenance", () => refresh());
+      socket.on("connect_error", err => { if (err && err.message === "maintenance") refresh(); });
       socket.on("disconnect", () => { $("#online").textContent = ME ? "Connecting…" : ""; });
 
       socket.on("online", count => {
@@ -2601,6 +2640,7 @@
         const state = await api("/api/state");
         if (state.now) clockSkew = Date.now() - state.now;
         STATE = { ...STATE, ...state };
+        if (!state.maintenance) STATE.maintenance = false;
 
         if (token) {
           try {
@@ -2615,7 +2655,19 @@
           }
         } else ME = null;
 
-        if (!booted) {
+        /* maintenance: everyone except admins only sees the closed screen */
+        const closed = Boolean(STATE.maintenance) && !(ME && ME.isAdmin);
+        $("#closed").hidden = !closed;
+        $("#closedText").textContent = STATE.maintenanceText || "";
+        document.body.classList.toggle("site-closed", closed);
+        $("#maintBar").hidden = !(STATE.maintenance && ME && ME.isAdmin);
+        if (closed) {
+          if (!booted) { booted = true; $("#boot").style.display = "none"; }
+          if (socket) { socket.disconnect(); socket = null; }
+          return;
+        }
+
+        if (!booted || (!socket && typeof io === "function")) {
           booted = true;
           $("#boot").style.display = "none";
           connectSocket();

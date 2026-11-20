@@ -645,6 +645,28 @@ function adminOnly(req, res, next) {
   next();
 }
 
+/* ---------- Maintenance mode: only admins can use the site ----------
+   Login, captcha and /api/me stay open so admins can still sign in. */
+const maintenanceOn = () => Boolean(S.settings.maintenance);
+const MAINT_OPEN = ['/auth/', '/captcha', '/me'];
+
+app.use('/api', (req, res, next) => {
+  if (!maintenanceOn()) return next();
+  const user = userFromToken(tokenFromRequest(req));
+  if (user && isAdmin(user)) return next();
+
+  if (req.path === '/state') {
+    return res.json({
+      maintenance: true,
+      maintenanceText: S.settings.maintenanceText || '',
+      config: { captcha: { mode: TURNSTILE_SECRET && TURNSTILE_SITE_KEY ? 'turnstile' : 'builtin', siteKey: TURNSTILE_SITE_KEY }, robloxLogin: oauthOn() },
+      now: now()
+    });
+  }
+  if (MAINT_OPEN.some(p => req.path === p || req.path.startsWith(p))) return next();
+  res.status(503).json({ error: 'Pet Duel is closed right now', maintenance: true });
+});
+
 function emitMe(user) {
   markDirty();
   io.to(`u:${user.id}`).emit('me:update', meView(user));
@@ -974,6 +996,7 @@ function buildState() {
     giveaways: Object.values(S.giveaways).map(publicGiveaway),
     chat: S.chat,
     online: onlineCount(),
+    maintenance: maintenanceOn(),
     bot: firstBot(),
     bots: publicBots(),
     bounties: publicBounties(),
@@ -1491,6 +1514,26 @@ function claimBounty(winner, loser, match) {
   }, { thumb: winner, author: winner, image: topImage([b.prize]) });
 }
 
+app.post('/api/admin/maintenance', auth, adminOnly, (req, res) => {
+  S.settings.maintenance = Boolean(req.body.on);
+  S.settings.maintenanceText = String(req.body.text || '').trim().slice(0, 200);
+  stateCache.t = 0;
+  markDirty();
+  console.log(`[ADMIN] ${req.user.username} turned maintenance ${S.settings.maintenance ? 'ON' : 'OFF'}`);
+
+  if (S.settings.maintenance) {
+    /* everyone who is not an admin is sent to the closed screen right away */
+    for (const sock of io.sockets.sockets.values()) {
+      if (!(sock.user && isAdmin(sock.user))) {
+        sock.emit('maintenance', { on: true });
+        sock.disconnect(true);
+      }
+    }
+  }
+  io.emit('maintenance', { on: S.settings.maintenance });
+  res.json({ ok: true, on: S.settings.maintenance });
+});
+
 app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
   const percent = Number(req.body.percent);
   if (!Number.isFinite(percent) || percent < 0 || percent > 20) return bad(res, 'Tax must be between 0 and 20 percent');
@@ -1511,6 +1554,10 @@ app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
 });
 
 const UPDATE_LOG = [
+  { version: '2.8', title: 'Maintenance mode', changes: [
+    'Admin panel: Close / Open the site. While closed only admins can use the site; everyone else sees a big PET DUEL "officially closed" screen with an optional message',
+    'Players are disconnected right away and come back automatically when the site is opened again; admins see a red maintenance bar'
+  ] },
   { version: '2.7', title: 'Sign in with Roblox', changes: [
     'Official Roblox OAuth login (one click, no code) next to the bio code login; shown once ROBLOX_CLIENT_ID and ROBLOX_CLIENT_SECRET are set',
     'PKCE + state check; the session token is handed over with a one-time ticket, never in a URL'
@@ -2663,7 +2710,9 @@ app.get('/api/admin/data', auth, adminOnly, (req, res) => {
     updateLog: UPDATE_LOG,
     updateNotes: S.updateNotes,
     bots: publicBots(),
-    elveUrl: S.settings.elveUrl || ''
+    elveUrl: S.settings.elveUrl || '',
+    maintenance: maintenanceOn(),
+    maintenanceText: S.settings.maintenanceText || ''
   });
 });
 
@@ -2973,6 +3022,17 @@ function adminUI() {
     <div class="modal wide">
       <div class="mh"><h3>🛠 Admin Panel</h3><button class="x" id="adm-x">✕</button></div>
 
+      <div id="mt-box" style="margin-bottom:16px;padding:14px;border-radius:12px;border:1px solid #343842">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <b style="font-size:15px">🔒 Maintenance mode</b>
+          <span id="mt-state" style="font-weight:800"></span>
+          <span style="flex:1"></span>
+          <button id="mt-toggle" class="btn"></button>
+        </div>
+        <input id="mt-text" class="in" maxlength="200" style="width:100%;margin-top:10px" placeholder="Optional message under &quot;Pet Duel is officially closed&quot;">
+        <p class="hint" style="margin:6px 0 0">When it is ON nobody except admins can use the site: players see a big PET DUEL closed screen and are disconnected right away. Admins can still log in and play normally.</p>
+      </div>
+
       <h4 style="margin:0 0 8px">📤 Pending Withdrawals</h4>
       <div id="adm-wd" style="margin-bottom:16px"></div>
 
@@ -3224,6 +3284,9 @@ function adminUI() {
     if (prevBounty) $('bt-item').value = prevBounty;
 
     renderBots(data.bots || []);
+    mtOn = Boolean(data.maintenance);
+    if (document.activeElement !== $('mt-text')) $('mt-text').value = data.maintenanceText || '';
+    renderMaint();
     $('e-src').value = data.elveUrl || '';
 
     $('tax-pct').value = data.settings ? data.settings.taxPercent : 0;
@@ -3260,6 +3323,25 @@ function adminUI() {
         </div>`).join('')
       : '<p class="hint">No active bounties.</p>';
   }
+
+  let mtOn = false;
+  function renderMaint() {
+    $('mt-state').textContent = mtOn ? '● ON: the site is closed' : '● OFF: the site is open';
+    $('mt-state').style.color = mtOn ? '#ff5968' : '#00efa0';
+    $('mt-box').style.borderColor = mtOn ? '#ff5968' : '#343842';
+    $('mt-toggle').textContent = mtOn ? 'Open the site' : 'Close the site';
+    $('mt-toggle').className = mtOn ? 'btn' : 'btn red';
+  }
+  $('mt-toggle').onclick = async () => {
+    const turnOn = !mtOn;
+    if (turnOn && !(await confirmBox({ title: 'Close the site?', text: 'Everyone except admins will be disconnected and see the closed screen.', ok: 'Close the site', danger: true }))) return;
+    try {
+      const r = await api('/api/admin/maintenance', { method: 'POST', body: { on: turnOn, text: $('mt-text').value } });
+      mtOn = r.on;
+      renderMaint();
+      toast(mtOn ? 'Maintenance ON: the site is closed' : 'Maintenance OFF: the site is open', 'ok');
+    } catch (err) { toast(err.message, 'err'); }
+  };
 
   function renderBots(bots) {
     $('bot-list').innerHTML = bots.length
@@ -3731,6 +3813,7 @@ function adminUI() {
 io.use((socket, next) => {
   socket.token = socket.handshake.auth && socket.handshake.auth.token;
   socket.user = userFromToken(socket.token);
+  if (maintenanceOn() && !(socket.user && isAdmin(socket.user))) return next(new Error('maintenance'));
   next();
 });
 
