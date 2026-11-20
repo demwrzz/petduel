@@ -1501,6 +1501,25 @@ app.post('/api/giveaway/create', auth, actionLimit, (req, res) => {
   res.json({ ok: true });
 });
 
+/* admins can delete any giveaway; by default the pets go back to the host */
+app.post('/api/admin/giveaway/delete', auth, adminOnly, (req, res) => {
+  const g = S.giveaways[String(req.body.id || '')];
+  if (!g) return bad(res, 'Giveaway not found', 404);
+  delete S.giveaways[g.id];
+
+  const host = S.users[g.host.id];
+  const refund = req.body.refund !== false;
+  if (refund && host) {
+    host.inventory.push(...g.items);
+    emitMe(host);
+  }
+  markDirty();
+  console.log(`[ADMIN] ${req.user.username} deleted giveaway ${g.id} of ${g.host.username} (${refund ? 'pets returned' : 'pets removed'})`);
+  pushChat({ id: rid(4), user: { username: 'System', avatar: null }, text: `${nick(g.host)}'s giveaway was cancelled by an admin.`, ts: now() });
+  io.emit('giveaway:remove', { id: g.id });
+  res.json({ ok: true });
+});
+
 app.post('/api/giveaway/enter', auth, actionLimit, async (req, res) => {
   if (!(await checkCaptcha(req, res))) return;
 
@@ -1617,6 +1636,10 @@ app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
 });
 
 const UPDATE_LOG = [
+  { version: '3.1', title: 'Safer deposit flow, giveaway delete', changes: [
+    'Deposit is 3 steps: 1) "Deposit at your own risk" with an I acknowledge checkbox, 2) trade rules incl. at least 6 food items per trade, 3) the bot (masked name, shown big) and the Join private server button',
+    'Admins see a delete button on every giveaway card; pets go back to the host unless unticked'
+  ] },
   { version: '3.0', title: 'Long giveaways', changes: [
     'Giveaway duration has no practical limit: days, hours and minutes in Advanced mode; Easy mode also has 1 hour and 1 day',
     'Giveaways are saved in the database and survive restarts / deploys (before, a restart returned the items to the host)',

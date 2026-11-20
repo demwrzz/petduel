@@ -763,6 +763,30 @@
     }
     .warn i { display: grid; place-items: center; flex: none; width: 26px; height: 26px; border-radius: 50%; color: #1a1100; background: var(--orange); font-style: normal; font-weight: 800; }
 
+    .dep-steps { display: flex; gap: 6px; margin: -4px 0 16px; }
+    .dep-steps i { flex: 1; height: 4px; border-radius: 4px; background: #262a35; transition: background .3s; }
+    .dep-steps i.on { background: var(--green); }
+    .dep-risk { margin-bottom: 16px; padding: 18px; border: 1px solid #6b2a33; border-radius: 12px; background: linear-gradient(160deg, #2a171b, #1a1a21); text-align: center; animation: enter .35s both; }
+    .dep-risk-ico { display: grid; place-items: center; width: 52px; height: 52px; margin: 0 auto 10px; border-radius: 50%; color: #fff; background: var(--red); font-size: 28px; font-weight: 900; box-shadow: 0 0 24px rgba(255, 89, 104, .5); }
+    .dep-risk h3 { margin: 0 0 8px; color: #fff; font-size: 20px; }
+    .dep-risk p { margin: 0 0 8px; color: #c9b9bc; line-height: 1.6; }
+    .dep-risk b { color: #fff; }
+    .dep-ack { margin: 0 0 16px; }
+    .dep-next { width: 100%; min-height: 48px; font-size: 15px; }
+    .dep-nav { display: flex; gap: 8px; margin-top: 14px; }
+    .dep-nav .dep-next { flex: 1; width: auto; }
+    .dep-rules { margin: 0 0 14px; padding-left: 22px; color: #c3c6cf; line-height: 1.7; }
+    .dep-rules li { margin-bottom: 6px; padding-left: 4px; }
+    .dep-rules b { color: #fff; }
+    .dep-food { display: inline-block; padding: 2px 8px; border-radius: 6px; color: #ffd27a; background: #3a2d14; font-weight: 700; }
+    .dep-bot { margin-bottom: 10px; padding: 16px; border: 1px solid #2c303b; border-radius: 12px; background: #191c25; animation: enter .35s both; }
+    .dep-bot.off { opacity: .6; }
+    .dep-bot-top { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .dep-bot-name { flex: 1; min-width: 0; }
+    .dep-bot-name small { display: block; color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; }
+    .dep-bot-name b { display: block; color: #fff; font-size: clamp(24px, 6vw, 34px); font-weight: 900; letter-spacing: 1px; line-height: 1.15; word-break: break-all; }
+    .dep-join { width: 100%; min-height: 48px; font-size: 15px; }
+    .dep-join svg { width: 18px; height: 18px; }
     .bot-row { display: flex; align-items: stretch; overflow: hidden; margin-bottom: 8px; border: 1px solid #2c303b; border-radius: 8px; background: #191c25; }
     .bot-main { display: flex; flex: 1; align-items: center; gap: 12px; padding: 10px 14px; font-weight: 700; }
     .dot { width: 9px; height: 9px; border-radius: 50%; background: #0fbf7c; box-shadow: 0 0 8px #0fbf7c; }
@@ -2316,7 +2340,7 @@
     /* ---------- Giveaways ---------- */
     function renderGiveaways() {
       const list = asArray(STATE.giveaways);
-      const sig = JSON.stringify([list.map(g => [g.id, g.entrantCount]), ME && ME.id]);
+      const sig = JSON.stringify([list.map(g => [g.id, g.entrantCount]), ME && ME.id, ME && ME.isAdmin]);
       if (sig === gwSig) return;
       gwSig = sig;
 
@@ -2358,7 +2382,7 @@
 
             <div class="gw-bar"><i class="ticker-bar" data-end="${Number(g.endsAt || 0)}" data-dur="${Number(g.duration || 60)}"></i></div>
 
-            <div class="gw-foot">${chips}<span style="flex:1"></span>${button}</div>
+            <div class="gw-foot">${chips}<span style="flex:1"></span>${ME && ME.isAdmin ? `<button class="btn red sm" data-action="gw-delete" data-id="${esc(g.id)}" title="Delete giveaway (admin)">🗑</button>` : ""}${button}</div>
           </div>`;
       }).join("");
     }
@@ -3284,40 +3308,85 @@
     const depositBots = () => {
       const list = asArray(STATE.bots);
       if (list.length) return list;
-      return STATE.bot ? [STATE.bot] : [{ id: "default", username: BOT_NAME, link: BOT_LINK, online: true }];
+      return STATE.bot ? [STATE.bot] : [];
     };
 
+    /* the bot's name is shown masked and big (ltcs***e) so players can match it in game */
     function botsListHTML() {
       const bots = depositBots();
+      if (!bots.length) return '<div class="empty">No deposit bot is available right now. Please try again later.</div>';
       const anyOnline = bots.some(b => b.online !== false);
       return bots.map(bot => {
         const online = bot.online !== false;
         return `
-          <div class="bot-row ${online ? "" : "off"}">
-            <div class="bot-main">
-              ${avatar({ username: bot.username, avatar: bot.avatar }, "sm")}
-              <span>${esc(bot.username)}</span>
+          <div class="dep-bot ${online ? "" : "off"}">
+            <div class="dep-bot-top">
+              ${avatar({ username: bot.username, avatar: bot.avatar }, "md")}
+              <div class="dep-bot-name">
+                <small>Trade only with</small>
+                <b>${esc(bot.username)}</b>
+              </div>
               <span class="bot-status ${online ? "on" : "off"}"><span class="dot ${online ? "" : "off"}"></span>${online ? "Online" : "Offline"}</span>
             </div>
             ${online
-              ? `<button class="join" data-action="bot-join" data-link="${esc(bot.link || bot.joinLink || BOT_LINK)}">Join</button>`
-              : '<button class="join" disabled>Offline</button>'}
+              ? `<button class="btn dep-join" data-action="bot-join" data-link="${esc(bot.link || bot.joinLink || BOT_LINK)}">
+                   <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5.2 2 2 18.8 18.8 22 22 5.2zm8.6 12.7-4.5-.9.9-4.5 4.5.9z"/></svg>
+                   Join private server
+                 </button>`
+              : '<button class="btn gray dep-join" disabled>Offline</button>'}
           </div>`;
       }).join("") + (anyOnline ? "" : '<p class="hint" style="color:#ffc65a">All bots are offline right now. Please wait until one is back online before depositing.</p>');
     }
 
-    function openBotsModal() {
+    /* Deposit: 1. accept the risk  2. read the trade rules  3. see the bot and the private server */
+    function openBotsModal(step = 1) {
+      const steps = `<div class="dep-steps">${[1, 2, 3].map(n => `<i class="${n <= step ? "on" : ""}"></i>`).join("")}</div>`;
+
+      if (step === 1) {
+        openModal2(`
+          ${modalHeader("Deposit", "close2")}
+          ${steps}
+          <div class="dep-risk">
+            <div class="dep-risk-ico">!</div>
+            <h3>Deposit at your own risk</h3>
+            <p>Depositing pets is <b>at your own risk</b>. Roblox / Adopt Me can ban or restrict trading accounts at any time, and pets on a banned bot can be lost. Pet Duel cannot guarantee that lost pets are replaced.</p>
+            <p>Only deposit pets you are okay with risking. Never deposit pets that are not yours.</p>
+          </div>
+          <label class="lg-check dep-ack">
+            <input type="checkbox" id="depAck">
+            <span class="lg-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg></span>
+            <span>I acknowledge that I deposit at my own risk</span>
+          </label>
+          <button class="btn dep-next" id="depNext1" data-action="dep-step" data-step="2" disabled>Continue</button>`);
+        $("#depAck").addEventListener("change", e => { $("#depNext1").disabled = !e.target.checked; });
+        return;
+      }
+
+      if (step === 2) {
+        openModal2(`
+          ${modalHeader("How to deposit", "close2")}
+          ${steps}
+          <ol class="dep-rules">
+            <li><b>Join the bot's private server</b> in Adopt Me (next step).</li>
+            <li><b>Send the bot a trade</b> with the pets you want to deposit.</li>
+            <li><span class="dep-food">🍔 Add at least <b>6 food items</b> to every trade.</span> This is required for security. Trades without 6 food items are declined.</li>
+            <li><b>Check the bot's name</b> before you accept. Scammers copy bot names with tiny changes.</li>
+            <li>Your pets appear in your inventory <b>once an admin confirms</b> the trade.</li>
+          </ol>
+          <div class="warn"><i>!</i><span>Staff will never DM you asking for pets. Only trade with the bot shown in this window.</span></div>
+          <div class="dep-nav">
+            <button class="btn gray" data-action="dep-step" data-step="1">Back</button>
+            <button class="btn dep-next" data-action="dep-step" data-step="3">I understand, show the bot</button>
+          </div>`);
+        return;
+      }
+
       openModal2(`
-        ${modalHeader("Deposit", "close2")}
-
-        <div class="warn">
-          <i>!</i>
-          <span>Always verify that the username of your trading partner matches exactly, users often impersonate bots with similar names.</span>
-        </div>
-
+        ${modalHeader("Deposit bot", "close2")}
+        ${steps}
         <div id="depositBots">${botsListHTML()}</div>
-
-        <p class="hint">To deposit, join the bot's server in Adopt Me and send it a trade request with the pets you want to deposit. They appear in your inventory once an admin confirms them.</p>`);
+        <p class="hint">Remember: at least <b>6 food items</b> in every trade. Your pets appear in your inventory once an admin confirms them.</p>
+        <div class="dep-nav"><button class="btn gray" data-action="dep-step" data-step="2">Back</button></div>`);
     }
 
     /* ---------- Create / Join ---------- */
@@ -3653,6 +3722,8 @@
             <ul>
               <li>Pets are virtual items with no real money value. Values on the site are only used to match fair games.</li>
               <li>Deposits are checked by hand and appear in your inventory once an admin confirms them.</li>
+              <li><b>Deposits are at your own risk.</b> Bot accounts can be banned by Roblox / Adopt Me and pets on a banned bot can be lost.</li>
+              <li>Every deposit trade must contain at least 6 food items.</li>
               <li>Only trade with the official bots listed in the Deposit window. We are not responsible for trades with impostors.</li>
               <li>Withdrawals are sent by admins and can take some time.</li>
             </ul>
@@ -4670,6 +4741,21 @@
 
       "submit-giveaway": submitGiveaway,
       "enter-giveaway"(el) { enterGiveaway(el.dataset.id); },
+      "dep-step"(el) { openBotsModal(Number(el.dataset.step) || 1); },
+      async "gw-delete"(el) {
+        const refund = await confirmBox({
+          title: "Delete giveaway",
+          text: "Delete this giveaway? Nobody wins it.",
+          ok: "Delete", danger: true,
+          checkbox: { label: "Give the pets back to the host", checked: true }
+        });
+        if (!refund) return;
+        try {
+          await api("/api/admin/giveaway/delete", { body: { id: el.dataset.id, refund: refund.checked } });
+          toast("Giveaway deleted", "ok");
+          await refresh();
+        } catch (error) { fail(error); }
+      },
 
       pick(el) { pickItem(el.dataset.id); },
       "select-all": selectAll,
