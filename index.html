@@ -546,6 +546,9 @@
     .lg-or::before, .lg-or::after { content: ""; flex: 1; height: 1px; background: #262a35; }
     .lg-check.shake { animation: lg-shake .4s; }
     @keyframes lg-shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+    .lg-hint { margin: 8px 0 18px; color: #7f8492; font-size: 13px; font-weight: 600; }
+    .lg-hint.ok { color: var(--green); }
+    .lg-hint.bad { color: var(--red); }
     .lg-label { display: block; margin-bottom: 9px; color: #fff; font-size: 15px; font-weight: 800; }
     .lg-input {
       width: 100%; height: 54px; padding: 0 18px; border: 1px solid #262a35; border-radius: 12px; color: #fff;
@@ -1537,6 +1540,7 @@
       if (!response.ok) {
         const error = new Error(data.error || data.message || `HTTP ${response.status}`);
         error.status = response.status;
+        error.needNickname = Boolean(data.needNickname);
         throw error;
       }
       return data;
@@ -1550,7 +1554,10 @@
       setTimeout(() => el.remove(), 4000);
     }
 
-    const fail = error => toast(error.message || String(error), "err");
+    const fail = error => {
+      if (error && error.needNickname) return showNickname();
+      toast(error.message || String(error), "err");
+    };
 
     /* ---------- Helpers ---------- */
     function avatar(user, size = "", ring = "") {
@@ -1688,6 +1695,8 @@
     }
 
     function closeModal() {
+      /* the nickname screen cannot be closed until a nickname is chosen (logging out still works) */
+      if ($("#modal").classList.contains("locked") && ME && !ME.nickname) return;
       $("#overlay").classList.remove("open");
       selected.clear();
       gridContext = null;
@@ -2661,6 +2670,8 @@
         $("#closedText").textContent = STATE.maintenanceText || "";
         document.body.classList.toggle("site-closed", closed);
         $("#maintBar").hidden = !(STATE.maintenance && ME && ME.isAdmin);
+        if (!closed && ME && !ME.nickname && !$("#nickCard")) showNickname();
+
         if (closed) {
           if (!booted) { booted = true; $("#boot").style.display = "none"; }
           if (socket) { socket.disconnect(); socket = null; }
@@ -2747,6 +2758,50 @@
     }, 100);
 
     /* ---------- Login ---------- */
+    /* ---------- Site nickname (required before playing) ---------- */
+    function showNickname(change = false) {
+      if (!ME) return showLogin();
+      gridContext = null;
+      viewMatchId = null;
+      openModal(`
+        ${LOGIN_DECO.replace('<button class="lg-x" data-action="close" aria-label="Close">×</button>', change ? '<button class="lg-x" data-action="close" aria-label="Close">×</button>' : "")}
+        <div class="lg-body" id="nickCard">
+          <h2>${change ? "Change your" : "Choose your"} <span>nickname</span></h2>
+          <p class="lg-sub">This is the name everyone sees on Pet Duel: in the chat, in games and on the leaderboard. Your Roblox name stays private.${change ? " You can change it once every 7 days." : " You need one to play."}</p>
+          <label class="lg-label" for="nickInput">Nickname</label>
+          <input class="lg-input" id="nickInput" maxlength="16" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="3-16 letters, numbers or _" value="${esc(ME.nickname || "")}">
+          <p class="lg-hint" id="nickHint">Letters, numbers and _ only.</p>
+          <button class="lg-btn ready" data-action="nick-save">${change ? "Save nickname" : "Start playing"}</button>
+          ${change ? "" : '<button class="lg-back" data-action="logout">Log out</button>'}
+        </div>`, "login" + (change ? "" : " locked"));
+
+      const input = $("#nickInput");
+      input.addEventListener("input", () => {
+        const v = input.value.trim();
+        const ok = /^[A-Za-z0-9_]{3,16}$/.test(v);
+        $("#nickHint").textContent = !v ? "Letters, numbers and _ only." : ok ? "Looks good!" : "3-16 letters, numbers or _";
+        $("#nickHint").className = "lg-hint " + (v ? (ok ? "ok" : "bad") : "");
+      });
+      input.addEventListener("keydown", e => { if (e.key === "Enter") saveNickname(); });
+      if (!matchMedia("(hover: none)").matches) setTimeout(() => input.focus({ preventScroll: true }), 80);
+    }
+
+    async function saveNickname() {
+      const nickname = $("#nickInput")?.value.trim();
+      if (!nickname) return toast("Choose a nickname", "err");
+      try {
+        const r = await api("/api/me/nickname", { body: { nickname } });
+        ME = r.user;
+        closeModal();
+        headerSig = "";
+        lobbySig = "";
+        renderHeader();
+        toast(`Welcome, ${ME.nickname}!`, "ok");
+        if (socket) connectSocket();
+        await refresh();
+      } catch (error) { toast(error.message, "err"); }
+    }
+
     /* ---------- Login ---------- */
     const LOGIN_DECO = `
       <svg class="lg-deco c1" viewBox="0 0 100 100"><use href="#chip-dog"/></svg>
@@ -3433,6 +3488,7 @@
               <div style="flex:1">
                 <h2>${esc(ME.username)}</h2>
                 <span class="pill">${esc(ME.rank || "Rookie")}</span>
+                <button class="btn gray sm" style="margin-left:6px" data-action="nick-change">✏️ Change nickname</button>
                 <div class="seen on" style="margin-top:6px"><span class="live-dot"></span><span class="live-text">Online now</span></div>
               </div>
 
@@ -3475,6 +3531,11 @@
     /* public update log: only things players see and can be shared openly */
     /* newest first; "note" is the short text shown in the banner in the middle of the home page */
     const PUBLIC_UPDATES = [
+      { v: "2.8", title: "Nicknames", note: "Pick your own nickname! Everyone on Pet Duel now sees your nickname instead of your Roblox name.", items: [
+        "Choose a nickname: it is shown in the chat, in games and on the leaderboard",
+        "Your Roblox name stays private",
+        "Change it from your profile (once every 7 days)"
+      ] },
       { v: "2.7", needs: "robloxLogin", title: "Sign in with Roblox", note: "You can now log in with your Roblox account in one click, no code in your bio needed!", items: [
         "Sign in with Roblox: one click, no code needed",
         "The bio code login still works too"
@@ -4492,6 +4553,8 @@
       login: showLogin,
       "login-start": loginStart,
       "login-cap-new"() { newLoginCaptcha(); },
+      "nick-save"() { saveNickname(); },
+      "nick-change"() { showNickname(true); },
       "login-roblox"() {
         const tos = $("#loginTos");
         if (tos && !tos.checked) {

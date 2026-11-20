@@ -74,7 +74,29 @@ const bad = (res, message, status = 400) => res.status(status).json({ error: mes
 const safeNumber = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 const valueOf = items => round2(items.reduce((t, i) => t + safeNumber(i.value), 0));
 
-const publicUser = u => ({ id: u.id, username: u.username, avatar: u.avatar || null });
+/* players are shown with their site nickname; the Roblox name stays private (admins still see it) */
+const nick = u => (u && (u.nickname || u.username)) || '';
+const publicUser = u => ({ id: u.id, username: nick(u), avatar: u.avatar || null });
+
+const NICK_RE = /^[A-Za-z0-9_]{3,16}$/;
+const NICK_RESERVED = ['admin', 'owner', 'staff', 'support', 'moderator', 'mod', 'petduel', 'system', 'bot', 'official', 'roblox'];
+function nickProblem(name, self) {
+  if (!NICK_RE.test(name)) return 'Nickname must be 3-16 letters, numbers or _';
+  const low = name.toLowerCase();
+  if (NICK_RESERVED.some(r => low.includes(r))) return 'This nickname is not allowed';
+  const taken = Object.values(S.users).some(u => u.id !== self.id &&
+    ((u.nickname && u.nickname.toLowerCase() === low) || String(u.username).toLowerCase() === low));
+  if (taken) return 'This nickname is taken';
+  if (S.bots.some(b => b.username.toLowerCase() === low)) return 'This nickname is not allowed';
+  return '';
+}
+/* admins type a nickname or a Roblox name */
+const findUserByName = name => {
+  const low = String(name || '').trim().toLowerCase();
+  if (!low) return null;
+  return Object.values(S.users).find(u => (u.nickname && u.nickname.toLowerCase() === low)) ||
+    Object.values(S.users).find(u => String(u.username).toLowerCase() === low) || null;
+};
 
 /* ---------- admin notifications (bell) ---------- */
 function notifyAdmins(type, text) {
@@ -113,7 +135,7 @@ function sendWebhook(url, embed, opts = {}) {
     footer: { text: 'Pet Duel · petduel.win' },
     ...(thumb ? { thumbnail: { url: thumb } } : {}),
     ...(image ? { image: { url: image } } : {}),
-    ...(opts.author ? { author: { name: clip(opts.author.username, 80), ...(avatarOf(opts.author) ? { icon_url: avatarOf(opts.author) } : {}) } } : {})
+    ...(opts.author ? { author: { name: clip(nick(opts.author), 80), ...(avatarOf(opts.author) ? { icon_url: avatarOf(opts.author) } : {}) } } : {})
   };
   fetch(url, {
     method: 'POST',
@@ -182,7 +204,10 @@ function inventoryView(item) {
 function meView(user) {
   return {
     id: user.id,
-    username: user.username,
+    username: nick(user),
+    nickname: user.nickname || '',
+    robloxName: user.username,
+    nickChangedAt: user.nickChangedAt || 0,
     displayName: user.displayName,
     avatar: user.avatar || null,
     isAdmin: isAdmin(user),
@@ -454,10 +479,13 @@ function ensureDefaultBot() {
   if (!S.bots.length) S.bots.push({ id: rid(6), username: BOT_NAME, link: BOT_LINK, online: true });
 }
 
-const publicBots = () => S.bots.map(b => {
+/* players only see the start and the last letter of a bot's name (ltcspace -> ltcs***e) */
+const maskName = n => (n.length <= 5 ? n.slice(0, 2) + '***' + n.slice(-1) : n.slice(0, 4) + '***' + n.slice(-1));
+const publicBots = (full = false) => S.bots.map(b => {
   const p = botProfiles.get(b.username.toLowerCase()) || {};
+  const name = p.username || b.username;
   return {
-    id: b.id, username: p.username || b.username, robloxId: p.robloxId || null,
+    id: b.id, username: full ? name : maskName(name), ...(full ? { robloxId: p.robloxId || null } : {}),
     avatar: p.avatar || null, link: b.link, joinLink: b.link, online: b.online !== false
   };
 });
@@ -633,10 +661,17 @@ function userFromToken(token) {
   return user;
 }
 
+const NICK_FREE = ['/api/me', '/api/me/nickname', '/api/auth/logout', '/api/withdrawals', '/api/profile'];
+
 function auth(req, res, next) {
   const user = userFromToken(tokenFromRequest(req));
   if (!user) return bad(res, 'Not logged in', 401);
   req.user = user;
+  /* everyone has to choose a site nickname before playing (admins can still use the admin panel) */
+  const path = req.originalUrl.split('?')[0];
+  if (!user.nickname && !NICK_FREE.includes(path) && !(isAdmin(user) && path.startsWith('/api/admin'))) {
+    return res.status(403).json({ error: 'Choose a nickname first', needNickname: true });
+  }
   next();
 }
 
@@ -1024,6 +1059,26 @@ app.get('/api/state', (req, res) => {
 
 app.get('/api/me', auth, (req, res) => res.json({ user: meView(req.user) }));
 
+/* choose (or change, once every 7 days) the nickname shown on the site */
+app.post('/api/me/nickname', auth, actionLimit, (req, res) => {
+  const user = req.user;
+  const name = String(req.body.nickname || '').trim();
+  if (user.nickname && user.nickname === name) return res.json({ ok: true, user: meView(user) });
+  const wait = (user.nickChangedAt || 0) + 7 * 24 * 60 * 60 * 1000 - now();
+  if (user.nickname && wait > 0) return bad(res, `You can change your nickname again in ${Math.ceil(wait / 86400000)} day(s)`);
+  const problem = nickProblem(name, user);
+  if (problem) return bad(res, problem);
+
+  const first = !user.nickname;
+  user.nickname = name;
+  user.nickChangedAt = now();
+  markDirty();
+  if (first) notifyAdmins('register', `${user.username} chose the nickname ${name}`);
+  emitMe(user);
+  stateCache.t = 0;
+  res.json({ ok: true, user: meView(user) });
+});
+
 app.get('/api/profile', auth, (req, res) => {
   const user = req.user;
   const perPage = 6;
@@ -1050,7 +1105,7 @@ app.get('/api/user/:id', (req, res) => {
   res.json({
     user: {
       id: user.id,
-      username: user.username,
+      username: nick(user),
       avatar: user.avatar || null,
       rank: rankOf(user.totalBet),
       totalBet: round2(user.totalBet),
@@ -1074,7 +1129,7 @@ app.get('/api/leaderboard', (req, res) => {
     .slice(0, 20)
     .map(u => ({
       id: u.id,
-      username: u.username,
+      username: nick(u),
       avatar: u.avatar || null,
       rank: rankOf(u.totalBet),
       value: round2(valueFor(u)),
@@ -1191,11 +1246,11 @@ function finishMatch(match) {
     title: '🪙 Coinflip finished',
     color: 0x00efa0,
     fields: [
-      { name: 'Winner', value: clip(winner.username, 100), inline: true },
-      { name: 'Loser', value: clip(loser.username, 100), inline: true },
+      { name: 'Winner', value: clip(nick(winner), 100), inline: true },
+      { name: 'Loser', value: clip(nick(loser), 100), inline: true },
       { name: 'Pot', value: String(round2(match.hostValue + match.oppValue)), inline: true },
-      { name: clip(`${match.host.username} (${match.hostSide}) - ${match.hostValue}`, 250), value: itemLine(match.hostItems) },
-      { name: clip(`${match.opp.username} - ${match.oppValue}`, 250), value: itemLine(match.oppItems) },
+      { name: clip(`${nick(match.host)} (${match.hostSide}) - ${match.hostValue}`, 250), value: itemLine(match.hostItems) },
+      { name: clip(`${nick(match.opp)} - ${match.oppValue}`, 250), value: itemLine(match.oppItems) },
       { name: 'Winning side', value: String(match.winnerSide), inline: true },
       { name: 'Match / Hash', value: clip(`${match.id}\n${match.hash}`, 300) }
     ],
@@ -1257,7 +1312,7 @@ app.post('/api/match/create', auth, actionLimit, (req, res) => {
     title: '🪙 New coinflip',
     color: 0x4da3ff,
     fields: [
-      { name: 'Host', value: clip(user.username, 100), inline: true },
+      { name: 'Host', value: clip(nick(user), 100), inline: true },
       { name: 'Value', value: String(match.hostValue), inline: true },
       { name: 'Join range', value: `${round2(match.hostValue * (1 - RANGE))} - ${round2(match.hostValue * (1 + RANGE))}`, inline: true },
       ...(maxJoin ? [{ name: 'Max pets to join', value: String(maxJoin), inline: true }] : []),
@@ -1348,7 +1403,7 @@ function endGiveaway(id) {
   if (!eligible.length) {
     host.inventory.push(...g.items);
     emitMe(host);
-    system(`${g.host.username}'s giveaway ended with no entrants. Items returned.`);
+    system(`${nick(g.host)}'s giveaway ended with no entrants. Items returned.`);
   } else {
     const winner = S.users[eligible[crypto.randomInt(eligible.length)]];
     if (!winner) {
@@ -1362,8 +1417,8 @@ function endGiveaway(id) {
         title: '🎉 Giveaway ended',
         color: 0xffb52e,
         fields: [
-          { name: 'Host', value: clip(g.host.username, 100), inline: true },
-          { name: 'Winner', value: clip(winner.username, 100), inline: true },
+          { name: 'Host', value: clip(nick(g.host), 100), inline: true },
+          { name: 'Winner', value: clip(nick(winner), 100), inline: true },
           { name: 'Entrants', value: String(eligible.length), inline: true },
           { name: 'Value', value: String(g.value), inline: true },
           { name: 'Items', value: itemLine(g.items) }
@@ -1371,7 +1426,7 @@ function endGiveaway(id) {
         timestamp: new Date().toISOString()
       }, { thumb: winner, author: winner, image: topImage(g.items) });
       emitMe(winner);
-      system(`${winner.username} won ${g.items.length} item(s) worth ${g.value} from ${g.host.username}'s giveaway!`);
+      system(`${nick(winner)} won ${g.items.length} item(s) worth ${g.value} from ${nick(g.host)}'s giveaway!`);
     }
   }
   io.emit('giveaway:remove', { id });
@@ -1423,7 +1478,7 @@ app.post('/api/giveaway/create', auth, actionLimit, (req, res) => {
     title: '🎁 New giveaway',
     color: 0x00efa0,
     fields: [
-      { name: 'Host', value: clip(user.username, 100), inline: true },
+      { name: 'Host', value: clip(nick(user), 100), inline: true },
       { name: 'Value', value: String(g.value), inline: true },
       { name: 'Mode', value: mode, inline: true },
       { name: 'Ends', value: `<t:${Math.floor(g.endsAt / 1000)}:R>`, inline: true },
@@ -1497,7 +1552,7 @@ function claimBounty(winner, loser, match) {
   pushChat({
     id: rid(4),
     user: { username: 'Bounty', avatar: null },
-    text: `${winner.username} claimed the bounty on ${b.target.username} and won ${b.prize.name}! Congratulations!`,
+    text: `${nick(winner)} claimed the bounty on ${nick(b.target)} and won ${b.prize.name}! Congratulations!`,
     ts: now()
   });
 
@@ -1505,8 +1560,8 @@ function claimBounty(winner, loser, match) {
     title: '🎯 Bounty claimed',
     color: 0xff5968,
     fields: [
-      { name: 'Winner', value: clip(winner.username, 100), inline: true },
-      { name: 'Target', value: clip(b.target.username, 100), inline: true },
+      { name: 'Winner', value: clip(nick(winner), 100), inline: true },
+      { name: 'Target', value: clip(nick(b.target), 100), inline: true },
       { name: 'Prize', value: itemLine([b.prize]) },
       { name: 'Match', value: clip(match.id, 100), inline: true }
     ],
@@ -1554,6 +1609,12 @@ app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
 });
 
 const UPDATE_LOG = [
+  { version: '2.9', title: 'Nicknames, masked bot names, delete all pets', changes: [
+    'Every player must choose a site nickname (3-16 letters, numbers or _, unique) before playing; it is shown everywhere instead of the Roblox name (chat, games, leaderboard, webhooks). Can be changed once every 7 days',
+    'Admin users list shows nickname + Roblox name; search, Give Items and bounties accept either',
+    'Admin: "Delete all pets" button next to every player who has pets',
+    'Deposit bots are shown masked to players (ltcspace -> ltcs***e); admins still see the full name'
+  ] },
   { version: '2.8', title: 'Maintenance mode', changes: [
     'Admin panel: Close / Open the site. While closed only admins can use the site; everyone else sees a big PET DUEL "officially closed" screen with an optional message',
     'Players are disconnected right away and come back automatically when the site is opened again; admins see a red maintenance bar'
@@ -1672,8 +1733,7 @@ app.post('/api/admin/updatelog/delete', auth, adminOnly, (req, res) => {
 });
 
 app.post('/api/admin/bounty', auth, adminOnly, (req, res) => {
-  const name = String(req.body.username || '').trim().toLowerCase();
-  const target = Object.values(S.users).find(u => u.username.toLowerCase() === name);
+  const target = findUserByName(req.body.username);
   const catalogItem = S.catalog.find(x => x.id === req.body.itemId);
 
   if (!target) return bad(res, 'User not found. They must log in once.');
@@ -1699,7 +1759,7 @@ app.post('/api/admin/bounty', auth, adminOnly, (req, res) => {
   pushChat({
     id: rid(4),
     user: { username: 'Bounty', avatar: null },
-    text: `A bounty was placed on ${target.username}! Be the first to beat them in a coinflip and win ${b.prize.name}!`,
+    text: `A bounty was placed on ${nick(target)}! Be the first to beat them in a coinflip and win ${b.prize.name}!`,
     ts: now()
   });
 
@@ -1707,8 +1767,8 @@ app.post('/api/admin/bounty', auth, adminOnly, (req, res) => {
     title: '🎯 New bounty',
     color: 0xffb52e,
     fields: [
-      { name: 'Target', value: clip(target.username, 100), inline: true },
-      { name: 'Placed by', value: clip(req.user.username, 100), inline: true },
+      { name: 'Target', value: clip(nick(target), 100), inline: true },
+      { name: 'Placed by', value: clip(nick(req.user), 100), inline: true },
       { name: 'Prize', value: itemLine([b.prize]) }
     ],
     timestamp: new Date().toISOString()
@@ -1853,10 +1913,10 @@ function finishJackpot(j) {
     title: '💣 Jackpot finished',
     color: 0xff5968,
     fields: [
-      { name: 'Winner', value: clip(winEntry.user.username, 100), inline: true },
+      { name: 'Winner', value: clip(nick(winEntry.user), 100), inline: true },
       { name: 'Pot', value: String(j.total), inline: true },
       { name: 'Chance', value: `${round2((winEntry.value / j.total) * 100)}%`, inline: true },
-      { name: 'Players', value: j.entries.map(e => `${e.user.username}: ${e.value}`).join('\n').slice(0, 1000) },
+      { name: 'Players', value: j.entries.map(e => `${nick(e.user)}: ${e.value}`).join('\n').slice(0, 1000) },
       { name: 'Round / Hash', value: clip(`${j.id}\n${j.hash}`, 300) }
     ],
     timestamp: new Date().toISOString()
@@ -1943,11 +2003,11 @@ app.post('/api/tip', auth, actionLimit, (req, res) => {
 
   target.inventory.push(...items);
 
-  addTransaction(sender, 'Tip Sent', target.username, -value);
-  addTransaction(target, 'Tip Received', sender.username, value);
+  addTransaction(sender, 'Tip Sent', nick(target), -value);
+  addTransaction(target, 'Tip Received', nick(sender), value);
 
   io.to(`u:${target.id}`).emit('tip:received', {
-    from: sender.username, count: items.length, value
+    from: nick(sender), count: items.length, value
   });
 
   emitMe(sender);
@@ -1985,7 +2045,7 @@ app.post('/api/withdraw', auth, actionLimit, (req, res) => {
     title: '📤 Withdraw request',
     color: 0xffb52e,
     fields: [
-      { name: 'Player', value: clip(user.username, 100), inline: true },
+      { name: 'Player', value: clip(nick(user), 100), inline: true },
       { name: 'Value', value: String(request.value), inline: true },
       { name: `Pets (${items.length})`, value: itemLine(items) }
     ],
@@ -2117,8 +2177,8 @@ function awardPrize(user, ev) {
     title: ev.type === 'wheel' ? '🎡 Wheel event winner' : '🔤 Word scramble winner',
     color: 0xffb52e,
     fields: [
-      { name: 'Winner', value: clip(user.username, 100), inline: true },
-      { name: 'Host', value: clip(ev.host.username, 100), inline: true },
+      { name: 'Winner', value: clip(nick(user), 100), inline: true },
+      { name: 'Host', value: clip(nick(ev.host), 100), inline: true },
       { name: 'Prize', value: itemLine([item]) }
     ],
     timestamp: new Date().toISOString()
@@ -2199,7 +2259,7 @@ function finishWheel(ev) {
   if (user) awardPrize(user, ev);
 
   emitEvent();
-  if (winnerPublic) eventChat(`${winnerPublic.username} won the wheel event and got ${ev.prize.name}!`);
+  if (winnerPublic) eventChat(`${nick(winnerPublic)} won the wheel event and got ${ev.prize.name}!`);
   scheduleEventClear(ev);
 }
 
@@ -2221,7 +2281,7 @@ function endScramble(ev, winnerUser) {
   if (winnerUser) {
     ev.winner = publicUser(winnerUser);
     awardPrize(winnerUser, ev);
-    eventChat(`${winnerUser.username} solved "${ev.word}" and won ${ev.prize.name}!`);
+    eventChat(`${nick(winnerUser)} solved "${ev.word}" and won ${ev.prize.name}!`);
   } else {
     ev.note = 'Time is up! Nobody solved it.';
     eventChat(`Time is up! The word was "${ev.word}".`);
@@ -2386,7 +2446,7 @@ app.post('/api/admin/bots/add', auth, adminOnly, async (req, res) => {
   markDirty();
   await loadBotProfile(username);
   emitBots();
-  res.json({ ok: true, bots: publicBots() });
+  res.json({ ok: true, bots: publicBots(true) });
 });
 
 app.post('/api/admin/bots/update', auth, adminOnly, (req, res) => {
@@ -2400,7 +2460,7 @@ app.post('/api/admin/bots/update', auth, adminOnly, (req, res) => {
   }
   markDirty();
   emitBots();
-  res.json({ ok: true, bots: publicBots() });
+  res.json({ ok: true, bots: publicBots(true) });
 });
 
 app.post('/api/admin/bots/delete', auth, adminOnly, (req, res) => {
@@ -2409,7 +2469,7 @@ app.post('/api/admin/bots/delete', auth, adminOnly, (req, res) => {
   S.bots.splice(i, 1);
   markDirty();
   emitBots();
-  res.json({ ok: true, bots: publicBots() });
+  res.json({ ok: true, bots: publicBots(true) });
 });
 
 /* ================= ADMIN: ELVEBREDD VALUE LOOKUP =================
@@ -2694,7 +2754,7 @@ app.get('/api/admin/data', auth, adminOnly, (req, res) => {
   res.json({
     catalog: S.catalog,
     users: Object.values(S.users).map(u => ({
-      id: u.id, username: u.username, items: u.inventory.length,
+      id: u.id, username: u.username, nickname: u.nickname || '', items: u.inventory.length,
       value: valueOf(u.inventory), totalBet: round2(u.totalBet),
       totalWon: round2(u.totalWon), totalLost: round2(u.totalLost || 0), profit: round2(u.profit),
       banned: Boolean(u.banned),
@@ -2709,7 +2769,7 @@ app.get('/api/admin/data', auth, adminOnly, (req, res) => {
     admins: Object.values(S.users).filter(u => isAdmin(u)).map(u => ({ id: u.id, username: u.username })),
     updateLog: UPDATE_LOG,
     updateNotes: S.updateNotes,
-    bots: publicBots(),
+    bots: publicBots(true),
     elveUrl: S.settings.elveUrl || '',
     maintenance: maintenanceOn(),
     maintenanceText: S.settings.maintenanceText || ''
@@ -2800,6 +2860,18 @@ app.post('/api/admin/inventory/delete', auth, adminOnly, (req, res) => {
 
   emitMe(user);
   res.json({ ok: true });
+});
+
+app.post('/api/admin/inventory/clear', auth, adminOnly, (req, res) => {
+  const user = S.users[String(req.body.id || '')];
+  if (!user) return bad(res, 'User not found', 404);
+  const count = user.inventory.length;
+  const value = valueOf(user.inventory);
+  user.inventory = [];
+  addTransaction(user, 'Removed by admin', 'all pets', -value);
+  console.log(`[ADMIN] ${req.user.username} deleted all ${count} pets (${value}) of ${user.username}`);
+  emitMe(user);
+  res.json({ ok: true, count, value });
 });
 
 app.get('/api/admin/notifications', auth, adminOnly, (req, res) => {
@@ -2993,8 +3065,7 @@ app.post('/api/admin/catalog/delete', auth, adminOnly, (req, res) => {
 });
 
 app.post('/api/admin/grant', auth, adminOnly, (req, res) => {
-  const username = String(req.body.username || '').trim().toLowerCase();
-  const user = Object.values(S.users).find(x => x.username.toLowerCase() === username);
+  const user = findUserByName(req.body.username);
   const item = S.catalog.find(x => x.id === req.body.catalogId);
   const qty = Math.floor(Number(req.body.qty));
 
@@ -3064,7 +3135,7 @@ function adminUI() {
 
         <div style="background:#f5faff;padding:14px;border-radius:12px">
           <h4 style="margin-bottom:10px">🎁 Give Items</h4>
-          <input id="g-user" list="g-users" class="in" style="width:100%;margin-bottom:8px" placeholder="Roblox username">
+          <input id="g-user" list="g-users" class="in" style="width:100%;margin-bottom:8px" placeholder="Nickname or Roblox username">
           <datalist id="g-users"></datalist>
           <input id="g-qty" class="in" style="width:100%;margin-bottom:8px" type="number" min="1" max="50" value="1">
           <p class="hint">User must have logged in once. Enter the username, then press Give on an item.</p>
@@ -3494,6 +3565,22 @@ function adminUI() {
     const st = e.target.closest('[data-stats]');
     if (st) { openStats(st.dataset.stats); return; }
 
+    const ci = e.target.closest('[data-clearinv]');
+    if (ci) {
+      const ok = await confirmBox({
+        title: 'Delete all pets',
+        text: `Delete ALL ${ci.dataset.count} pets (${ci.dataset.val}) of ${ci.dataset.name}? This cannot be undone.`,
+        ok: 'Delete all', danger: true
+      });
+      if (!ok) return;
+      try {
+        const r = await api('/api/admin/inventory/clear', { method: 'POST', body: { id: ci.dataset.clearinv } });
+        toast(`${r.count} pets deleted`, 'ok');
+        await load();
+      } catch (err) { toast(err.message, 'err'); }
+      return;
+    }
+
     const mu = e.target.closest('[data-mute]');
     if (mu) {
       const doMute = mu.dataset.state === '1';
@@ -3583,7 +3670,7 @@ function adminUI() {
     const sort = $('u-s').value;
 
     const list = usersCache.filter(u => {
-      if (q && !u.username.toLowerCase().includes(q)) return false;
+      if (q && !u.username.toLowerCase().includes(q) && !(u.nickname || '').toLowerCase().includes(q)) return false;
       if (f === 'online') return u.online;
       if (f === 'offline') return !u.online;
       if (f === 'admin') return u.isAdmin;
@@ -3606,13 +3693,15 @@ function adminUI() {
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px;border-bottom:1px solid #e0edfb;flex-wrap:wrap">
           <span style="display:flex;align-items:center;gap:8px;min-width:150px">
             <i style="width:9px;height:9px;border-radius:50%;background:${u.online ? '#22c55e' : '#8b93a3'};display:inline-block"></i>
-            <b>${esc(u.username)}${u.banned ? ' (banned)' : ''}${u.muted ? ' (muted)' : ''}</b>
+            <b>${u.nickname ? esc(u.nickname) : '<i style="color:#ffb52e">no nickname</i>'}${u.banned ? ' (banned)' : ''}${u.muted ? ' (muted)' : ''}</b>
+            <small style="color:#8d909a">Roblox: ${esc(u.username)}</small>
             <small>${u.online ? 'online' : esc(ago(u.lastSeen))}</small>
           </span>
           <span>${u.items} items · ${fmt(u.value)} · bet ${fmt(u.totalBet)}</span>
           <span style="display:flex;gap:6px;flex-wrap:wrap">
             ${!u.isAdmin ? `<button class="btn sm gray" data-mute="${esc(u.id)}" data-state="${u.muted ? '0' : '1'}">${u.muted ? 'Unmute' : 'Mute'}</button>` : ''}
             <button class="btn sm gray" data-inv="${esc(u.id)}">Items</button>
+            ${u.items ? `<button class="btn sm red" data-clearinv="${esc(u.id)}" data-name="${esc(u.nickname || u.username)}" data-count="${u.items}" data-val="${esc(fmt(u.value))}">Delete all pets</button>` : ''}
             <button class="btn sm gray" data-stats="${esc(u.id)}">Stats</button>
             ${u.isAdmin ? `<button class="btn sm gray" data-tag="${esc(u.id)}" data-state="${u.adminTag ? '0' : '1'}">Tag: ${u.adminTag ? 'ON' : 'OFF'}</button>` : ''}
             <button class="btn sm gray" data-role="${esc(u.id)}" data-state="${u.isAdmin ? '0' : '1'}">${u.isAdmin ? 'Remove admin' : 'Make admin'}</button>
@@ -3846,6 +3935,10 @@ io.on('connection', socket => {
   socket.on('disconnect', () => clearInterval(floodTimer));
 
   socket.on('chat:send', (payload, ack) => {
+    if (socket.user && !S.users[socket.user.id]?.nickname) {
+      if (typeof ack === 'function') ack({ error: 'Choose a nickname first' });
+      return;
+    }
     const callback = typeof ack === 'function' ? ack : () => {};
     const user = userFromToken(socket.token);
     if (!user) return callback({ error: 'Login to chat' });
