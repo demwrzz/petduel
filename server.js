@@ -21,20 +21,6 @@ const BOT_NAME = 'DedokAmp';
 const BOT_LINK = 'https://www.roblox.com/share?code=a0dd8a7bc68f034b99e078f454d4e903&type=Server';
 const MAX_ITEMS = 20;
 
-/* Two games, each with its own catalog, coinflip lobby and jackpot. Items can only be used in their own game. */
-const GAMES = [
-  { id: 'adoptme', name: 'Adopt Me' },
-  { id: 'ctd', name: 'CTD' }
-];
-const GAME_IDS = GAMES.map(g => g.id);
-const gameOf = item => (item && item.game === 'ctd' ? 'ctd' : 'adoptme');
-const gameName = id => (GAMES.find(g => g.id === id) || GAMES[0]).name;
-
-/* Cameraman Tower Defense deposit bot (set these in Render > Environment) */
-const CTD_BOT_NAME = E.CTD_BOT_NAME || 'CTDdepo1';
-const CTD_BOT_LINK = E.CTD_BOT_LINK ||
-  'https://www.roblox.com/share?code=0a10f5ec5f9fee4faf9ebb4362873dd0&type=Server';
-
 const DISCORD_INVITE = E.DISCORD_INVITE || 'https://discord.gg/TaPXaAseP';
 /* Put the webhook URLs in Render > Environment, NOT in the code */
 const WEBHOOK_GW = E.DISCORD_GW_WEBHOOK || '';
@@ -57,7 +43,6 @@ const S = {
   announcement: null,
   notifications: [],
   bounties: [],
-  botStatus: { adoptme: true, ctd: true },
   settings: { taxPercent: 0, taxReceiver: 'auto', taxIdx: 0 },
   updateNotes: []
 };
@@ -116,38 +101,20 @@ function isAdmin(user) {
     ADMIN_NAMES.includes(String(user.username).toLowerCase());
 }
 
-/* 30 ranks, based on total wagered value */
+/* 12 ranks, based on total wagered value. "icon" picks the badge shape on the site. */
 const RANKS = [
-  { name: 'Rookie',      min: 0,        color: '#8d909a' },
-  { name: 'Beginner',    min: 100,      color: '#a3a6b0' },
-  { name: 'Amateur',     min: 250,      color: '#9ad1ff' },
-  { name: 'Casual',      min: 500,      color: '#7cc4ff' },
-  { name: 'Roller',      min: 1000,     color: '#4da3ff' },
-  { name: 'Bronze',      min: 2500,     color: '#cd7f32' },
-  { name: 'Silver',      min: 5000,     color: '#c0c7d1' },
-  { name: 'Gold',        min: 7500,     color: '#ffd24a' },
-  { name: 'Highroller',  min: 10000,    color: '#ff5968' },
-  { name: 'Platinum',    min: 15000,    color: '#7fe6e0' },
-  { name: 'Emerald',     min: 20000,    color: '#2bd67b' },
-  { name: 'Ruby',        min: 30000,    color: '#e0115f' },
-  { name: 'Sapphire',    min: 40000,    color: '#2d6bff' },
-  { name: 'Diamond',     min: 50000,    color: '#6fe3ff' },
-  { name: 'Master',      min: 65000,    color: '#b57bff' },
-  { name: 'Grandmaster', min: 80000,    color: '#9b5cff' },
-  { name: 'Whale',       min: 100000,   color: '#ffb52e' },
-  { name: 'Elite',       min: 150000,   color: '#ff8a3d' },
-  { name: 'Champion',    min: 200000,   color: '#ff6b6b' },
-  { name: 'Legend',      min: 300000,   color: '#ffcf33' },
-  { name: 'Mythic',      min: 400000,   color: '#d946ef' },
-  { name: 'Titan',       min: 500000,   color: '#f97316' },
-  { name: 'Overlord',    min: 750000,   color: '#ef4444' },
-  { name: 'Immortal',    min: 1000000,  color: '#a78bfa' },
-  { name: 'Celestial',   min: 1500000,  color: '#38bdf8' },
-  { name: 'Divine',      min: 2000000,  color: '#fde68a' },
-  { name: 'Cosmic',      min: 3000000,  color: '#818cf8' },
-  { name: 'Eternal',     min: 5000000,  color: '#34d399' },
-  { name: 'Omega',       min: 7500000,  color: '#fb7185' },
-  { name: 'Godlike',     min: 10000000, color: '#f0abfc' }
+  { name: 'Rookie',      min: 0,       color: '#8d909a', icon: 'medal' },
+  { name: 'Bronze',      min: 500,     color: '#cd7f32', icon: 'medal' },
+  { name: 'Silver',      min: 2500,    color: '#c0c7d1', icon: 'medal' },
+  { name: 'Gold',        min: 10000,   color: '#ffd24a', icon: 'medal' },
+  { name: 'Platinum',    min: 25000,   color: '#7fe6e0', icon: 'gem' },
+  { name: 'Diamond',     min: 60000,   color: '#6fb8ff', icon: 'gem' },
+  { name: 'Master',      min: 120000,  color: '#a78bfa', icon: 'star' },
+  { name: 'Grandmaster', min: 250000,  color: '#ec4899', icon: 'star' },
+  { name: 'Champion',    min: 500000,  color: '#ff8a3d', icon: 'crown' },
+  { name: 'Legend',      min: 1000000, color: '#ef4444', icon: 'crown' },
+  { name: 'Mythic',      min: 2500000, color: '#22d3ee', icon: 'bolt' },
+  { name: 'Godlike',     min: 5000000, color: '#f0abfc', icon: 'bolt' }
 ];
 
 const rankIndex = name => RANKS.findIndex(r => r.name === name);
@@ -162,31 +129,12 @@ function rankOf(totalBet) {
 
 const MUTE_FOREVER = Number.MAX_SAFE_INTEGER;
 
-/* every stat change goes through here so the per-game numbers and the totals always match */
-function bump(user, game, d) {
-  const g = user.gstats[game] || user.gstats.adoptme;
-
-  if (d.bet)    { g.bet    = round2(g.bet + d.bet);       user.totalBet  = round2(user.totalBet + d.bet); }
-  if (d.won)    { g.won    = round2(g.won + d.won);       user.totalWon  = round2(user.totalWon + d.won); }
-  if (d.lost)   { g.lost   = round2(g.lost + d.lost);     user.totalLost = round2((user.totalLost || 0) + d.lost); }
-  if (d.profit) { g.profit = round2(g.profit + d.profit); user.profit    = round2(user.profit + d.profit); }
-}
-
-function recalcTotals(user) {
-  const sum = key => round2(GAME_IDS.reduce((t, g) => t + safeNumber(user.gstats[g][key]), 0));
-  user.totalBet = sum('bet');
-  user.totalWon = sum('won');
-  user.totalLost = sum('lost');
-  user.profit = sum('profit');
-}
-
-function statsByGame(user) {
-  const out = {};
-  for (const g of GAME_IDS) {
-    const x = user.gstats[g];
-    out[g] = { totalBet: round2(x.bet), totalWon: round2(x.won), totalLost: round2(x.lost), profit: round2(x.profit) };
-  }
-  return out;
+/* every stat change goes through here */
+function bump(user, d) {
+  if (d.bet)    user.totalBet  = round2(user.totalBet + d.bet);
+  if (d.won)    user.totalWon  = round2(user.totalWon + d.won);
+  if (d.lost)   user.totalLost = round2((user.totalLost || 0) + d.lost);
+  if (d.profit) user.profit    = round2(user.profit + d.profit);
 }
 
 function addTransaction(user, type, id, amount) {
@@ -210,7 +158,6 @@ function meView(user) {
     totalLost: round2(user.totalLost || 0),
     profit: round2(user.profit),
     rank: rankOf(user.totalBet),
-    wagerLeft: round2(user.wagerLeft || 0),
     mutedUntil: user.mutedUntil || 0,
     inventory: user.inventory.map(inventoryView)
   };
@@ -219,7 +166,7 @@ function meView(user) {
 function newItem(c) {
   return {
     uid: rid(12), catalogId: c.id, name: c.name, image: c.image,
-    value: c.value, age: c.age, fly: c.fly, ride: c.ride, game: gameOf(c)
+    value: c.value, age: c.age, fly: c.fly, ride: c.ride
   };
 }
 
@@ -271,15 +218,19 @@ function ensureUser(u) {
   u.totalWon = u.totalWon || 0;
   u.totalLost = u.totalLost || 0;
   u.profit = u.profit || 0;
-  u.wagerLeft = u.wagerLeft || 0;
-  u.inventory.forEach(i => { i.game = gameOf(i); });
+  delete u.wagerLeft;
 
-  /* stats are kept per game; everything played before CTD existed counts as Adopt Me */
-  const zero = () => ({ bet: 0, won: 0, lost: 0, profit: 0 });
-  if (!u.gstats) {
-    u.gstats = { adoptme: { bet: u.totalBet, won: u.totalWon, lost: u.totalLost, profit: u.profit }, ctd: zero() };
+  /* the old second game is gone: its items disappear and only Adopt Me stats stay in the totals */
+  u.inventory = u.inventory.filter(i => i.game !== 'ctd');
+  for (const i of u.inventory) delete i.game;
+  if (u.gstats) {
+    const a = u.gstats.adoptme || {};
+    u.totalBet = a.bet || 0;
+    u.totalWon = a.won || 0;
+    u.totalLost = a.lost || 0;
+    u.profit = a.profit || 0;
+    delete u.gstats;
   }
-  for (const g of GAME_IDS) u.gstats[g] = Object.assign(zero(), u.gstats[g]);
 
   return u;
 }
@@ -308,11 +259,9 @@ function snapshot() {
   }
 
   /* items sitting in an unfinished jackpot round go back to their owners */
-  for (const j of Object.values(JPS)) {
-    if (j && j.state !== 'finished') {
-      for (const e of j.entries) {
-        if (users[e.user.id]) users[e.user.id].inventory.push(...JSON.parse(JSON.stringify(e.items)));
-      }
+  if (JP && JP.state !== 'finished') {
+    for (const e of JP.entries) {
+      if (users[e.user.id]) users[e.user.id].inventory.push(...JSON.parse(JSON.stringify(e.items)));
     }
   }
 
@@ -325,7 +274,6 @@ function snapshot() {
     announcement: S.announcement,
     notifications: S.notifications.slice(0, 50),
     bounties: S.bounties,
-    botStatus: S.botStatus,
     settings: S.settings,
     updateNotes: S.updateNotes
   };
@@ -352,13 +300,13 @@ async function initDb() {
       Object.values(S.users).forEach(ensureUser);
       S.sessions = Object.assign(Object.create(null), d.sessions || {});
       S.catalog = d.catalog || [];
-      S.catalog.forEach(c => { c.game = gameOf(c); });
+      S.catalog = S.catalog.filter(c => c.game !== 'ctd');
+      S.catalog.forEach(c => { delete c.game; });
       S.history = d.history || [];
       S.withdrawals = d.withdrawals || [];
       S.announcement = d.announcement || null;
       S.notifications = d.notifications || [];
       S.bounties = d.bounties || [];
-      S.botStatus = { adoptme: true, ctd: true, ...(d.botStatus || {}) };
       S.settings = { taxPercent: 0, taxReceiver: 'auto', taxIdx: 0, ...(d.settings || {}) };
       S.updateNotes = d.updateNotes || [];
       console.log('State loaded from MongoDB.');
@@ -476,30 +424,7 @@ async function loadBot() {
   }
 }
 
-const botsPublic = () => ({
-  adoptme: { ...bot, online: S.botStatus.adoptme !== false },
-  ctd: { ...ctdBot, online: S.botStatus.ctd !== false }
-});
-
-const ctdBot = { username: CTD_BOT_NAME, id: null, avatar: null, link: CTD_BOT_LINK, joinLink: CTD_BOT_LINK };
-
-async function loadCtdBot() {
-  if (!CTD_BOT_NAME) return;
-  try {
-    const user = await robloxLookup(CTD_BOT_NAME);
-    if (!user) return;
-    ctdBot.id = user.id;
-    ctdBot.username = user.username;
-    ctdBot.avatar = await robloxAvatar(user.id);
-  } catch (error) {
-    console.error('CTD bot profile could not be loaded:', error.message);
-  }
-}
-
-async function loadBots() {
-  await loadBot();
-  await loadCtdBot();
-}
+const loadBots = loadBot;
 
 /* ================= EXPRESS + SOCKET ================= */
 
@@ -647,6 +572,7 @@ function userFromToken(token) {
   if (!session || session.exp <= now()) return null;
   const user = S.users[session.userId];
   if (!user || user.banned) return null;
+  if (now() - (user.lastSeen || 0) > 30000) user.lastSeen = now();
   return user;
 }
 
@@ -845,7 +771,6 @@ setInterval(() => {
 function publicMatch(match) {
   const result = {
     id: match.id,
-    game: match.game || 'adoptme',
     state: match.state,
     status: match.state,
     hash: match.hash,
@@ -896,12 +821,10 @@ function buildState() {
     chat: S.chat,
     online: onlineCount(),
     bot,
-    bots: botsPublic(),
-    games: GAMES,
     bounties: publicBounties(),
     announcement: S.announcement,
     event: publicEvent(EVENT),
-    jackpots: { adoptme: publicJackpot(JPS.adoptme), ctd: publicJackpot(JPS.ctd) },
+    jackpot: publicJackpot(JP),
     discord: DISCORD_INVITE,
     config: {
       range: RANGE, maxItems: MAX_ITEMS, ranks: RANKS,
@@ -917,7 +840,7 @@ let stateCache = { t: 0, body: '' };
 app.get('/api/state', (req, res) => {
   const t = now();
   if (t - stateCache.t > 400) stateCache = { t, body: JSON.stringify(buildState()) };
-  res.type('application/json').send(stateCache.body);
+  res.type('application/json').send(stateCache.body.slice(0, -1) + ',"now":' + t + '}');
 });
 
 app.get('/api/me', auth, (req, res) => res.json({ user: meView(req.user) }));
@@ -934,8 +857,7 @@ app.get('/api/profile', auth, (req, res) => {
       totalBet: round2(user.totalBet),
       totalWon: round2(user.totalWon),
       totalLost: round2(user.totalLost || 0),
-      profit: round2(user.profit),
-      games: statsByGame(user)
+      profit: round2(user.profit)
     },
     rows: user.tx.slice((page - 1) * perPage, page * perPage),
     page, pages
@@ -956,17 +878,15 @@ app.get('/api/user/:id', (req, res) => {
       totalWon: round2(user.totalWon),
       totalLost: round2(user.totalLost || 0),
       profit: round2(user.profit),
-      games: statsByGame(user)
+      online: socketsByUser.has(user.id),
+      lastSeen: user.lastSeen || 0
     }
   });
 });
 
 app.get('/api/leaderboard', (req, res) => {
   const by = req.query.by === 'profit' ? 'profit' : 'totalBet';
-  const game = GAME_IDS.includes(req.query.game) ? req.query.game : 'all';
-  const key = by === 'profit' ? 'profit' : 'bet';
-
-  const valueFor = u => (game === 'all' ? u[by] : u.gstats[game][key]) || 0;
+  const valueFor = u => u[by] || 0;
 
   const list = Object.values(S.users)
     .filter(u => !u.banned && valueFor(u) > 0)
@@ -982,7 +902,7 @@ app.get('/api/leaderboard', (req, res) => {
       totalWon: round2(u.totalWon)
     }));
 
-  res.json({ by, game, list });
+  res.json({ by, list });
 });
 
 app.get('/api/history/me', auth, (req, res) => {
@@ -1067,23 +987,17 @@ function finishMatch(match) {
 
   match.taxValue = tax.value;
 
-  const game = match.game || 'adoptme';
-
-  bump(host, game, { bet: match.hostValue });
-  bump(opponent, game, { bet: match.oppValue });
-
-  /* wager requirement goes down by what each player staked */
-  host.wagerLeft = Math.max(0, round2((host.wagerLeft || 0) - match.hostValue));
-  opponent.wagerLeft = Math.max(0, round2((opponent.wagerLeft || 0) - match.oppValue));
-  bump(winner, game, { won: round2(loserStake - tax.value), profit: round2(loserStake - tax.value) });
-  bump(loser, game, { lost: loserStake, profit: -loserStake });
+  bump(host, { bet: match.hostValue });
+  bump(opponent, { bet: match.oppValue });
+  bump(winner, { won: round2(loserStake - tax.value), profit: round2(loserStake - tax.value) });
+  bump(loser, { lost: loserStake, profit: -loserStake });
 
   addTransaction(winner, 'Coinflip Win', match.id, round2(loserStake - tax.value));
 
   if (tax.receiver && tax.items.length) {
     addTransaction(winner, 'Coinflip Tax', match.id, -tax.value);
     addTransaction(tax.receiver, 'Tax Received', match.id, tax.value);
-    notifyAdmins('tax', `💰 Tax: ${tax.items.length} item(s) worth ${tax.value} from a ${gameName(game)} coinflip went to ${tax.receiver.username}`);
+    notifyAdmins('tax', `💰 Tax: ${tax.items.length} item(s) worth ${tax.value} from a coinflip went to ${tax.receiver.username}`);
     emitMe(tax.receiver);
   }
   addTransaction(loser, 'Coinflip Loss', match.id, -loserStake);
@@ -1099,7 +1013,6 @@ function finishMatch(match) {
     fields: [
       { name: 'Winner', value: clip(winner.username, 100), inline: true },
       { name: 'Loser', value: clip(loser.username, 100), inline: true },
-      { name: 'Game', value: gameName(match.game), inline: true },
       { name: 'Pot', value: String(round2(match.hostValue + match.oppValue)), inline: true },
       { name: clip(`${match.host.username} (${match.hostSide}) - ${match.hostValue}`, 250), value: itemLine(match.hostItems) },
       { name: clip(`${match.opp.username} - ${match.oppValue}`, 250), value: itemLine(match.oppItems) },
@@ -1132,15 +1045,12 @@ app.post('/api/match/create', auth, actionLimit, (req, res) => {
 
   if (side !== 'dog' && side !== 'cat') return bad(res, 'Pick a side');
 
-  const game = GAME_IDS.includes(req.body.game) ? req.body.game : 'adoptme';
-
   const open = Object.values(S.matches).filter(m => m.host.id === user.id && m.state === 'waiting');
   if (open.length >= 3) return bad(res, 'Max 3 open matches');
   if (Object.keys(S.matches).length >= 150) return bad(res, 'Lobby is full');
 
   const selected = pickItems(user, uids, MAX_ITEMS);
   if (!selected) return bad(res, 'Invalid item selection');
-  if (!selected.every(i => gameOf(i) === game)) return bad(res, `Only ${gameName(game)} items can be used in this game`);
   if (valueOf(selected) <= 0) return bad(res, 'Value too low');
 
   const items = takeItems(user, uids, MAX_ITEMS);
@@ -1148,7 +1058,7 @@ app.post('/api/match/create', auth, actionLimit, (req, res) => {
   const id = rid(10);
 
   const match = {
-    id, game, state: 'waiting', seed, hash: sha(seed),
+    id, state: 'waiting', seed, hash: sha(seed),
     host: publicUser(user), opp: null, hostSide: side,
     hostItems: items, oppItems: [],
     hostValue: valueOf(items), oppValue: 0,
@@ -1172,9 +1082,6 @@ app.post('/api/match/join', auth, actionLimit, (req, res) => {
 
   const selected = pickItems(user, uids, MAX_ITEMS);
   if (!selected) return bad(res, 'Invalid item selection');
-  if (!selected.every(i => gameOf(i) === (match.game || 'adoptme'))) {
-    return bad(res, `Only ${gameName(match.game)} items can be used in this game`);
-  }
 
   const value = valueOf(selected);
   const min = match.hostValue * (1 - RANGE);
@@ -1241,7 +1148,7 @@ function endGiveaway(id) {
   if (!eligible.length) {
     host.inventory.push(...g.items);
     emitMe(host);
-    system(`🎁 ${g.host.username}'s giveaway ended with no entrants. Items returned.`);
+    system(`${g.host.username}'s giveaway ended with no entrants. Items returned.`);
   } else {
     const winner = S.users[eligible[crypto.randomInt(eligible.length)]];
     if (!winner) {
@@ -1249,8 +1156,6 @@ function endGiveaway(id) {
       emitMe(host);
     } else {
       winner.inventory.push(...g.items);
-      /* items from giveaways must be wagered 1x their value before withdrawing */
-      winner.wagerLeft = round2((winner.wagerLeft || 0) + g.value);
       addTransaction(winner, 'Giveaway Win', g.id, g.value);
 
       sendWebhook(WEBHOOK_GW, {
@@ -1266,7 +1171,7 @@ function endGiveaway(id) {
         timestamp: new Date().toISOString()
       });
       emitMe(winner);
-      system(`🎉 ${winner.username} won ${g.items.length} item(s) worth ${g.value} from ${g.host.username}'s giveaway!`);
+      system(`${winner.username} won ${g.items.length} item(s) worth ${g.value} from ${g.host.username}'s giveaway!`);
     }
   }
   io.emit('giveaway:remove', { id });
@@ -1296,7 +1201,9 @@ app.post('/api/giveaway/create', auth, actionLimit, (req, res) => {
   }
   if (Object.keys(S.giveaways).length >= 20) return bad(res, 'Too many active giveaways');
 
-  if (!pickItems(user, uids, 5)) return bad(res, 'Select up to 5 valid items');
+  const picked = pickItems(user, uids, 5);
+  if (!picked) return bad(res, 'Select up to 5 valid items');
+
   const items = takeItems(user, uids, 5);
 
   const g = {
@@ -1341,9 +1248,11 @@ app.post('/api/giveaway/enter', auth, actionLimit, async (req, res) => {
   if (!g || g.endsAt <= now()) return bad(res, 'Giveaway ended');
   if (g.host.id === user.id) return bad(res, 'You cannot enter your own giveaway');
   if (g.entrants.includes(user.id)) return bad(res, 'Already entered');
-  if (user.totalBet < g.minBet) return bad(res, `You need ${g.minBet} total bet to enter`);
+  const wagered = user.totalBet;
 
-  if (g.minRank && rankIndex(rankOf(user.totalBet)) < rankIndex(g.minRank)) {
+  if (wagered < g.minBet) return bad(res, `You need ${g.minBet} total bet to enter`);
+
+  if (g.minRank && rankIndex(g.minRank) >= 0 && rankIndex(rankOf(wagered)) < rankIndex(g.minRank)) {
     return bad(res, `You need the ${g.minRank} rank (or higher) to enter`);
   }
 
@@ -1367,14 +1276,12 @@ function publicBounties() {
 function claimBounty(winner, loser, match) {
   if (!winner || !loser || winner.id === loser.id) return;
 
-  const index = S.bounties.findIndex(b => b.target.id === loser.id && b.createdBy !== winner.id);
+  const index = S.bounties.findIndex(b => b.target.id === loser.id);
   if (index < 0) return;
 
   const [b] = S.bounties.splice(index, 1);
 
-  b.prize.game = gameOf(b.prize);
   winner.inventory.push(b.prize);
-  winner.wagerLeft = round2((winner.wagerLeft || 0) + safeNumber(b.prize.value));
   addTransaction(winner, 'Bounty Win', b.id, b.prize.value);
 
   markDirty();
@@ -1389,7 +1296,7 @@ function claimBounty(winner, loser, match) {
 
   pushChat({
     id: rid(4),
-    user: { username: '🎯 Bounty', avatar: null },
+    user: { username: 'Bounty', avatar: null },
     text: `${winner.username} claimed the bounty on ${b.target.username} and won ${b.prize.name}! Congratulations!`,
     ts: now()
   });
@@ -1427,6 +1334,15 @@ app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
 });
 
 const UPDATE_LOG = [
+  { version: '1.9', title: 'Simpler site, chat rule and admin search', changes: [
+    'Back to a single game (Adopt Me): everything about the second game and the withdraw wager requirement was removed',
+    'Chat: you need to place a bet before you can write ("Place a bet to chat")',
+    'Admin panel: search players by name, filter online / offline / admins / banned, sort by last seen, bet or value',
+    'Profiles show when a player was last seen',
+    'Coinflip flips as soon as the 3-2-1 countdown ends; the games counter next to History is gone',
+    'Active coinflip value is shown under Coinflip and the jackpot pot under Jackpot in the top menu',
+    'New rank icons and a calmer look'
+  ] },
   { version: '1.8', title: 'Tax, captcha, auto select and online counter', changes: [
     'Coinflip tax: admins set a rate (0–20%) and the receiver; taxed items go to an admin account and a bell notification is sent',
     'Captcha when logging in and when entering a giveaway (Cloudflare Turnstile if configured, built-in image captcha otherwise)',
@@ -1435,18 +1351,13 @@ const UPDATE_LOG = [
     'Online counter counts each logged-in player once (not tabs) and is shown only after login',
     'Admin panel: update log'
   ] },
-  { version: '1.7', title: 'CTD deposit bot, security and per-game stats', changes: [
-    'CTD deposit bot (CTDdepo1) with its own join link; admins can set each bot online or offline',
+  { version: '1.7', title: 'Security', changes: [
     'Per-IP rate limits, automatic temporary IP blocks, request timeouts, socket limits and a short cache for the public state',
     'Content security policy, safer lookups and no stack traces for visitors',
-    'Item audit every 30 seconds: no item id may exist in two places; database revision lock against double instances',
-    'Profile, user card, leaderboard and admin stats are split into Adopt Me and CTD'
+    'Item audit every 30 seconds: no item id may exist in two places; database revision lock against double instances'
   ] },
-  { version: '1.6', title: 'Cameraman Tower Defense and bounty', changes: [
-    'Second game: CTD, with its own catalog, coinflip lobby and jackpot; items cannot be used in the other game',
-    'Game tabs on the coinflip and jackpot pages, stat cards for total items, value and active games',
-    'Bounty: admins put a bounty on a player, the first player who beats them wins the prize and everyone sees a congratulation popup',
-    'Admin catalog split into Adopt Me and CTD with a move button'
+  { version: '1.6', title: 'Bounty', changes: [
+    'Bounty: admins put a bounty on a player, the first player who beats them wins the prize and everyone sees a congratulation popup'
   ] },
   { version: '1.5', title: 'Pet Duel, mobile and jackpot', changes: [
     'Site renamed to Pet Duel and an independence notice added in the footer',
@@ -1464,7 +1375,7 @@ const UPDATE_LOG = [
   { version: '1.0', title: 'Launch', changes: [
     'Roblox login, coinflip with provably fair hash, 3D coin, history and replay',
     'Giveaways, live chat, leaderboard, announcements and admin panel with catalog and item grants',
-    'Manual withdraw requests with a wager requirement for items from giveaways, events and tips',
+    'Manual withdraw requests',
     'Discord webhooks for giveaways and coinflips'
   ] }
 ];
@@ -1485,17 +1396,6 @@ app.post('/api/admin/updatelog/delete', auth, adminOnly, (req, res) => {
   if (index < 0) return bad(res, 'Note not found', 404);
   S.updateNotes.splice(index, 1);
   markDirty();
-  res.json({ ok: true });
-});
-
-app.post('/api/admin/bot', auth, adminOnly, (req, res) => {
-  const game = String(req.body.game || '');
-  if (!GAME_IDS.includes(game)) return bad(res, 'Invalid game');
-
-  S.botStatus[game] = Boolean(req.body.online);
-  markDirty();
-
-  io.emit('bots:update', botsPublic());
   res.json({ ok: true });
 });
 
@@ -1526,7 +1426,7 @@ app.post('/api/admin/bounty', auth, adminOnly, (req, res) => {
 
   pushChat({
     id: rid(4),
-    user: { username: '🎯 Bounty', avatar: null },
+    user: { username: 'Bounty', avatar: null },
     text: `A bounty was placed on ${target.username}! Be the first to beat them in a coinflip and win ${b.prize.name}!`,
     ts: now()
   });
@@ -1555,17 +1455,7 @@ app.post('/api/admin/bounty/cancel', auth, adminOnly, (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/admin/catalog/game', auth, adminOnly, (req, res) => {
-  const item = S.catalog.find(x => x.id === req.body.id);
-  if (!item) return bad(res, 'Item not found', 404);
-  if (!GAME_IDS.includes(req.body.game)) return bad(res, 'Invalid game');
-
-  item.game = req.body.game;
-  markDirty();
-  res.json({ ok: true });
-});
-
-/* ================= JACKPOT (one round per game) =================
+/* ================= JACKPOT =================
    Players put items in the pot. When a second player joins a 60s countdown starts.
    The winner is picked by value share: roll = HMAC(seed, roundId), published after the round.
    The winner and roll are hidden from the clients until the round is finished. */
@@ -1577,17 +1467,16 @@ const JP_MAX_PLAYERS = 25;
 const JP_MAX_JOIN_ITEMS = 20;
 const JP_MAX_USER_ITEMS = 40;
 
-const JPS = { adoptme: null, ctd: null };
-const jpTimers = { adoptme: [], ctd: [] };
+let JP = null;
+let jpTimers = [];
 
-function jpLater(game, fn, ms) { jpTimers[game].push(setTimeout(fn, ms)); }
+function jpLater(fn, ms) { jpTimers.push(setTimeout(fn, ms)); }
 
 function publicJackpot(j) {
   if (!j) return null;
 
   const out = {
     id: j.id,
-    game: j.game,
     state: j.state,
     hash: j.hash,
     entries: j.entries.map(e => ({ user: e.user, value: e.value, items: e.items.map(publicItem) })),
@@ -1608,18 +1497,18 @@ function publicJackpot(j) {
 
 function emitJackpot(j) { io.emit('jackpot:update', publicJackpot(j)); }
 
-function newJackpot(game) {
-  jpTimers[game].forEach(clearTimeout);
-  jpTimers[game] = [];
+function newJackpot() {
+  jpTimers.forEach(clearTimeout);
+  jpTimers = [];
 
   const seed = rid(32);
   const j = {
-    id: rid(8), game, state: 'waiting', seed, hash: sha(seed),
+    id: rid(8), state: 'waiting', seed, hash: sha(seed),
     entries: [], total: 0, endsAt: 0, rollEndsAt: 0,
     winnerId: null, roll: null, winner: null
   };
 
-  JPS[game] = j;
+  JP = j;
   emitJackpot(j);
 }
 
@@ -1629,7 +1518,7 @@ function jpRecalc(j) {
 }
 
 function rollJackpot(j) {
-  if (JPS[j.game] !== j || j.state !== 'countdown') return;
+  if (JP !== j || j.state !== 'countdown') return;
 
   const digest = crypto.createHmac('sha256', j.seed).update(j.id).digest('hex');
   j.roll = parseInt(digest.slice(0, 8), 16) / 0x100000000;
@@ -1647,11 +1536,11 @@ function rollJackpot(j) {
   j.rollEndsAt = now() + JP_ROLL_MS;
   emitJackpot(j);
 
-  jpLater(j.game, () => finishJackpot(j), JP_ROLL_MS);
+  jpLater(() => finishJackpot(j), JP_ROLL_MS);
 }
 
 function finishJackpot(j) {
-  if (JPS[j.game] !== j || j.state !== 'rolling') return;
+  if (JP !== j || j.state !== 'rolling') return;
 
   const winEntry = j.winner;
   const winner = S.users[winEntry.user.id];
@@ -1666,26 +1555,32 @@ function finishJackpot(j) {
     const u = S.users[e.user.id];
     if (!u) continue;
 
-    bump(u, j.game, { bet: e.value });
-    u.wagerLeft = Math.max(0, round2((u.wagerLeft || 0) - e.value));
+    bump(u, { bet: e.value });
 
     if (e === winEntry) {
       const gain = round2(j.total - e.value);
-      bump(u, j.game, { won: gain, profit: gain });
+      bump(u, { won: gain, profit: gain });
       addTransaction(u, 'Jackpot Win', j.id, gain);
     } else {
-      bump(u, j.game, { lost: e.value, profit: -e.value });
+      bump(u, { lost: e.value, profit: -e.value });
       addTransaction(u, 'Jackpot Loss', j.id, -e.value);
     }
 
     emitMe(u);
   }
 
+  /* beating a bounty target in a jackpot round also claims the bounty */
+  if (winner) {
+    for (const e of j.entries) {
+      const u = S.users[e.user.id];
+      if (u && e !== winEntry) claimBounty(winner, u, { id: j.id });
+    }
+  }
+
   sendWebhook(WEBHOOK_JP, {
     title: '💣 Jackpot finished',
     color: 0xff5968,
     fields: [
-      { name: 'Game', value: gameName(j.game), inline: true },
       { name: 'Winner', value: clip(winEntry.user.username, 100), inline: true },
       { name: 'Pot', value: String(j.total), inline: true },
       { name: 'Chance', value: `${round2((winEntry.value / j.total) * 100)}%`, inline: true },
@@ -1696,13 +1591,12 @@ function finishJackpot(j) {
   });
 
   emitJackpot(j);
-  jpLater(j.game, () => newJackpot(j.game), JP_RESULT_MS);
+  jpLater(() => newJackpot(), JP_RESULT_MS);
 }
 
 app.post('/api/jackpot/join', auth, actionLimit, (req, res) => {
   const user = req.user;
-  const game = GAME_IDS.includes(req.body.game) ? req.body.game : 'adoptme';
-  const j = JPS[game];
+  const j = JP;
 
   if (!j || (j.state !== 'waiting' && j.state !== 'countdown')) {
     return bad(res, 'This round is already rolling. Join the next round.');
@@ -1712,7 +1606,6 @@ app.post('/api/jackpot/join', auth, actionLimit, (req, res) => {
   const selected = pickItems(user, uids, JP_MAX_JOIN_ITEMS);
 
   if (!selected) return bad(res, `Select 1–${JP_MAX_JOIN_ITEMS} valid items`);
-  if (!selected.every(i => gameOf(i) === game)) return bad(res, `Only ${gameName(game)} items can be used here`);
   if (valueOf(selected) <= 0) return bad(res, 'Value too low');
 
   let entry = j.entries.find(e => e.user.id === user.id);
@@ -1733,7 +1626,7 @@ app.post('/api/jackpot/join', auth, actionLimit, (req, res) => {
   if (j.state === 'waiting' && j.entries.length >= 2) {
     j.state = 'countdown';
     j.endsAt = now() + JP_TIME * 1000;
-    jpLater(game, () => rollJackpot(j), JP_TIME * 1000);
+    jpLater(() => rollJackpot(j), JP_TIME * 1000);
   }
 
   emitJackpot(j);
@@ -1743,8 +1636,7 @@ app.post('/api/jackpot/join', auth, actionLimit, (req, res) => {
 
 /* a lone player can take their items back while nobody else has joined */
 app.post('/api/jackpot/leave', auth, actionLimit, (req, res) => {
-  const game = GAME_IDS.includes(req.body.game) ? req.body.game : 'adoptme';
-  const j = JPS[game];
+  const j = JP;
 
   if (!j || j.state !== 'waiting') return bad(res, 'You can only leave while waiting for a second player');
 
@@ -1763,7 +1655,7 @@ app.post('/api/jackpot/leave', auth, actionLimit, (req, res) => {
 /* ================= TIP =================
    Send items from your inventory to another player (from their profile card).
    The items leave the sender in the same step they reach the receiver (no dupes).
-   Received items carry a 1x wager requirement, like giveaway / event prizes. */
+   */
 
 app.post('/api/tip', auth, actionLimit, (req, res) => {
   const sender = req.user;
@@ -1778,7 +1670,6 @@ app.post('/api/tip', auth, actionLimit, (req, res) => {
   const value = valueOf(items);
 
   target.inventory.push(...items);
-  target.wagerLeft = round2((target.wagerLeft || 0) + value);
 
   addTransaction(sender, 'Tip Sent', target.username, -value);
   addTransaction(target, 'Tip Received', sender.username, value);
@@ -1800,10 +1691,6 @@ app.post('/api/tip', auth, actionLimit, (req, res) => {
 app.post('/api/withdraw', auth, actionLimit, (req, res) => {
   const user = req.user;
   const uids = selectionToUids(req.body);
-
-  if ((user.wagerLeft || 0) > 0.001) {
-    return bad(res, `You must wager ${round2(user.wagerLeft)} more before you can withdraw.`);
-  }
 
   const open = S.withdrawals.filter(w => w.user.id === user.id && w.status === 'pending');
   if (open.length >= 5) return bad(res, 'You already have 5 pending withdrawals');
@@ -1909,7 +1796,7 @@ function emitEvent() {
 function eventChat(text, withButton = false) {
   pushChat({
     id: rid(4),
-    user: { username: '🎉 Event', avatar: null },
+    user: { username: 'Event', avatar: null },
     text,
     ts: now(),
     event: withButton
@@ -1925,12 +1812,10 @@ function scheduleEventClear(ev) {
   }, 60000);
 }
 
-/* items from events must be wagered 1x their value before withdrawing */
 function awardPrize(user, ev) {
   const item = ev.prize;
 
   user.inventory.push(item);
-  user.wagerLeft = round2((user.wagerLeft || 0) + safeNumber(item.value));
   addTransaction(user, 'Event Win', ev.id, item.value);
   emitMe(user);
 
@@ -1964,7 +1849,7 @@ function beginWheel(ev) {
     ev.status = 'finished';
     ev.note = 'Not enough players (at least 2 needed).';
     emitEvent();
-    eventChat('🎡 Wheel event cancelled: not enough players.');
+    eventChat('Wheel event cancelled: not enough players.');
     scheduleEventClear(ev);
     return;
   }
@@ -1973,7 +1858,7 @@ function beginWheel(ev) {
   ev.status = 'running';
   ev.round = 0;
 
-  eventChat('🎡 The wheel is spinning!');
+  eventChat('The wheel is spinning!');
   startWheelRound(ev);
 }
 
@@ -2020,7 +1905,7 @@ function finishWheel(ev) {
   if (user) awardPrize(user, ev);
 
   emitEvent();
-  if (winnerPublic) eventChat(`🏆 ${winnerPublic.username} won the wheel event and got ${ev.prize.name}!`);
+  if (winnerPublic) eventChat(`${winnerPublic.username} won the wheel event and got ${ev.prize.name}!`);
   scheduleEventClear(ev);
 }
 
@@ -2042,10 +1927,10 @@ function endScramble(ev, winnerUser) {
   if (winnerUser) {
     ev.winner = publicUser(winnerUser);
     awardPrize(winnerUser, ev);
-    eventChat(`🔤 ${winnerUser.username} solved "${ev.word}" and won ${ev.prize.name}!`);
+    eventChat(`${winnerUser.username} solved "${ev.word}" and won ${ev.prize.name}!`);
   } else {
     ev.note = 'Time is up! Nobody solved it.';
-    eventChat(`🔤 Time is up! The word was "${ev.word}".`);
+    eventChat(`Time is up! The word was "${ev.word}".`);
   }
 
   emitEvent();
@@ -2077,7 +1962,7 @@ app.post('/api/admin/event/wheel', auth, adminOnly, (req, res) => {
   later(() => beginWheel(ev), seconds * 1000);
 
   emitEvent();
-  eventChat(`🎡 Wheel event started! Prize: ${catalogItem.name}. Click to join!`, true);
+  eventChat(`Wheel event started! Prize: ${catalogItem.name}. Click to join!`, true);
   res.json({ ok: true });
 });
 
@@ -2110,7 +1995,7 @@ app.post('/api/admin/event/scramble', auth, adminOnly, (req, res) => {
   later(() => endScramble(ev, null), seconds * 1000);
 
   emitEvent();
-  eventChat(`🔤 Word Scramble started! Prize: ${catalogItem.name}. Click to play!`, true);
+  eventChat(`Word Scramble started! Prize: ${catalogItem.name}. Click to play!`, true);
   res.json({ ok: true });
 });
 
@@ -2184,8 +2069,7 @@ function cleanItem(body) {
     name, image, value,
     age: ['normal', 'neon', 'mega'].includes(body.age) ? body.age : 'normal',
     fly: Boolean(body.fly),
-    ride: Boolean(body.ride),
-    game: body.game === 'ctd' ? 'ctd' : 'adoptme'
+    ride: Boolean(body.ride)
   };
 }
 
@@ -2200,15 +2084,14 @@ app.get('/api/admin/data', auth, adminOnly, (req, res) => {
       id: u.id, username: u.username, items: u.inventory.length,
       value: valueOf(u.inventory), totalBet: round2(u.totalBet),
       totalWon: round2(u.totalWon), totalLost: round2(u.totalLost || 0), profit: round2(u.profit),
-      gstats: u.gstats,
-      banned: Boolean(u.banned), wagerLeft: round2(u.wagerLeft || 0),
+      banned: Boolean(u.banned),
+      online: socketsByUser.has(u.id), lastSeen: u.lastSeen || 0,
       isAdmin: isAdmin(u),
       adminTag: isAdmin(u) && u.adminTag !== false,
       muted: (u.mutedUntil || 0) > now()
     })),
     withdrawals: S.withdrawals.filter(w => w.status === 'pending'),
     bounties: publicBounties(),
-    botStatus: S.botStatus,
     settings: S.settings,
     admins: Object.values(S.users).filter(u => isAdmin(u)).map(u => ({ id: u.id, username: u.username })),
     updateLog: UPDATE_LOG,
@@ -2276,7 +2159,7 @@ app.get('/api/admin/inventory', auth, adminOnly, (req, res) => {
   res.json({
     username: user.username,
     items: user.inventory.map(i => ({
-      uid: i.uid, name: i.name, image: i.image, value: i.value, game: gameOf(i),
+      uid: i.uid, name: i.name, image: i.image, value: i.value,
       age: i.age, fly: i.fly, ride: i.ride
     }))
   });
@@ -2313,13 +2196,12 @@ app.post('/api/admin/notifications/read', auth, adminOnly, (req, res) => {
   res.json({ ok: true });
 });
 
-/* Fix a player's stats for one game (totals and rank follow automatically). Every change is logged. */
+/* Fix a player's stats (totals and rank follow automatically). Every change is logged. */
 app.post('/api/admin/stats', auth, adminOnly, (req, res) => {
   const user = S.users[String(req.body.id || '')];
   if (!user) return bad(res, 'User not found', 404);
 
-  const game = GAME_IDS.includes(req.body.game) ? req.body.game : 'adoptme';
-  const fields = { totalBet: 'bet', totalWon: 'won', totalLost: 'lost', profit: 'profit' };
+  const fields = { totalBet: 'totalBet', totalWon: 'totalWon', totalLost: 'totalLost', profit: 'profit' };
   const next = {};
 
   for (const [field, key] of Object.entries(fields)) {
@@ -2333,11 +2215,10 @@ app.post('/api/admin/stats', auth, adminOnly, (req, res) => {
     next[key] = round2(n);
   }
 
-  console.log(`[ADMIN] ${req.user.username} changed ${gameName(game)} stats of ${user.username}:`,
-    JSON.stringify({ before: user.gstats[game], after: next }));
+  console.log(`[ADMIN] ${req.user.username} changed stats of ${user.username}:`,
+    JSON.stringify({ before: { totalBet: user.totalBet, totalWon: user.totalWon, totalLost: user.totalLost, profit: user.profit }, after: next }));
 
-  Object.assign(user.gstats[game], next);
-  recalcTotals(user);
+  Object.assign(user, next);
 
   markDirty();
   emitMe(user);
@@ -2415,7 +2296,7 @@ app.post('/api/admin/announce', auth, adminOnly, (req, res) => {
   if (req.body.chat && text) {
     pushChat({
       id: rid(4),
-      user: { username: '📢 Announcement', avatar: null },
+      user: { username: 'Announcement', avatar: null },
       text,
       ts: now(),
       admin: true
@@ -2464,7 +2345,6 @@ app.post('/api/admin/grant', auth, adminOnly, (req, res) => {
   if (!Number.isInteger(qty) || qty < 1 || qty > 50) return bad(res, 'Quantity must be between 1 and 50');
 
   for (let i = 0; i < qty; i++) user.inventory.push(newItem(item));
-  user.wagerLeft = round2((user.wagerLeft || 0) + item.value * qty);
   emitMe(user);
   res.json({ ok: true });
 });
@@ -2495,7 +2375,6 @@ function adminUI() {
           <input id="a-name" class="in" style="width:100%;margin-bottom:8px" placeholder="Item name">
           <input id="a-val" class="in" style="width:100%;margin-bottom:8px" type="number" min="0" step="0.01" placeholder="Value">
           <div class="row">
-            <select id="a-game"><option value="adoptme">Adopt Me</option><option value="ctd">CTD</option></select>
             <select id="a-age"><option value="normal">Normal</option><option value="neon">Neon</option><option value="mega">Mega</option></select>
             <label><input id="a-fly" type="checkbox"> Fly</label>
             <label><input id="a-ride" type="checkbox"> Ride</label>
@@ -2522,9 +2401,6 @@ function adminUI() {
         <p class="hint">The tax is taken in items from the pot of every finished coinflip (the largest items that still fit under the rate, so it is never more than the rate). It goes to the chosen admin, or to the admins in turn when "Auto" is selected, and you get a bell notification each time. 0 turns the tax off.</p>
       </div>
 
-      <h4 style="margin:16px 0 8px">🤖 Deposit bots</h4>
-      <div id="adm-bots" style="background:#f5faff;padding:14px;border-radius:12px"></div>
-
       <h4 style="margin:16px 0 8px">🎯 Bounty</h4>
       <div style="background:#f5faff;padding:14px;border-radius:12px">
         <input id="bt-user" list="g-users" class="in" style="width:100%;margin-bottom:8px" placeholder="Roblox username of the target">
@@ -2547,7 +2423,7 @@ function adminUI() {
           <button id="ev-scr" class="btn" style="flex:1">🔤 Start Word Scramble</button>
           <button id="ev-cancel" class="btn red">Cancel event</button>
         </div>
-        <p class="hint">The prize is created from the selected catalog item and given to the winner (the winner must wager its value once before withdrawing). Starting an event posts an announcement in chat and a banner on the home page.</p>
+        <p class="hint">The prize is created from the selected catalog item and given to the winner. Starting an event posts an announcement in chat and a banner on the home page.</p>
       </div>
 
       <h4 style="margin:16px 0 8px">📢 Announcement (shown in the top banner)</h4>
@@ -2567,6 +2443,12 @@ function adminUI() {
       <div id="adm-cat" style="display:block"></div>
 
       <h4 style="margin:16px 0 8px">👥 Users</h4>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+        <input id="u-q" class="in" placeholder="Search username..." autocomplete="off" style="flex:1;min-width:170px">
+        <select id="u-f" class="in"><option value="all">All players</option><option value="online">Online</option><option value="offline">Offline</option><option value="admin">Admins</option><option value="banned">Banned / muted</option></select>
+        <select id="u-s" class="in"><option value="seen">Sort: last seen</option><option value="bet">Sort: total bet</option><option value="value">Sort: inventory value</option><option value="name">Sort: name</option></select>
+      </div>
+      <div id="u-count" class="hint" style="margin-bottom:6px"></div>
       <div id="adm-users"></div>
       <div id="adm-inv"></div>
       <div id="adm-stats"></div>
@@ -2579,6 +2461,9 @@ function adminUI() {
   const $ = id => document.getElementById(id);
 
   $('adm-x').onclick = () => overlay.remove();
+  $('u-q').oninput = () => renderUsers();
+  $('u-f').onchange = () => renderUsers();
+  $('u-s').onchange = () => renderUsers();
   overlay.addEventListener('mousedown', e => { if (e.target === overlay) overlay.remove(); });
 
   $('a-img').oninput = () => {
@@ -2601,13 +2486,12 @@ function adminUI() {
             </span>
           </div>
           <div style="margin-top:6px;font-size:12px">
-            ${w.items.map(i => (i.game === 'ctd' ? '[CTD] ' : '') + esc(i.name) + (i.age !== 'normal' ? ' (' + esc(i.age) + ')' : '') + (i.fly ? ' F' : '') + (i.ride ? ' R' : '')).join(' · ')}
+            ${w.items.map(i => esc(i.name) + (i.age !== 'normal' ? ' (' + esc(i.age) + ')' : '') + (i.fly ? ' F' : '') + (i.ride ? ' R' : '')).join(' · ')}
           </div>
         </div>`).join('')
       : '<p class="hint">No pending withdrawals.</p>';
 
     const catCard = item => {
-      const other = item.game === 'ctd' ? 'adoptme' : 'ctd';
       return `
         <div style="border:2px solid #e0edfb;border-radius:12px;padding:10px;text-align:center">
           <img src="${esc(item.image)}" alt="" style="width:70px;height:70px;object-fit:contain">
@@ -2618,42 +2502,20 @@ function adminUI() {
             <button class="btn mint sm" data-action="give" data-id="${esc(item.id)}" style="flex:1">Give</button>
             <button class="btn red sm" data-action="delete" data-id="${esc(item.id)}">🗑</button>
           </div>
-          <button class="btn gray sm" data-action="move" data-id="${esc(item.id)}" data-to="${other}" style="width:100%;margin-top:5px">Move to ${other === 'ctd' ? 'CTD' : 'Adopt Me'}</button>
         </div>`;
     };
 
-    const gameBlock = (id, title) => {
-      const list = data.catalog.filter(i => (i.game === 'ctd' ? 'ctd' : 'adoptme') === id);
-      return `<h5 style="margin:12px 0 8px">${title} (${list.length})</h5>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:10px">
-          ${list.map(catCard).join('') || '<p class="hint">No items yet.</p>'}
-        </div>`;
-    };
-
-    $('adm-cat').innerHTML = gameBlock('adoptme', 'Adopt Me catalog') + gameBlock('ctd', 'CTD catalog');
-
-    $('adm-users').innerHTML = data.users.length
-      ? data.users.map(u => `
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px;border-bottom:1px solid #e0edfb">
-          <b>${esc(u.username)}${u.banned ? ' 🚫' : ''}${u.muted ? ' 🔇' : ''}</b>
-          <span>${u.items} items · ${fmt(u.value)}${u.wagerLeft > 0 ? ' · wager left ' + fmt(u.wagerLeft) : ''}</span>
-          <span style="display:flex;gap:6px">
-            ${!u.isAdmin ? `<button class="btn sm gray" data-mute="${esc(u.id)}" data-state="${u.muted ? '0' : '1'}">${u.muted ? 'Unmute' : 'Mute'}</button>` : ''}
-            <button class="btn sm gray" data-inv="${esc(u.id)}">Items</button>
-            <button class="btn sm gray" data-stats="${esc(u.id)}">Stats</button>
-            ${u.isAdmin ? `<button class="btn sm gray" data-tag="${esc(u.id)}" data-state="${u.adminTag ? '0' : '1'}">Tag: ${u.adminTag ? 'ON' : 'OFF'}</button>` : ''}
-            <button class="btn sm gray" data-role="${esc(u.id)}" data-state="${u.isAdmin ? '0' : '1'}">${u.isAdmin ? 'Remove admin' : 'Make admin'}</button>
-            <button class="btn sm ${u.banned ? 'mint' : 'red'}" data-ban="${esc(u.id)}" data-state="${u.banned ? '0' : '1'}">${u.banned ? 'Unban' : 'Ban'}</button>
-          </span>
-        </div>`).join('')
-      : '<p class="hint">No users yet.</p>';
+    $('adm-cat').innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:10px">
+      ${data.catalog.map(catCard).join('') || '<p class="hint">No items yet.</p>'}
+    </div>`;
 
     usersCache = data.users;
+    renderUsers();
     $('g-users').innerHTML = data.users.map(u => `<option value="${esc(u.username)}"></option>`).join('');
 
     const prevItem = $('ev-item').value;
     $('ev-item').innerHTML = data.catalog.length
-      ? data.catalog.map(i => `<option value="${esc(i.id)}">${i.game === 'ctd' ? '[CTD] ' : '[Adopt Me] '}${esc(i.name)} (${fmt(i.value)})</option>`).join('')
+      ? data.catalog.map(i => `<option value="${esc(i.id)}">${esc(i.name)} (${fmt(i.value)})</option>`).join('')
       : '<option value="">No catalog items</option>';
     if (prevItem) $('ev-item').value = prevItem;
 
@@ -2687,16 +2549,6 @@ function adminUI() {
       </div>
       ${logNotes}${logBuiltIn}`;
 
-    $('adm-bots').innerHTML = [['adoptme', 'Adopt Me'], ['ctd', 'CTD']].map(([g, name]) => {
-      const on = !data.botStatus || data.botStatus[g] !== false;
-      return `
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0">
-          <b>${name} bot</b>
-          <span>${on ? '🟢 Online' : '🔴 Offline'}</span>
-          <button class="btn sm ${on ? 'red' : 'mint'}" data-bot="${g}" data-state="${on ? '0' : '1'}">${on ? 'Set offline' : 'Set online'}</button>
-        </div>`;
-    }).join('');
-
     $('bt-list').innerHTML = (data.bounties || []).length
       ? data.bounties.map(b => `
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px;border-bottom:1px solid #e0edfb">
@@ -2722,7 +2574,7 @@ function adminUI() {
         method: 'POST',
         body: {
           image: $('a-img').value, name: $('a-name').value, value: $('a-val').value,
-          game: $('a-game').value, age: $('a-age').value, fly: $('a-fly').checked, ride: $('a-ride').checked
+          age: $('a-age').value, fly: $('a-fly').checked, ride: $('a-ride').checked
         }
       });
       $('a-img').value = ''; $('a-name').value = ''; $('a-val').value = '';
@@ -2737,12 +2589,6 @@ function adminUI() {
     if (!button) return;
     const id = button.dataset.id;
     try {
-      if (button.dataset.action === 'move') {
-        await api('/api/admin/catalog/game', { method: 'POST', body: { id, game: button.dataset.to } });
-        toast('Item moved', 'ok');
-        await load();
-      }
-
       if (button.dataset.action === 'give') {
         await api('/api/admin/grant', {
           method: 'POST',
@@ -2849,14 +2695,66 @@ function adminUI() {
   let usersCache = [];
   let statsUser = null;
 
-  function openStats(userId, game) {
+  function ago(ts) {
+    if (!ts) return 'never';
+    const m = Math.floor((Date.now() - ts) / 60000);
+    if (m < 1) return 'just now';
+    if (m < 60) return m + ' min ago';
+    if (m < 1440) return Math.floor(m / 60) + ' h ago';
+    return Math.floor(m / 1440) + ' d ago';
+  }
+
+  function renderUsers() {
+    const q = ($('u-q').value || '').trim().toLowerCase();
+    const f = $('u-f').value;
+    const sort = $('u-s').value;
+
+    const list = usersCache.filter(u => {
+      if (q && !u.username.toLowerCase().includes(q)) return false;
+      if (f === 'online') return u.online;
+      if (f === 'offline') return !u.online;
+      if (f === 'admin') return u.isAdmin;
+      if (f === 'banned') return u.banned || u.muted;
+      return true;
+    });
+
+    list.sort((a, b) => {
+      if (sort === 'bet') return b.totalBet - a.totalBet;
+      if (sort === 'value') return b.value - a.value;
+      if (sort === 'name') return a.username.localeCompare(b.username);
+      return (Number(b.online) - Number(a.online)) || ((b.lastSeen || 0) - (a.lastSeen || 0));
+    });
+
+    const online = usersCache.filter(u => u.online).length;
+    $('u-count').textContent = `${list.length} shown · ${online} online · ${usersCache.length} total`;
+
+    $('adm-users').innerHTML = list.length
+      ? list.slice(0, 100).map(u => `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px;border-bottom:1px solid #e0edfb;flex-wrap:wrap">
+          <span style="display:flex;align-items:center;gap:8px;min-width:150px">
+            <i style="width:9px;height:9px;border-radius:50%;background:${u.online ? '#22c55e' : '#8b93a3'};display:inline-block"></i>
+            <b>${esc(u.username)}${u.banned ? ' (banned)' : ''}${u.muted ? ' (muted)' : ''}</b>
+            <small>${u.online ? 'online' : esc(ago(u.lastSeen))}</small>
+          </span>
+          <span>${u.items} items · ${fmt(u.value)} · bet ${fmt(u.totalBet)}</span>
+          <span style="display:flex;gap:6px;flex-wrap:wrap">
+            ${!u.isAdmin ? `<button class="btn sm gray" data-mute="${esc(u.id)}" data-state="${u.muted ? '0' : '1'}">${u.muted ? 'Unmute' : 'Mute'}</button>` : ''}
+            <button class="btn sm gray" data-inv="${esc(u.id)}">Items</button>
+            <button class="btn sm gray" data-stats="${esc(u.id)}">Stats</button>
+            ${u.isAdmin ? `<button class="btn sm gray" data-tag="${esc(u.id)}" data-state="${u.adminTag ? '0' : '1'}">Tag: ${u.adminTag ? 'ON' : 'OFF'}</button>` : ''}
+            <button class="btn sm gray" data-role="${esc(u.id)}" data-state="${u.isAdmin ? '0' : '1'}">${u.isAdmin ? 'Remove admin' : 'Make admin'}</button>
+            <button class="btn sm ${u.banned ? 'mint' : 'red'}" data-ban="${esc(u.id)}" data-state="${u.banned ? '0' : '1'}">${u.banned ? 'Unban' : 'Ban'}</button>
+          </span>
+        </div>`).join('') + (list.length > 100 ? '<p class="hint">Showing the first 100. Use the search to narrow it down.</p>' : '')
+      : '<p class="hint">No users match.</p>';
+  }
+
+
+  function openStats(userId) {
     const u = usersCache.find(x => x.id === userId);
     if (!u) return;
 
     statsUser = userId;
-    game = game || 'adoptme';
-
-    const g = (u.gstats && u.gstats[game]) || { bet: 0, won: 0, lost: 0, profit: 0 };
 
     const field = (id, label, value) => `
       <div><small>${label}</small>
@@ -2866,47 +2764,37 @@ function adminUI() {
       <div style="background:#f5faff;padding:14px;border-radius:12px;margin-top:10px">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px">
           <b>${esc(u.username)}'s stats</b>
-          <select id="st-game" class="in">
-            <option value="adoptme" ${game === 'adoptme' ? 'selected' : ''}>Adopt Me</option>
-            <option value="ctd" ${game === 'ctd' ? 'selected' : ''}>CTD</option>
-          </select>
           <button class="btn gray sm" id="st-close">Close</button>
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:10px">
-          ${field('st-bet', 'Total bet', g.bet)}
-          ${field('st-won', 'Total won', g.won)}
-          ${field('st-lost', 'Total lost', g.lost)}
-          ${field('st-profit', 'Profit', g.profit)}
+          ${field('st-bet', 'Total bet', u.totalBet)}
+          ${field('st-won', 'Total won', u.totalWon)}
+          ${field('st-lost', 'Total lost', u.totalLost)}
+          ${field('st-profit', 'Profit', u.profit)}
         </div>
-        <button class="btn" id="st-save" style="width:100%">Save ${game === 'ctd' ? 'CTD' : 'Adopt Me'} stats</button>
-        <p class="hint">Overall totals and rank are recalculated from both games. Every change is written to the server log.</p>
+        <button class="btn" id="st-save" style="width:100%">Save stats</button>
+        <p class="hint">The rank follows total bet. Every change is written to the server log.</p>
       </div>`;
 
     $('adm-stats').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
-  $('adm-stats').onchange = e => {
-    if (e.target.id === 'st-game' && statsUser) openStats(statsUser, e.target.value);
-  };
-
   $('adm-stats').onclick = async e => {
     if (e.target.closest('#st-close')) { $('adm-stats').innerHTML = ''; statsUser = null; return; }
     if (!e.target.closest('#st-save') || !statsUser) return;
-
-    const game = $('st-game').value;
 
     try {
       await api('/api/admin/stats', {
         method: 'POST',
         body: {
-          id: statsUser, game,
+          id: statsUser,
           totalBet: $('st-bet').value, totalWon: $('st-won').value,
           totalLost: $('st-lost').value, profit: $('st-profit').value
         }
       });
       toast('Stats saved', 'ok');
       await load();
-      openStats(statsUser, game);
+      openStats(statsUser);
     } catch (err) { toast(err.message, 'err'); }
   };
 
@@ -2927,7 +2815,7 @@ function adminUI() {
             ${data.items.length ? data.items.map(i => `
               <div style="border:2px solid #e0edfb;border-radius:10px;padding:8px;text-align:center">
                 <img src="${esc(i.image)}" alt="" style="width:60px;height:60px;object-fit:contain">
-                <div style="font-weight:700;font-size:12px">${i.game === 'ctd' ? '[CTD] ' : ''}${esc(i.name)}</div>
+                <div style="font-weight:700;font-size:12px">${esc(i.name)}</div>
                 ${tags(i)}
                 <div>${fmt(i.value)}</div>
                 <button class="btn red sm" data-delitem="${esc(i.uid)}" data-name="${esc(i.name)}" style="margin-top:6px;width:100%">Delete</button>
@@ -3001,16 +2889,6 @@ function adminUI() {
     } catch (err) { toast(err.message, 'err'); }
   };
 
-  $('adm-bots').onclick = async e => {
-    const b = e.target.closest('[data-bot]');
-    if (!b) return;
-    try {
-      await api('/api/admin/bot', { method: 'POST', body: { game: b.dataset.bot, online: b.dataset.state === '1' } });
-      toast(b.dataset.state === '1' ? 'Bot is now online' : 'Bot is now offline', 'ok');
-      await load();
-    } catch (err) { toast(err.message, 'err'); }
-  };
-
   $('bt-add').onclick = async () => {
     try {
       await api('/api/admin/bounty', { method: 'POST', body: { username: $('bt-user').value, itemId: $('bt-item').value } });
@@ -3075,6 +2953,8 @@ io.on('connection', socket => {
     socket.on('disconnect', () => {
       const left = (socketsByUser.get(uid) || 1) - 1;
       if (left <= 0) socketsByUser.delete(uid); else socketsByUser.set(uid, left);
+      const u = S.users[uid];
+      if (u) u.lastSeen = now();
     });
   }
   if (socket.user && isAdmin(socket.user)) socket.join('admins');
@@ -3101,6 +2981,8 @@ io.on('connection', socket => {
       const mins = Math.max(1, Math.ceil((user.mutedUntil - now()) / 60000));
       return callback({ error: `You are muted for ${mins} more minute(s).` });
     }
+
+    if (!isAdmin(user) && (user.totalBet || 0) <= 0) return callback({ error: 'Place a bet to chat' });
 
     let text = typeof payload === 'string' ? payload : payload && payload.text;
     if (typeof text !== 'string') return callback({ error: 'Invalid message' });
@@ -3167,9 +3049,7 @@ function auditItems() {
     [...m.hostItems, ...m.oppItems].forEach(i => add(i.uid, `match ${m.id}`, false));
   }
 
-  for (const j of Object.values(JPS)) {
-    if (j && j.state !== 'finished') j.entries.forEach(e => e.items.forEach(i => add(i.uid, `jackpot ${j.id}`, false)));
-  }
+  if (JP && JP.state !== 'finished') JP.entries.forEach(e => e.items.forEach(i => add(i.uid, `jackpot ${JP.id}`, false)));
 
   for (const g of Object.values(S.giveaways)) g.items.forEach(i => add(i.uid, `giveaway ${g.id}`, false));
   for (const w of S.withdrawals) {
@@ -3222,7 +3102,7 @@ app.use((err, req, res, next) => {
 
 (async () => {
   await initDb();
-  GAME_IDS.forEach(g => newJackpot(g));
+  newJackpot();
   auditItems();
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`Pet Duel running on port ${PORT}`);
