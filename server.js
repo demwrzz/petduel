@@ -1541,7 +1541,7 @@ const UPDATE_LOG = [
   { version: '2.2', title: 'New lobby, info pages and easier pet adding', changes: [
     'Coinflip lobby rebuilt: Player vs Player, all pets in one row with badges, value and join range on the right, Join / View buttons',
     'Sort games by value or newest; game count and total value in the toolbar',
-    'Updates (public, with "Crypto gambling - soon"), Terms of Service, Provably Fair and FAQ next to Discord',
+    'Updates (public), Terms of Service, Provably Fair and FAQ next to Discord',
     'Admin: add a pet with all 12 versions at once; known pets fill their picture automatically; elvebredd fills every value',
     'Elvebredd parser can no longer freeze the server (this caused the 502 errors)'
   ] },
