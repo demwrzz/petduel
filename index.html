@@ -411,7 +411,7 @@
       height: calc(100vh - 112px); min-height: 420px;
     }
 
-    .giveaways { display: flex; flex-direction: column; gap: 8px; max-height: 260px; overflow-y: auto; }
+    .giveaways { display: flex; flex-direction: column; gap: 8px; max-height: min(430px, 55vh); overflow-y: auto; flex: none; }
     .giveaway-card {
       position: relative; display: flex; align-items: center; gap: 12px; padding: 12px;
       border: 1px solid #6a5528; border-radius: 8px; overflow: hidden;
@@ -938,6 +938,20 @@
     .gw-title small { color: #cfc6b0; font-size: 12px; }
     .gw-timer { padding: 5px 10px; border-radius: 999px; color: var(--orange); background: #3a2d14; font-size: 13px; font-weight: 800; }
     .gw-items { display: flex; align-items: center; margin: 12px 0 10px; padding-left: 10px; }
+    .gw-pets { display: flex; flex-direction: column; gap: 6px; margin: 12px 0 10px; }
+    .gw-pet { display: flex; align-items: center; gap: 10px; padding: 6px 10px 6px 6px; border: 1px solid #3a3224; border-radius: 9px; background: rgba(0, 0, 0, .22); }
+    .gw-pet-img { position: relative; display: grid; place-items: center; flex: none; width: 42px; height: 42px; border-radius: 50%; background: radial-gradient(circle at 50% 45%, #2c2a26, #17150f 72%); }
+    .gw-pet-img img { width: 84%; height: 84%; object-fit: contain; }
+    .gw-pet-img .tb { bottom: -5px; }
+    .gw-pet-img .tb i { width: 15px; height: 15px; font-size: 8px; border-color: #241f16; }
+    .gw-pet-name { flex: 1; min-width: 0; overflow: hidden; color: #fff; font-size: 13px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+    .gw-pet b { display: flex; align-items: center; color: var(--orange); font-size: 13px; white-space: nowrap; }
+    .gw-pet b svg { width: 13px; height: 13px; }
+    .gw-dur { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .gw-dur div { position: relative; }
+    .gw-dur input { width: 100%; padding: 12px 44px 12px 12px; border: 2px solid #484b54; border-radius: 7px; background: #14171f; }
+    .gw-dur input:focus { border-color: var(--green); }
+    .gw-dur span { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 12px; font-weight: 800; pointer-events: none; }
     .gw-bar { height: 5px; overflow: hidden; border-radius: 5px; background: #2a2620; }
     .gw-bar i { display: block; width: 100%; height: 100%; background: linear-gradient(90deg, var(--orange), #ffd35a); transition: width .3s linear; }
     .gw-foot { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
@@ -2328,14 +2342,18 @@
               ${avatar(g.host, "md")}
               <div class="gw-title">
                 <b>${esc(getUsername(g.host))}'s Giveaway</b>
-                <small>${GEM}${short(g.value)} · ${Number(g.entrantCount || 0)} entered</small>
+                <small>${GEM}${fmt(g.value)} · ${Number(g.entrantCount || 0)} entered</small>
               </div>
               <div class="gw-timer ticker-giveaway" data-end="${Number(g.endsAt || 0)}"></div>
             </div>
 
-            <div class="gw-items">
-              ${items.slice(0, 5).map(i => `<div class="item-thumb" title="${esc(i.name)} • ${fmt(i.value)}"><img src="${esc(itemImage(i))}" alt=""></div>`).join("")}
-              ${items.length > 5 ? `<div class="item-thumb"><b>+${items.length - 5}</b></div>` : ""}
+            <div class="gw-pets">
+              ${items.slice(0, 5).map(i => `
+                <div class="gw-pet" data-tip="${esc(itemLabel(i))}" data-tip-value="${esc(fmt(i.value))}">
+                  <div class="gw-pet-img"><img src="${esc(itemImage(i))}" alt="">${thumbBadges(i)}</div>
+                  <div class="gw-pet-name">${esc(itemLabel(i))}</div>
+                  <b>${GEM}${fmt(i.value)}</b>
+                </div>`).join("")}
             </div>
 
             <div class="gw-bar"><i class="ticker-bar" data-end="${Number(g.endsAt || 0)}" data-dur="${Number(g.duration || 60)}"></i></div>
@@ -2399,11 +2417,16 @@
       t.innerHTML = giveawayMode === "easy"
         ? `<label>Duration</label>
            <div class="seg" style="margin:0">
-             ${[[30, "30 sec"], [120, "2 min"], [300, "5 min"]].map(([s, n]) =>
+             ${[[30, "30 sec"], [120, "2 min"], [300, "5 min"], [3600, "1 hour"], [86400, "1 day"]].map(([s, n]) =>
                `<button class="${giveawayDur === s ? "on" : ""}" data-action="gw-dur" data-sec="${s}">${n}</button>`).join("")}
            </div>`
-        : `<div class="gw-fields">
-             <div><label>Duration (1–200 minutes)</label><input id="giveawayMinutes" type="number" min="1" max="200" value="10"></div>
+        : `<label>Duration (as long as you want)</label>
+           <div class="gw-dur" style="margin-bottom:12px">
+             <div><input id="giveawayDays" type="number" min="0" value="0"><span>days</span></div>
+             <div><input id="giveawayHours" type="number" min="0" value="0"><span>hours</span></div>
+             <div><input id="giveawayMinutes" type="number" min="0" value="10"><span>min</span></div>
+           </div>
+           <div class="gw-fields">
              <div><label>Min total bet</label><input id="giveawayMinBet" type="number" min="0" value="0"></div>
            </div>`;
     }
@@ -2417,10 +2440,12 @@
       if (giveawayMode === "easy") {
         duration = giveawayDur;
       } else {
-        const minutes = Number($("#giveawayMinutes").value);
+        const part = id => Math.max(0, Math.floor(Number($(id).value) || 0));
+        const minutes = part("#giveawayDays") * 1440 + part("#giveawayHours") * 60 + part("#giveawayMinutes");
         minBet = Number($("#giveawayMinBet").value);
 
-        if (!Number.isInteger(minutes) || minutes < 1 || minutes > 200) return toast("Duration must be 1–200 minutes", "err");
+        if (minutes < 1) return toast("Duration must be at least 1 minute", "err");
+        if (minutes > 365 * 1440) return toast("Duration can be at most 365 days", "err");
         if (!Number.isFinite(minBet) || minBet < 0) return toast("Invalid minimum bet", "err");
 
         duration = minutes * 60;
@@ -2744,7 +2769,8 @@
 
       document.querySelectorAll(".ticker-giveaway").forEach(el => {
         const s = Math.max(0, Math.ceil((Number(el.dataset.end) - time) / 1000));
-        el.textContent = Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+        const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+        el.textContent = d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${String(m).padStart(2, "0")}m` : m + ":" + String(s % 60).padStart(2, "0");
       });
 
       document.querySelectorAll(".ticker-jp").forEach(el => {
@@ -3531,6 +3557,11 @@
     /* public update log: only things players see and can be shared openly */
     /* newest first; "note" is the short text shown in the banner in the middle of the home page */
     const PUBLIC_UPDATES = [
+      { v: "2.9", title: "Bigger giveaways", note: "Giveaways can now run for days, and you can see every pet's name and value right on the giveaway card!", items: [
+        "Giveaways can run for minutes, hours or days",
+        "See each pet's picture, name and value on the giveaway card",
+        "Giveaways keep running even if the site restarts"
+      ] },
       { v: "2.8", title: "Nicknames", note: "Pick your own nickname! Everyone on Pet Duel now sees your nickname instead of your Roblox name.", items: [
         "Choose a nickname: it is shown in the chat, in games and on the leaderboard",
         "Your Roblox name stays private",

@@ -38,7 +38,8 @@ const WEBHOOK_CF = E.DISCORD_CF_WEBHOOK || WEBHOOKS.coinflip;
 const WEBHOOK_JP = E.DISCORD_JP_WEBHOOK || WEBHOOKS.jackpot || WEBHOOK_CF;
 const WEBHOOK_WD = E.DISCORD_WD_WEBHOOK || WEBHOOKS.withdraw;
 const SITE_URL = E.SITE_URL || 'https://petduel.win';
-const MAX_GW_MINUTES = 200;
+/* giveaways can run as long as you like (the cap is only a safety limit) */
+const MAX_GW_SECONDS = 365 * 24 * 60 * 60;
 
 let RANGE = Number(E.JOIN_RANGE || 0.10);
 if (!Number.isFinite(RANGE) || RANGE < 0 || RANGE > 1) RANGE = 0.10;
@@ -312,9 +313,7 @@ function snapshot() {
     if (users[m.host.id]) users[m.host.id].inventory.push(...JSON.parse(JSON.stringify(m.hostItems)));
     if (m.opp && users[m.opp.id]) users[m.opp.id].inventory.push(...JSON.parse(JSON.stringify(m.oppItems)));
   }
-  for (const g of Object.values(S.giveaways)) {
-    if (users[g.host.id]) users[g.host.id].inventory.push(...JSON.parse(JSON.stringify(g.items)));
-  }
+  /* giveaways are saved as they are (they can run for days), so they survive a restart */
 
   /* items sitting in an unfinished jackpot round go back to their owners */
   if (JP && JP.state !== 'finished') {
@@ -334,6 +333,7 @@ function snapshot() {
     bounties: S.bounties,
     settings: S.settings,
     updateNotes: S.updateNotes,
+    giveaways: S.giveaways,
     bots: S.bots.map(b => ({ id: b.id, username: b.username, link: b.link, online: b.online !== false }))
   };
 }
@@ -369,6 +369,7 @@ async function initDb() {
       S.settings = { taxPercent: 0, taxReceiver: 'auto', taxIdx: 0, elveUrl: '', ...(d.settings || {}) };
       S.bots = Array.isArray(d.bots) ? d.bots : [];
       S.updateNotes = d.updateNotes || [];
+      S.giveaways = Object.assign(Object.create(null), d.giveaways || {});
       console.log('State loaded from MongoDB.');
     }
   } catch (err) {
@@ -1386,10 +1387,16 @@ function pushChat(message) {
 
 /* ================= GIVEAWAYS ================= */
 
+setInterval(() => {
+  const t = now();
+  for (const g of Object.values(S.giveaways)) if (g.endsAt <= t) endGiveaway(g.id);
+}, 2000);
+
 function endGiveaway(id) {
   const g = S.giveaways[id];
   if (!g) return;
   delete S.giveaways[id];
+  markDirty();
 
   const host = S.users[g.host.id];
   if (!host) return;
@@ -1440,9 +1447,9 @@ app.post('/api/giveaway/create', auth, actionLimit, (req, res) => {
   const uids = selectionToUids(req.body);
 
   if (mode === 'easy') {
-    if (![30, 120, 300].includes(duration)) return bad(res, 'Invalid duration');
+    if (![30, 120, 300, 3600, 86400].includes(duration)) return bad(res, 'Invalid duration');
   } else if (mode === 'advanced') {
-    if (!(duration >= 60 && duration <= MAX_GW_MINUTES * 60)) return bad(res, `Advanced duration must be 1–${MAX_GW_MINUTES} minutes`);
+    if (!(duration >= 60 && duration <= MAX_GW_SECONDS)) return bad(res, 'Duration must be at least 1 minute');
     if (!Number.isFinite(minBet) || minBet < 0) return bad(res, 'Invalid minimum bet');
   } else {
     return bad(res, 'Invalid mode');
@@ -1472,7 +1479,7 @@ app.post('/api/giveaway/create', auth, actionLimit, (req, res) => {
   };
 
   S.giveaways[g.id] = g;
-  setTimeout(() => endGiveaway(g.id), duration * 1000);
+  markDirty();
 
   sendWebhook(WEBHOOK_GW, {
     title: '🎁 New giveaway',
@@ -1512,6 +1519,7 @@ app.post('/api/giveaway/enter', auth, actionLimit, async (req, res) => {
   }
 
   g.entrants.push(user.id);
+  markDirty();
   io.emit('giveaway:update', publicGiveaway(g));
   res.json({ ok: true });
 });
@@ -1609,6 +1617,11 @@ app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
 });
 
 const UPDATE_LOG = [
+  { version: '3.0', title: 'Long giveaways', changes: [
+    'Giveaway duration has no practical limit: days, hours and minutes in Advanced mode; Easy mode also has 1 hour and 1 day',
+    'Giveaways are saved in the database and survive restarts / deploys (before, a restart returned the items to the host)',
+    'Giveaway card shows every pet with its picture, name, badges and value; the timer shows days and hours'
+  ] },
   { version: '2.9', title: 'Nicknames, masked bot names, delete all pets', changes: [
     'Every player must choose a site nickname (3-16 letters, numbers or _, unique) before playing; it is shown everywhere instead of the Roblox name (chat, games, leaderboard, webhooks). Can be changed once every 7 days',
     'Admin users list shows nickname + Roblox name; search, Give Items and bounties accept either',
