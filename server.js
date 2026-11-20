@@ -43,8 +43,10 @@ const S = {
   announcement: null,
   notifications: [],
   bounties: [],
-  settings: { taxPercent: 0, taxReceiver: 'auto', taxIdx: 0 },
-  updateNotes: []
+  settings: { taxPercent: 0, taxReceiver: 'auto', taxIdx: 0, elveUrl: '' },
+  updateNotes: [],
+  /* deposit bots, managed in the admin panel: { id, username, link, online } */
+  bots: []
 };
 
 const pending = new Map();
@@ -275,7 +277,8 @@ function snapshot() {
     notifications: S.notifications.slice(0, 50),
     bounties: S.bounties,
     settings: S.settings,
-    updateNotes: S.updateNotes
+    updateNotes: S.updateNotes,
+    bots: S.bots.map(b => ({ id: b.id, username: b.username, link: b.link, online: b.online !== false }))
   };
 }
 
@@ -307,7 +310,8 @@ async function initDb() {
       S.announcement = d.announcement || null;
       S.notifications = d.notifications || [];
       S.bounties = d.bounties || [];
-      S.settings = { taxPercent: 0, taxReceiver: 'auto', taxIdx: 0, ...(d.settings || {}) };
+      S.settings = { taxPercent: 0, taxReceiver: 'auto', taxIdx: 0, elveUrl: '', ...(d.settings || {}) };
+      S.bots = Array.isArray(d.bots) ? d.bots : [];
       S.updateNotes = d.updateNotes || [];
       console.log('State loaded from MongoDB.');
     }
@@ -410,21 +414,43 @@ async function robloxAvatar(id) {
   } catch { return null; }
 }
 
-const bot = { username: BOT_NAME, id: null, avatar: null, link: BOT_LINK, joinLink: BOT_LINK };
+/* ---- Deposit bots ----
+   Admins add / remove bots and switch each one online or offline in the admin panel.
+   Deposits are confirmed by hand, so "offline" simply means: do not send trades to this bot right now. */
+const botProfiles = new Map(); /* username (lowercase) -> { robloxId, username, avatar } */
 
-async function loadBot() {
+function ensureDefaultBot() {
+  if (!S.bots.length) S.bots.push({ id: rid(6), username: BOT_NAME, link: BOT_LINK, online: true });
+}
+
+const publicBots = () => S.bots.map(b => {
+  const p = botProfiles.get(b.username.toLowerCase()) || {};
+  return {
+    id: b.id, username: p.username || b.username, robloxId: p.robloxId || null,
+    avatar: p.avatar || null, link: b.link, joinLink: b.link, online: b.online !== false
+  };
+});
+
+/* kept for older clients: the first bot */
+const firstBot = () => publicBots()[0] || null;
+
+async function loadBotProfile(username) {
   try {
-    const user = await robloxLookup(BOT_NAME);
+    const user = await robloxLookup(username);
     if (!user) return;
-    bot.id = user.id;
-    bot.username = user.username;
-    bot.avatar = await robloxAvatar(user.id);
+    botProfiles.set(username.toLowerCase(), { robloxId: user.id, username: user.username, avatar: await robloxAvatar(user.id) });
   } catch (error) {
-    console.error('Bot profile could not be loaded:', error.message);
+    console.error(`Bot profile ${username} could not be loaded:`, error.message);
   }
 }
 
-const loadBots = loadBot;
+async function loadBots() {
+  ensureDefaultBot();
+  for (const b of S.bots) await loadBotProfile(b.username);
+  io.emit('bots:update', publicBots());
+}
+
+const emitBots = () => io.emit('bots:update', publicBots());
 
 /* ================= EXPRESS + SOCKET ================= */
 
@@ -820,7 +846,8 @@ function buildState() {
     giveaways: Object.values(S.giveaways).map(publicGiveaway),
     chat: S.chat,
     online: onlineCount(),
-    bot,
+    bot: firstBot(),
+    bots: publicBots(),
     bounties: publicBounties(),
     announcement: S.announcement,
     event: publicEvent(EVENT),
@@ -1334,6 +1361,12 @@ app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
 });
 
 const UPDATE_LOG = [
+  { version: '2.0', title: 'Deposit bots, elvebredd values and a new look', changes: [
+    'Deposit lists every bot with its Online / Offline status; offline bots cannot be joined',
+    'Admin panel: add / remove deposit bots, change join links and switch each bot online or offline',
+    'Admin panel: type a pet name, pick Normal / Neon / Mega and Fly / Ride, and the value and image are fetched from elvebredd.com',
+    'Rubik font and a paw print background'
+  ] },
   { version: '1.9', title: 'Simpler site, chat rule and admin search', changes: [
     'Back to a single game (Adopt Me): everything about the second game and the withdraw wager requirement was removed',
     'Chat: you need to place a bet before you can write ("Place a bet to chat")',
@@ -2073,6 +2106,267 @@ function cleanItem(body) {
   };
 }
 
+/* ================= ADMIN: DEPOSIT BOTS ================= */
+
+const cleanBotName = v => String(v || '').trim();
+const validBotName = v => /^[A-Za-z0-9_]{3,20}$/.test(v);
+const validBotLink = v => /^https:\/\/(www\.)?roblox\.com\/[^\s"'<>]{1,400}$/.test(v);
+
+app.post('/api/admin/bots/add', auth, adminOnly, async (req, res) => {
+  const username = cleanBotName(req.body.username);
+  const link = String(req.body.link || '').trim();
+  if (!validBotName(username)) return bad(res, 'Enter a valid Roblox username');
+  if (!validBotLink(link)) return bad(res, 'The join link must be a https://www.roblox.com/... link');
+  if (S.bots.length >= 20) return bad(res, 'You can add at most 20 bots');
+  if (S.bots.some(b => b.username.toLowerCase() === username.toLowerCase())) return bad(res, 'This bot is already in the list');
+
+  const b = { id: rid(6), username, link, online: req.body.online !== false };
+  S.bots.push(b);
+  markDirty();
+  await loadBotProfile(username);
+  emitBots();
+  res.json({ ok: true, bots: publicBots() });
+});
+
+app.post('/api/admin/bots/update', auth, adminOnly, (req, res) => {
+  const b = S.bots.find(x => x.id === req.body.id);
+  if (!b) return bad(res, 'Bot not found', 404);
+  if (req.body.online !== undefined) b.online = Boolean(req.body.online);
+  if (req.body.link !== undefined) {
+    const link = String(req.body.link || '').trim();
+    if (!validBotLink(link)) return bad(res, 'The join link must be a https://www.roblox.com/... link');
+    b.link = link;
+  }
+  markDirty();
+  emitBots();
+  res.json({ ok: true, bots: publicBots() });
+});
+
+app.post('/api/admin/bots/delete', auth, adminOnly, (req, res) => {
+  const i = S.bots.findIndex(x => x.id === req.body.id);
+  if (i < 0) return bad(res, 'Bot not found', 404);
+  S.bots.splice(i, 1);
+  markDirty();
+  emitBots();
+  res.json({ ok: true, bots: publicBots() });
+});
+
+/* ================= ADMIN: ELVEBREDD VALUE LOOKUP =================
+   The admin types a pet name and picks Normal / Neon / Mega + Fly / Ride; the server reads the
+   value list of elvebredd.com and returns that pet's value and image so it can be added to the catalog.
+   The site has no documented API, so the parser is tolerant: it reads JSON endpoints or the JSON embedded
+   in the page and finds every object that has a name and value fields. If elvebredd changes its site,
+   set the exact data URL in the admin panel (or ELVE_URL in Render > Environment). */
+
+const ELVE_ORIGIN = 'https://elvebredd.com';
+const ELVE_DEFAULT_URLS = [
+  ELVE_ORIGIN + '/api/values', ELVE_ORIGIN + '/api/pets', ELVE_ORIGIN + '/api/items',
+  ELVE_ORIGIN + '/values', ELVE_ORIGIN + '/'
+];
+const ELVE_TTL = 15 * 60 * 1000;
+let elveCache = { ts: 0, pets: [], source: '' };
+let elveLoading = null;
+
+const normName = v => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+function numberOf(v) {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (typeof v !== 'string') return null;
+  const t = v.trim().replace(/,/g, '');
+  if (!/^-?\d+(\.\d+)?$/.test(t)) return null;
+  return Number(t);
+}
+
+const NAME_KEYS = ['name', 'title', 'item_name', 'itemName', 'petName', 'pet_name'];
+const IMAGE_KEYS = ['image', 'img', 'imageUrl', 'image_url', 'imageURL', 'icon', 'picture', 'thumbnail', 'src'];
+
+/* finds every "pet-like" object (a name + at least one numeric value field) anywhere in the data */
+function collectPets(root, base) {
+  const out = [];
+  const seen = new Set();
+
+  const walk = (node, depth) => {
+    if (!node || typeof node !== 'object' || depth > 10 || seen.has(node)) return;
+    seen.add(node);
+    if (Array.isArray(node)) { node.forEach(x => walk(x, depth + 1)); return; }
+
+    const nameKey = NAME_KEYS.find(k => typeof node[k] === 'string' && node[k].trim());
+    if (nameKey) {
+      const values = {};
+      for (const [k, v] of Object.entries(node)) {
+        if (!/val/i.test(k)) continue;
+        const n = numberOf(v);
+        if (n !== null && n >= 0) values[k] = n;
+      }
+      if (Object.keys(values).length) {
+        let image = '';
+        const imageKey = IMAGE_KEYS.find(k => typeof node[k] === 'string' && node[k].trim());
+        if (imageKey) {
+          try { image = new URL(node[imageKey].trim(), base).href; } catch { image = ''; }
+        }
+        out.push({ name: node[nameKey].trim(), image, values });
+      }
+    }
+    Object.values(node).forEach(v => walk(v, depth + 1));
+  };
+
+  walk(root, 0);
+  return out;
+}
+
+/* tries to read JSON from a response body: plain JSON, Next.js __NEXT_DATA__, or JSON blobs in <script> tags */
+function extractJson(text) {
+  const found = [];
+  const t = text.trim();
+  if (t.startsWith('{') || t.startsWith('[')) {
+    try { found.push(JSON.parse(t)); return found; } catch { /* not JSON */ }
+  }
+  const next = text.match(/<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
+  if (next) { try { found.push(JSON.parse(next[1])); } catch { /* ignore */ } }
+
+  const re = /<script[^>]*type="application\/(?:ld\+)?json"[^>]*>([\s\S]*?)<\/script>/gi;
+  let m;
+  while ((m = re.exec(text))) { try { found.push(JSON.parse(m[1])); } catch { /* ignore */ } }
+
+  /* Next.js app router streams data as self.__next_f.push([1,"..."]) chunks */
+  const chunks = [];
+  const fre = /self\.__next_f\.push\(\[1,"((?:[^"\\]|\\.)*)"\]\)/g;
+  while ((m = fre.exec(text))) { try { chunks.push(JSON.parse('"' + m[1] + '"')); } catch { /* ignore */ } }
+  if (chunks.length) {
+    const joined = chunks.join('');
+    const arr = /\[\s*\{[^\[\]]*?"name"\s*:[\s\S]*?\}\s*\]/g;
+    while ((m = arr.exec(joined))) { try { found.push(JSON.parse(m[0])); } catch { /* ignore */ } }
+  }
+  return found;
+}
+
+async function fetchText(url) {
+  const response = await fetch(url, {
+    signal: AbortSignal.timeout(15000),
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+      Accept: 'application/json, text/html;q=0.9, */*;q=0.8'
+    }
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.text();
+}
+
+async function loadElve(force) {
+  if (!force && elveCache.pets.length && now() - elveCache.ts < ELVE_TTL) return elveCache;
+  if (elveLoading) return elveLoading;
+
+  elveLoading = (async () => {
+    const custom = String(S.settings.elveUrl || E.ELVE_URL || '').trim();
+    const queue = custom ? [custom, ...ELVE_DEFAULT_URLS] : [...ELVE_DEFAULT_URLS];
+    const tried = new Set();
+    const errors = [];
+
+    while (queue.length && tried.size < 14) {
+      const url = queue.shift();
+      if (tried.has(url)) continue;
+      tried.add(url);
+      try {
+        const text = await fetchText(url);
+        const pets = [];
+        for (const data of extractJson(text)) pets.push(...collectPets(data, url));
+
+        if (pets.length >= 5) {
+          const byKey = new Map();
+          for (const p of pets) if (!byKey.has(normName(p.name))) byKey.set(normName(p.name), p);
+          elveCache = { ts: now(), pets: [...byKey.values()], source: url };
+          return elveCache;
+        }
+
+        /* an HTML page: follow the API / JSON links it mentions */
+        const links = text.match(/["'](\/api\/[^"'\s<>]{1,120}|https:\/\/elvebredd\.com\/[^"'\s<>]{1,120}\.json)["']/g) || [];
+        for (const l of links.slice(0, 8)) {
+          try { queue.push(new URL(l.slice(1, -1), url).href); } catch { /* ignore */ }
+        }
+        errors.push(`${url}: no pet data`);
+      } catch (error) {
+        errors.push(`${url}: ${error.message}`);
+      }
+    }
+    throw new Error('Could not read elvebredd values (' + errors.slice(0, 4).join(' | ') + ')');
+  })();
+
+  try { return await elveLoading; } finally { elveLoading = null; }
+}
+
+/* sorts a value key into (age, potion), e.g. "nvalue - fly&ride" -> neon + fly&ride */
+function classifyKey(key) {
+  const k = key.toLowerCase();
+  let age = 'normal';
+  if (/mega|^m[\s_-]*val|^mvalue/.test(k)) age = 'mega';
+  else if (/neon|^n[\s_-]*val|^nvalue/.test(k)) age = 'neon';
+
+  const fly = /fly|(^|[^a-z])f([^a-z]|$)/.test(k) || /fr$|flyride|fly&ride/.test(k);
+  const ride = /ride|fr$/.test(k) || /(^|[^a-z])r([^a-z]|$)/.test(k.replace(/^r[\s_-]*value/, ''));
+  const potion = fly && ride ? 'fr' : fly ? 'f' : ride ? 'r' : 'none';
+  return { age, potion };
+}
+
+function pickValue(pet, age, fly, ride) {
+  const want = fly && ride ? 'fr' : fly ? 'f' : ride ? 'r' : 'none';
+  const keys = Object.keys(pet.values).map(key => ({ key, ...classifyKey(key) }));
+  const sameAge = keys.filter(k => k.age === age);
+
+  /* fly-only and ride-only usually share a price; use one when the other is missing */
+  const order = want === 'f' ? ['f', 'r'] : want === 'r' ? ['r', 'f'] : [want];
+  for (const p of order) {
+    const hit = sameAge.find(k => k.potion === p);
+    if (hit) return { key: hit.key, value: pet.values[hit.key] };
+  }
+
+  /* a list with a single plain "value" field: only the normal, no-potion price exists */
+  if (age === 'normal' && want === 'none' && keys.length === 1) return { key: keys[0].key, value: pet.values[keys[0].key] };
+  return null;
+}
+
+app.get('/api/admin/elve', auth, adminOnly, async (req, res) => {
+  const name = String(req.query.name || '').trim().slice(0, 60);
+  const age = ['normal', 'neon', 'mega'].includes(req.query.age) ? req.query.age : 'normal';
+  const fly = req.query.fly === '1' || req.query.fly === 'true';
+  const ride = req.query.ride === '1' || req.query.ride === 'true';
+  if (normName(name).length < 2) return bad(res, 'Enter a pet name');
+
+  let data;
+  try { data = await loadElve(req.query.refresh === '1'); }
+  catch (error) { return bad(res, error.message, 502); }
+
+  const q = normName(name);
+  const exact = data.pets.find(p => normName(p.name) === q);
+  const similar = data.pets
+    .filter(p => normName(p.name) !== q && (normName(p.name).startsWith(q) || normName(p.name).includes(q)))
+    .slice(0, 8)
+    .map(p => p.name);
+
+  if (!exact) {
+    return bad(res, similar.length ? `Pet not found. Did you mean: ${similar.join(', ')}?` : 'Pet not found on elvebredd', 404);
+  }
+
+  const picked = pickValue(exact, age, fly, ride);
+  if (!picked) {
+    return bad(res, `No ${age}${fly ? ' fly' : ''}${ride ? ' ride' : ''} value for ${exact.name}. Fields found: ${Object.keys(exact.values).join(', ')}`, 404);
+  }
+  if (!/^https:\/\//.test(exact.image)) return bad(res, `Found ${exact.name} (${picked.value}) but no image URL. Paste the image URL by hand.`, 404);
+
+  res.json({
+    ok: true, name: exact.name, image: exact.image, value: round2(picked.value),
+    age, fly, ride, field: picked.key, source: data.source, similar
+  });
+});
+
+app.post('/api/admin/elve/source', auth, adminOnly, (req, res) => {
+  const url = String(req.body.url || '').trim();
+  if (url && !/^https:\/\/[^\s"'<>]{4,400}$/.test(url)) return bad(res, 'The data URL must start with https://');
+  S.settings.elveUrl = url;
+  elveCache = { ts: 0, pets: [], source: '' };
+  markDirty();
+  res.json({ ok: true });
+});
+
 app.get('/api/admin/ui', auth, adminOnly, (req, res) => {
   res.type('application/javascript').send(`(${adminUI.toString()})();`);
 });
@@ -2095,7 +2389,9 @@ app.get('/api/admin/data', auth, adminOnly, (req, res) => {
     settings: S.settings,
     admins: Object.values(S.users).filter(u => isAdmin(u)).map(u => ({ id: u.id, username: u.username })),
     updateLog: UPDATE_LOG,
-    updateNotes: S.updateNotes
+    updateNotes: S.updateNotes,
+    bots: publicBots(),
+    elveUrl: S.settings.elveUrl || ''
   });
 });
 
@@ -2370,6 +2666,25 @@ function adminUI() {
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">
         <div style="background:#f5faff;padding:14px;border-radius:12px">
           <h4 style="margin-bottom:10px">➕ Add New Item</h4>
+          <div style="border:1px solid #343842;border-radius:8px;padding:10px;margin-bottom:10px">
+            <small style="font-weight:800">⚡ Auto from elvebredd.com</small>
+            <input id="e-name" class="in" list="e-sugg" style="width:100%;margin:6px 0" placeholder="Pet name (e.g. Shadow Dragon)" autocomplete="off">
+            <datalist id="e-sugg"></datalist>
+            <div class="row" style="margin-bottom:6px">
+              <select id="e-age"><option value="normal">Normal</option><option value="neon">Neon</option><option value="mega">Mega</option></select>
+              <label><input id="e-fly" type="checkbox"> Fly</label>
+              <label><input id="e-ride" type="checkbox"> Ride</label>
+            </div>
+            <div style="display:flex;gap:6px">
+              <button id="e-fetch" class="btn gray sm" style="flex:1">Fetch value</button>
+              <button id="e-add" class="btn sm" style="flex:1">Fetch &amp; add</button>
+            </div>
+            <div id="e-msg" class="hint" style="margin:6px 0 0"></div>
+            <details style="margin-top:6px"><summary class="hint" style="cursor:pointer">Data source</summary>
+              <input id="e-src" class="in" style="width:100%;margin:6px 0" placeholder="Optional exact data URL (empty = automatic)">
+              <button id="e-src-save" class="btn gray sm">Save source</button>
+            </details>
+          </div>
           <input id="a-img" class="in" style="width:100%;margin-bottom:8px" placeholder="Image URL (https://...)">
           <img id="a-prev" alt="" style="width:70px;height:70px;object-fit:contain;display:block;margin:0 auto 8px">
           <input id="a-name" class="in" style="width:100%;margin-bottom:8px" placeholder="Item name">
@@ -2389,6 +2704,17 @@ function adminUI() {
           <input id="g-qty" class="in" style="width:100%;margin-bottom:8px" type="number" min="1" max="50" value="1">
           <p class="hint">User must have logged in once. Enter the username, then press Give on an item.</p>
         </div>
+      </div>
+
+      <h4 style="margin:16px 0 8px">🤖 Deposit bots</h4>
+      <div style="background:#f5faff;padding:14px;border-radius:12px">
+        <div id="bot-list" style="margin-bottom:10px"></div>
+        <div style="display:grid;grid-template-columns:1fr 2fr auto;gap:8px">
+          <input id="bot-name" class="in" maxlength="20" placeholder="Bot Roblox username">
+          <input id="bot-link" class="in" placeholder="Join link (https://www.roblox.com/share?...)">
+          <button id="bot-add" class="btn">Add bot</button>
+        </div>
+        <p class="hint">Every bot is shown in the Deposit window with its status. Players cannot join an offline bot.</p>
       </div>
 
       <h4 style="margin:16px 0 8px">💰 Coinflip tax</h4>
@@ -2523,6 +2849,9 @@ function adminUI() {
     $('bt-item').innerHTML = $('ev-item').innerHTML;
     if (prevBounty) $('bt-item').value = prevBounty;
 
+    renderBots(data.bots || []);
+    $('e-src').value = data.elveUrl || '';
+
     $('tax-pct').value = data.settings ? data.settings.taxPercent : 0;
     $('tax-rcv').innerHTML = '<option value="auto">Auto (admins in turn)</option>' +
       (data.admins || []).map(a => `<option value="${esc(a.id)}">${esc(a.username)}</option>`).join('');
@@ -2557,6 +2886,104 @@ function adminUI() {
         </div>`).join('')
       : '<p class="hint">No active bounties.</p>';
   }
+
+  function renderBots(bots) {
+    $('bot-list').innerHTML = bots.length
+      ? bots.map(b => `
+        <div style="display:flex;align-items:center;gap:10px;padding:8px;border-bottom:1px solid #e0edfb;flex-wrap:wrap">
+          ${b.avatar ? `<img src="${esc(b.avatar)}" alt="" style="width:32px;height:32px;border-radius:50%">` : ''}
+          <b style="min-width:110px">${esc(b.username)}</b>
+          <span style="color:${b.online ? '#00efa0' : '#ff5968'};font-weight:800">● ${b.online ? 'Online' : 'Offline'}</span>
+          <input class="in" data-bot-link="${esc(b.id)}" value="${esc(b.link)}" style="flex:1;min-width:180px">
+          <button class="btn sm ${b.online ? 'gray' : 'mint'}" data-bot-toggle="${esc(b.id)}" data-on="${b.online ? '0' : '1'}">${b.online ? 'Set offline' : 'Set online'}</button>
+          <button class="btn red sm" data-bot-del="${esc(b.id)}">🗑</button>
+        </div>`).join('')
+      : '<p class="hint">No bots yet. Deposits are not possible until you add one.</p>';
+  }
+
+  $('bot-add').onclick = async () => {
+    try {
+      const r = await api('/api/admin/bots/add', { method: 'POST', body: { username: $('bot-name').value, link: $('bot-link').value } });
+      $('bot-name').value = ''; $('bot-link').value = '';
+      renderBots(r.bots);
+      toast('Bot added', 'ok');
+    } catch (err) { toast(err.message, 'err'); }
+  };
+
+  $('bot-list').onclick = async e => {
+    const t = e.target.closest('[data-bot-toggle]');
+    const d = e.target.closest('[data-bot-del]');
+    try {
+      if (t) {
+        const r = await api('/api/admin/bots/update', { method: 'POST', body: { id: t.dataset.botToggle, online: t.dataset.on === '1' } });
+        renderBots(r.bots);
+      }
+      if (d) {
+        if (!(await confirmBox({ title: 'Remove bot', text: 'Remove this bot from the deposit list?', ok: 'Remove', danger: true }))) return;
+        const r = await api('/api/admin/bots/delete', { method: 'POST', body: { id: d.dataset.botDel } });
+        renderBots(r.bots);
+        toast('Bot removed', 'ok');
+      }
+    } catch (err) { toast(err.message, 'err'); }
+  };
+
+  $('bot-list').onchange = async e => {
+    const input = e.target.closest('[data-bot-link]');
+    if (!input) return;
+    try {
+      const r = await api('/api/admin/bots/update', { method: 'POST', body: { id: input.dataset.botLink, link: input.value } });
+      renderBots(r.bots);
+      toast('Join link saved', 'ok');
+    } catch (err) { toast(err.message, 'err'); }
+  };
+
+  async function elveFetch() {
+    const name = $('e-name').value.trim();
+    if (!name) { toast('Enter a pet name', 'err'); return null; }
+    const qs = new URLSearchParams({
+      name, age: $('e-age').value, fly: $('e-fly').checked ? '1' : '0', ride: $('e-ride').checked ? '1' : '0'
+    });
+    $('e-msg').textContent = 'Loading values from elvebredd…';
+    try {
+      const r = await api('/api/admin/elve?' + qs.toString());
+      $('a-img').value = r.image;
+      $('a-prev').src = r.image;
+      $('a-name').value = r.name;
+      $('a-val').value = r.value;
+      $('a-age').value = r.age;
+      $('a-fly').checked = r.fly;
+      $('a-ride').checked = r.ride;
+      $('e-msg').textContent = `${r.name}: ${fmt(r.value)} (field "${r.field}")`;
+      return r;
+    } catch (err) {
+      $('e-msg').textContent = err.message;
+      const m = /Did you mean: (.*)\?$/.exec(err.message);
+      if (m) $('e-sugg').innerHTML = m[1].split(', ').map(n => `<option value="${esc(n)}"></option>`).join('');
+      toast(err.message, 'err');
+      return null;
+    }
+  }
+
+  $('e-fetch').onclick = () => elveFetch();
+  $('e-name').onkeydown = e => { if (e.key === 'Enter') elveFetch(); };
+  $('e-add').onclick = async () => {
+    const r = await elveFetch();
+    if (!r) return;
+    try {
+      await api('/api/admin/catalog', { method: 'POST', body: { image: r.image, name: r.name, value: r.value, age: r.age, fly: r.fly, ride: r.ride } });
+      $('a-img').value = ''; $('a-name').value = ''; $('a-val').value = '';
+      $('a-prev').removeAttribute('src');
+      toast(`${r.name} added (${fmt(r.value)})`, 'ok');
+      await load();
+    } catch (err) { toast(err.message, 'err'); }
+  };
+
+  $('e-src-save').onclick = async () => {
+    try {
+      await api('/api/admin/elve/source', { method: 'POST', body: { url: $('e-src').value } });
+      toast('Data source saved', 'ok');
+    } catch (err) { toast(err.message, 'err'); }
+  };
 
   $('adm-wd').onclick = async e => {
     const b = e.target.closest('[data-wd]');
@@ -3102,6 +3529,7 @@ app.use((err, req, res, next) => {
 
 (async () => {
   await initDb();
+  ensureDefaultBot();
   newJackpot();
   auditItems();
   server.listen(PORT, '0.0.0.0', () => {

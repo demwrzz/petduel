@@ -6,7 +6,7 @@
   <title>Pet Duel | Adopt Me pet coinflip</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%2300efa0'/%3E%3Ccircle cx='50' cy='50' r='38' fill='%23101218'/%3E%3Cellipse cx='50' cy='62' rx='14' ry='11' fill='%2300efa0'/%3E%3Cellipse cx='33' cy='46' rx='6' ry='8' fill='%2300efa0'/%3E%3Cellipse cx='45' cy='36' rx='6' ry='8' fill='%2300efa0'/%3E%3Cellipse cx='57' cy='36' rx='6' ry='8' fill='%2300efa0'/%3E%3Cellipse cx='69' cy='46' rx='6' ry='8' fill='%2300efa0'/%3E%3C/svg%3E">
 
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
   <script src="/socket.io/socket.io.js"></script>
 
   <style>
@@ -21,10 +21,19 @@
     html, body { margin: 0; min-height: 100%; }
 
     body {
-      background: var(--bg); color: var(--text);
-      font-family: Inter, Arial, sans-serif; font-size: 14px;
+      color: var(--text);
+      font-family: Rubik, Inter, Arial, sans-serif; font-size: 14px;
       -webkit-font-smoothing: antialiased;
+      /* soft paw print pattern behind everything */
+      background-color: var(--bg);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220'%3E%3Cg fill='white' fill-opacity='.035'%3E%3Cg transform='translate(45 50) rotate(-20) scale(1.25)'%3E%3Cellipse cx='0' cy='8' rx='9' ry='7.5'/%3E%3Cellipse cx='-10' cy='-3' rx='3.6' ry='4.8' transform='rotate(-25 -10 -3)'/%3E%3Cellipse cx='-3.6' cy='-9' rx='3.6' ry='5'/%3E%3Cellipse cx='3.6' cy='-9' rx='3.6' ry='5'/%3E%3Cellipse cx='10' cy='-3' rx='3.6' ry='4.8' transform='rotate(25 10 -3)'/%3E%3C/g%3E%3Cg transform='translate(160 95) rotate(18) scale(1)'%3E%3Cellipse cx='0' cy='8' rx='9' ry='7.5'/%3E%3Cellipse cx='-10' cy='-3' rx='3.6' ry='4.8' transform='rotate(-25 -10 -3)'/%3E%3Cellipse cx='-3.6' cy='-9' rx='3.6' ry='5'/%3E%3Cellipse cx='3.6' cy='-9' rx='3.6' ry='5'/%3E%3Cellipse cx='10' cy='-3' rx='3.6' ry='4.8' transform='rotate(25 10 -3)'/%3E%3C/g%3E%3Cg transform='translate(80 170) rotate(8) scale(0.9)'%3E%3Cellipse cx='0' cy='8' rx='9' ry='7.5'/%3E%3Cellipse cx='-10' cy='-3' rx='3.6' ry='4.8' transform='rotate(-25 -10 -3)'/%3E%3Cellipse cx='-3.6' cy='-9' rx='3.6' ry='5'/%3E%3Cellipse cx='3.6' cy='-9' rx='3.6' ry='5'/%3E%3Cellipse cx='10' cy='-3' rx='3.6' ry='4.8' transform='rotate(25 10 -3)'/%3E%3C/g%3E%3Cg transform='translate(195 200) rotate(-30) scale(0.8)'%3E%3Cellipse cx='0' cy='8' rx='9' ry='7.5'/%3E%3Cellipse cx='-10' cy='-3' rx='3.6' ry='4.8' transform='rotate(-25 -10 -3)'/%3E%3Cellipse cx='-3.6' cy='-9' rx='3.6' ry='5'/%3E%3Cellipse cx='3.6' cy='-9' rx='3.6' ry='5'/%3E%3Cellipse cx='10' cy='-3' rx='3.6' ry='4.8' transform='rotate(25 10 -3)'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+      background-size: 220px 220px;
+      background-attachment: fixed;
     }
+    .bot-row.off { opacity: .7; }
+    .bot-status { display: flex; align-items: center; gap: 6px; margin-left: auto; font-size: 12px; font-weight: 700; }
+    .bot-status.on { color: var(--green); }
+    .bot-status.off { color: var(--muted); }
 
     button, input, select { font: inherit; }
     button { cursor: pointer; border: 0; }
@@ -2132,6 +2141,13 @@
         renderChat();
       });
 
+      socket.on("bots:update", bots => {
+        STATE.bots = asArray(bots);
+        STATE.bot = STATE.bots[0] || STATE.bot;
+        const box = $("#depositBots");
+        if (box) box.innerHTML = botsListHTML();
+      });
+
       socket.on("bounty:update", list => {
         STATE.bounties = list;
         renderBountyStrip();
@@ -2568,10 +2584,32 @@
       openBotsModal();
     }
 
-    function openBotsModal() {
-      const bot = STATE.bot || {};
-      const name = bot.username || BOT_NAME;
+    const depositBots = () => {
+      const list = asArray(STATE.bots);
+      if (list.length) return list;
+      return STATE.bot ? [STATE.bot] : [{ id: "default", username: BOT_NAME, link: BOT_LINK, online: true }];
+    };
 
+    function botsListHTML() {
+      const bots = depositBots();
+      const anyOnline = bots.some(b => b.online !== false);
+      return bots.map(bot => {
+        const online = bot.online !== false;
+        return `
+          <div class="bot-row ${online ? "" : "off"}">
+            <div class="bot-main">
+              ${avatar({ username: bot.username, avatar: bot.avatar }, "sm")}
+              <span>${esc(bot.username)}</span>
+              <span class="bot-status ${online ? "on" : "off"}"><span class="dot ${online ? "" : "off"}"></span>${online ? "Online" : "Offline"}</span>
+            </div>
+            ${online
+              ? `<button class="join" data-action="bot-join" data-link="${esc(bot.link || bot.joinLink || BOT_LINK)}">Join</button>`
+              : '<button class="join" disabled>Offline</button>'}
+          </div>`;
+      }).join("") + (anyOnline ? "" : '<p class="hint" style="color:#ffc65a">All bots are offline right now. Please wait until one is back online before depositing.</p>');
+    }
+
+    function openBotsModal() {
       openModal2(`
         ${modalHeader("Deposit", "close2")}
 
@@ -2580,13 +2618,7 @@
           <span>Always verify that the username of your trading partner matches exactly, users often impersonate bots with similar names.</span>
         </div>
 
-        <div class="bot-row">
-          <div class="bot-main">
-            ${avatar({ username: name, avatar: bot.avatar }, "sm")}
-            <span>${esc(name)}</span>
-          </div>
-          <button class="join" data-action="bot-join">Join</button>
-        </div>
+        <div id="depositBots">${botsListHTML()}</div>
 
         <p class="hint">To deposit, join the bot's server in Adopt Me and send it a trade request with the pets you want to deposit. They appear in your inventory once an admin confirms them.</p>`);
     }
@@ -3668,8 +3700,9 @@
 
       wallet: showWallet,
       deposit: showDeposit,
-      "bot-join"() {
-        const link = (STATE.bot && STATE.bot.link) || BOT_LINK;
+      "bot-join"(el) {
+        const link = (el && el.dataset.link) || (STATE.bot && STATE.bot.link) || BOT_LINK;
+        if (!/^https:\/\/(www\.)?roblox\.com\//.test(link)) return toast("Invalid bot link", "err");
         window.open(link, "_blank", "noopener,noreferrer");
       },
       withdraw,
