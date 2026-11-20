@@ -711,9 +711,48 @@
     table { width: 100%; border-collapse: collapse; font-size: 12px; }
     th, td { padding: 11px; border-bottom: 1px solid var(--border); text-align: left; }
     th { color: var(--muted); }
-    .pagination { display: flex; justify-content: center; gap: 5px; margin-top: 14px; }
-    .pagination button { min-width: 34px; height: 34px; border-radius: 5px; color: #fff; background: #30343e; }
+    .pagination { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 5px; margin-top: 14px; }
+    .pagination button { min-width: 34px; height: 34px; padding: 0 8px; border-radius: 6px; color: #fff; background: #2a2e38; font-weight: 700; transition: background .15s; }
+    .pagination button:hover:not(:disabled) { background: #363b47; }
     .pagination button.on { color: #06130d; background: var(--green); }
+    .pagination button.arrow { font-size: 18px; line-height: 1; }
+    .pagination .dots { min-width: 20px; color: var(--muted); text-align: center; }
+    .pagination .pg-of { margin-left: 8px; color: var(--muted); font-size: 12px; font-weight: 700; }
+
+    /* ---------- wallet ---------- */
+    .modal.wallet-open { animation: wallet-in .5s cubic-bezier(.18, .9, .25, 1.15) both; }
+    @keyframes wallet-in { from { opacity: 0; transform: translateY(40px) scale(.9); } 60% { opacity: 1; } }
+    #grid.stagger .inventory-item { animation: item-in .4s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i, 0) * 22ms + 120ms); }
+    @keyframes item-in { from { opacity: 0; transform: translateY(12px) scale(.94); } }
+    .wd-panel { margin-bottom: 12px; border: 1px solid #5c4a22; border-radius: 10px; background: #1f1d18; overflow: hidden; animation: enter .4s both; }
+    .wd-head { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 12px 14px; color: #fff; background: transparent; font-weight: 800; }
+    .wd-head svg { width: 20px; height: 20px; color: #c9b37a; transition: transform .3s; }
+    .wd-panel.open .wd-head svg { transform: rotate(180deg); }
+    .wd-title { display: flex; align-items: center; gap: 8px; }
+    .wd-title b { padding: 1px 8px; border-radius: 999px; color: #211500; background: var(--orange); font-size: 12px; }
+    .wd-pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--orange); animation: live-ping-o 1.4s infinite; }
+    @keyframes live-ping-o { 0% { box-shadow: 0 0 0 0 rgba(255, 181, 46, .7); } 100% { box-shadow: 0 0 0 9px rgba(255, 181, 46, 0); } }
+    .wd-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .35s cubic-bezier(.2, .8, .2, 1); }
+    .wd-body > div { min-height: 0; overflow: hidden; padding: 0 14px; }
+    .wd-panel.open .wd-body { grid-template-rows: 1fr; }
+    .wd-panel.open .wd-body > div { padding-bottom: 12px; }
+    .wd-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid #332d20; }
+    .wd-row .items { flex: 1; padding-bottom: 6px; }
+    .wd-row .item-thumb { width: 40px; height: 40px; }
+    .wd-st { min-width: 76px; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 800; text-align: center; text-transform: uppercase; letter-spacing: .4px; }
+    .wd-st.pending { color: #ffc65a; background: #3a2d14; }
+    .wd-st.done { color: var(--green); background: #15372d; }
+    .wd-st.refunded { color: #9aa0ad; background: #2a2e38; }
+    .wd-meta { display: flex; flex-direction: column; align-items: flex-end; }
+    .wd-meta small { color: var(--muted); font-size: 11px; }
+
+    /* ---------- create: opponent pet limit ---------- */
+    .max-pick { display: flex; align-items: center; gap: 3px; padding: 3px; border: 1px solid var(--border); border-radius: 10px; background: #14171f; }
+    .max-pick span { padding: 0 8px 0 6px; color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px; white-space: nowrap; }
+    .max-pick button { min-width: 34px; height: 34px; padding: 0 8px; border-radius: 7px; color: #b6b8c0; background: transparent; font-weight: 800; transition: background .15s, color .15s; }
+    .max-pick button:hover { color: #fff; background: #222631; }
+    .max-pick button.on { color: #04120b; background: var(--green); }
+    .max-pill { display: inline-block; margin-top: 3px; padding: 2px 8px; border: 1px solid #1f5a47; border-radius: 6px; color: var(--green); background: #12291f; font-size: 11px; font-weight: 800; }
 
     /* ---------- TOASTS / BOOT ---------- */
     .toasts { position: fixed; top: 88px; right: 16px; z-index: 300; display: flex; flex-direction: column; gap: 8px; }
@@ -1120,10 +1159,6 @@
       </div>
 
       <nav class="nav">
-        <a class="discord-btn first" href="https://discord.gg/TaPXaAseP" target="_blank" rel="noopener noreferrer" title="Join our Discord">
-          <svg viewBox="0 0 24 24"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189z"/></svg>
-          <span>Discord</span>
-        </a>
         <div class="nav-item active" data-action="home" data-nav="home">
           <svg class="nav-ico" viewBox="0 0 24 24"><ellipse cx="9" cy="16" rx="7" ry="3.5" fill="currentColor" opacity=".7"/><ellipse cx="9" cy="12" rx="7" ry="3.5" fill="currentColor" opacity=".85"/><ellipse cx="15" cy="8" rx="7" ry="3.5" fill="currentColor"/></svg>
           <span class="nav-text">Coinflip<span class="nav-sub" id="navCf"></span></span>
@@ -1149,6 +1184,10 @@
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1.2 16h-2.4v-2.4h2.4zm2.3-7.6c-.5.7-1.1 1.1-1.6 1.5-.6.4-.8.7-.8 1.6h-2.3c0-1.7.6-2.4 1.5-3 .7-.5 1.2-.8 1.2-1.6 0-.7-.6-1.3-1.5-1.3-1 0-1.6.6-1.7 1.6H8c.1-2.3 1.7-3.8 4.1-3.8 2.3 0 3.9 1.3 3.9 3.3 0 .6-.2 1.2-.5 1.7z"/></svg>
           <span class="nl-t">FAQ</span>
         </button>
+        <a class="discord-btn" href="https://discord.gg/TaPXaAseP" target="_blank" rel="noopener noreferrer" title="Join our Discord">
+          <svg viewBox="0 0 24 24"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189z"/></svg>
+          <span>Discord</span>
+        </a>
       </nav>
       <div class="header-right" id="headerRight"></div>
     </header>
@@ -1790,7 +1829,8 @@
             <div class="v-win">${esc(getUsername(hostWon ? match.host : match.joiner))} won</div>`;
         } else {
           value = `<div class="v1">${GEM}${fmt(match.hostValue)}</div>
-            <div class="v2">${GEM}${fmt(Math.ceil(low))} - ${fmt(Math.floor(high))}</div>`;
+            <div class="v2">${GEM}${fmt(Math.ceil(low))} - ${fmt(Math.floor(high))}</div>
+            ${Number(match.maxJoin) ? `<span class="max-pill">Max ${Number(match.maxJoin)} pet${Number(match.maxJoin) === 1 ? "" : "s"}</span>` : ""}`;
         }
 
         const join = match.state === "waiting"
@@ -1876,6 +1916,7 @@
             <div class="vp-wait">?</div>
             <div class="vw-name muted">Waiting…</div>
             <div class="vw-range">Join with ${GEM}${fmt(Math.ceil(low))} – ${fmt(Math.floor(high))}</div>
+            ${Number(match.maxJoin) ? `<span class="max-pill">Max ${Number(match.maxJoin)} pet${Number(match.maxJoin) === 1 ? "" : "s"}</span>` : ""}
           </div>`;
         }
 
@@ -2684,12 +2725,12 @@
       $("#inventoryWorth").textContent = fmt(totalValue(all));
       $("#inventoryCount").textContent = all.length;
 
-      $("#grid").innerHTML = items.map(item => {
+      $("#grid").innerHTML = items.map((item, idx) => {
         const id = itemId(item);
         const checked = selected.has(id);
 
         return `
-          <div class="inventory-item ${checked ? "selected" : ""}" data-action="pick" data-id="${esc(id)}">
+          <div class="inventory-item ${checked ? "selected" : ""}" style="--i:${Math.min(idx, 30)}" data-action="pick" data-id="${esc(id)}">
             ${checked ? '<span class="check">✓</span>' : ""}
             <img src="${esc(itemImage(item))}" alt="">
             <div class="name">${esc(item.name)}</div>
@@ -2814,6 +2855,7 @@
 
       openModal(`
         ${modalHeader("Inventory")}
+        <div id="wdBox"></div>
         <div class="hint" style="margin:0 0 7px">Select Item</div>
 
         ${selectionGridHTML()}
@@ -2821,9 +2863,44 @@
         <div class="modal-footer">
           <button class="btn outline" data-action="select-all">Select All</button>
           <button class="btn" id="withdrawButton" data-action="withdraw">Withdraw 0</button>
-        </div>`, "wide");
+        </div>`, "wide wallet-open");
 
       bindGrid();
+      const grid = $("#grid");
+      if (grid) { grid.classList.add("stagger"); setTimeout(() => grid.classList.remove("stagger"), 900); }
+      loadWithdrawals();
+    }
+
+    /* the player's own withdraw requests, shown on top of the wallet */
+    let wdOpen = true;
+    async function loadWithdrawals() {
+      const box = $("#wdBox");
+      if (!box) return;
+      try {
+        const { list } = await api("/api/withdrawals");
+        if (!$("#wdBox")) return;
+        const rows = asArray(list);
+        if (!rows.length) { box.innerHTML = ""; return; }
+        const pending = rows.filter(w => w.status === "pending");
+        const label = { pending: "Pending", done: "Sent", refunded: "Refunded" };
+        box.innerHTML = `
+          <div class="wd-panel ${wdOpen ? "open" : ""}">
+            <button class="wd-head" data-action="wd-toggle">
+              <span class="wd-title">${pending.length ? '<span class="wd-pulse"></span>' : ""}Pending withdrawals
+                <b>${pending.length}</b>${pending.length ? `<span class="muted">· ${GEM}${fmt(pending.reduce((t, w) => t + Number(w.value || 0), 0))}</span>` : ""}</span>
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+            </button>
+            <div class="wd-body"><div>
+              ${rows.slice(0, 15).map(w => `
+                <div class="wd-row">
+                  <span class="wd-st ${esc(w.status)}">${label[w.status] || esc(w.status)}</span>
+                  <div class="items">${thumbs(w.items, 6)}</div>
+                  <div class="wd-meta"><b>${GEM}${fmt(w.value)}</b><small>${esc(ago(w.ts))}</small></div>
+                </div>`).join("")}
+              <p class="hint" style="margin:6px 0 0">Pending requests are sent to you in game by an admin. If something goes wrong the pets come back to your inventory.</p>
+            </div></div>
+          </div>`;
+      } catch { box.innerHTML = ""; }
     }
 
     async function withdraw() {
@@ -2905,11 +2982,14 @@
     }
 
     /* ---------- Create / Join ---------- */
+    let createMaxJoin = 0;
+
     function showCreate() {
       if (!requireLogin()) return;
 
       selected = new Set();
       createSide = "dog";
+      createMaxJoin = 0;
       viewMatchId = null;
 
       gridContext = {
@@ -2936,6 +3016,11 @@
 
         <div class="modal-footer">
           <span id="createInfo" style="margin-right:auto;align-self:center"></span>
+          <div class="max-pick" id="maxJoin" title="How many pets the opponent may join with">
+            <span>Opponent max pets</span>
+            ${[[0, "Any"], [1, "1"], [2, "2"], [3, "3"], [5, "5"], [10, "10"]].map(([n, l]) =>
+              `<button class="${n === 0 ? "on" : ""}" data-action="max-join" data-n="${n}">${l}</button>`).join("")}
+          </div>
           <div class="side-pick" id="sides" title="Pick your side">
             <button class="side-mini selected" data-action="side" data-side="dog" title="Paw">${chip("dog")}</button>
             <button class="side-mini" data-action="side" data-side="cat" title="Cat">${chip("cat")}</button>
@@ -2952,7 +3037,7 @@
       if (!uids.length) return toast("Select items first", "err");
 
       try {
-        await api("/api/match/create", { body: { uids, side: createSide } });
+        await api("/api/match/create", { body: { uids, side: createSide, maxJoin: createMaxJoin } });
         closeModal();
         toast("Game created!", "ok");
         await refresh();
@@ -2970,8 +3055,10 @@
 
       const [low, high] = matchRange(Number(match.hostValue || 0));
 
+      const joinMax = Number(match.maxJoin) || 20;
+
       gridContext = {
-        max: 20,
+        max: joinMax,
         game: match.game || "adoptme",
         range: [low, high],
         info() {
@@ -2980,7 +3067,7 @@
           const t = $("#joinInfo");
 
           if (t) {
-            t.innerHTML = `Your bet ${GEM}${fmt(value)} · Need ${fmt(low)} – ${fmt(high)}`;
+            t.innerHTML = `Your bet ${GEM}${fmt(value)} · Need ${fmt(Math.ceil(low))} – ${fmt(Math.floor(high))}${joinMax < 20 ? ` · max ${joinMax} pet${joinMax === 1 ? "" : "s"}` : ""}`;
             t.style.color = valid ? "var(--green)" : "var(--red)";
           }
         }
@@ -3035,6 +3122,21 @@
     }
 
     let profileStats = {};
+
+    /* 1 … 4 5 [6] 7 8 … 42 with previous / next arrows */
+    function paginationHTML(page, pages) {
+      if (pages <= 1) return "";
+      const nums = new Set([1, pages]);
+      for (let i = page - 2; i <= page + 2; i++) if (i >= 1 && i <= pages) nums.add(i);
+      const list = [...nums].sort((a, b) => a - b);
+      let html = `<button class="arrow" ${page <= 1 ? "disabled" : ""} data-action="profile-page" data-page="${page - 1}">‹</button>`;
+      list.forEach((n, i) => {
+        if (i && n - list[i - 1] > 1) html += '<span class="dots">…</span>';
+        html += `<button class="${n === page ? "on" : ""}" data-action="profile-page" data-page="${n}">${n}</button>`;
+      });
+      html += `<button class="arrow" ${page >= pages ? "disabled" : ""} data-action="profile-page" data-page="${page + 1}">›</button>`;
+      return `<div class="pagination">${html}<span class="pg-of">Page ${page} of ${pages}</span></div>`;
+    }
 
     function pfRender() {
       const grid = $("#pfStats");
@@ -3100,10 +3202,7 @@
                   </tbody></table></div>`
               : '<div class="empty">No transactions yet</div>'}
 
-            <div class="pagination">
-              ${Array.from({ length: pages }, (_, i) => `
-                <button class="${i + 1 === Number(result.page) ? "on" : ""}" data-action="profile-page" data-page="${i + 1}">${i + 1}</button>`).join("")}
-            </div>
+            ${paginationHTML(Number(result.page) || 1, pages)}
           </div>`;
         profileStats = stats;
         pfRender();
@@ -3127,6 +3226,11 @@
 
     /* public update log: only things players see and can be shared openly */
     const PUBLIC_UPDATES = [
+      { v: "2.4", title: "Pet limits and withdraw status", items: [
+        "When you create a coinflip you can limit how many pets your opponent may join with",
+        "See your pending withdrawals right in your wallet",
+        "Shorter page buttons in your transaction history"
+      ] },
       { v: "2.3", title: "Smoother and shinier", items: [
         "Animated sort menu and a Create Coinflip button",
         "Pick your coin side right next to Create Game",
@@ -4138,6 +4242,12 @@
       admin: openAdmin,
 
       info(el) { showInfo(el.dataset.page); },
+      "wd-toggle"() { wdOpen = !wdOpen; $(".wd-panel")?.classList.toggle("open", wdOpen); },
+      "max-join"(el) {
+        createMaxJoin = Number(el.dataset.n) || 0;
+        document.querySelectorAll("#maxJoin button").forEach(b => b.classList.toggle("on", b === el));
+        gridContext && gridContext.info && gridContext.info();
+      },
       "sort-toggle"() { $("#cfSortBox").classList.toggle("open"); },
       "sort-pick"(el) {
         lobbySort = el.dataset.sort;

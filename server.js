@@ -22,10 +22,22 @@ const BOT_LINK = 'https://www.roblox.com/share?code=a0dd8a7bc68f034b99e078f454d4
 const MAX_ITEMS = 20;
 
 const DISCORD_INVITE = E.DISCORD_INVITE || 'https://discord.gg/TaPXaAseP';
-/* Put the webhook URLs in Render > Environment, NOT in the code */
-const WEBHOOK_GW = E.DISCORD_GW_WEBHOOK || '';
-const WEBHOOK_CF = E.DISCORD_CF_WEBHOOK || '';
-const WEBHOOK_JP = E.DISCORD_JP_WEBHOOK || WEBHOOK_CF;
+
+/* ---- Discord webhooks ----
+   Paste a webhook URL between the quotes, or set the same name in Render > Environment
+   (the Render value wins). Anyone who can read this file can post with a webhook that is pasted here,
+   so only paste them if the GitHub repository is private. */
+const WEBHOOKS = {
+  giveaway: '',   /* DISCORD_GW_WEBHOOK: new giveaways, giveaway winners, event winners */
+  coinflip: '',   /* DISCORD_CF_WEBHOOK: new and finished coinflips, bounties */
+  jackpot: '',    /* DISCORD_JP_WEBHOOK: jackpot winners (falls back to the coinflip one) */
+  withdraw: ''    /* DISCORD_WD_WEBHOOK: withdraw requests, for staff */
+};
+const WEBHOOK_GW = E.DISCORD_GW_WEBHOOK || WEBHOOKS.giveaway;
+const WEBHOOK_CF = E.DISCORD_CF_WEBHOOK || WEBHOOKS.coinflip;
+const WEBHOOK_JP = E.DISCORD_JP_WEBHOOK || WEBHOOKS.jackpot || WEBHOOK_CF;
+const WEBHOOK_WD = E.DISCORD_WD_WEBHOOK || WEBHOOKS.withdraw;
+const SITE_URL = E.SITE_URL || 'https://petduel.win';
 const MAX_GW_MINUTES = 200;
 
 let RANGE = Number(E.JOIN_RANGE || 0.10);
@@ -82,15 +94,34 @@ const itemLine = items => clip(
   ).join('\n') || '-'
 );
 
-function sendWebhook(url, embed) {
+/* pictures for embeds: only public https images are sent to Discord */
+const httpsUrl = v => (typeof v === 'string' && /^https:\/\/[^\s"'<>]{4,500}$/.test(v) ? v : null);
+const avatarOf = u => httpsUrl(u && (S.users[u.id]?.avatar || u.avatar));
+const topImage = items => {
+  const best = [...(items || [])].sort((a, b) => Number(b.value || 0) - Number(a.value || 0)).find(i => httpsUrl(i.image));
+  return best ? best.image : null;
+};
+
+/* opts: { thumb: user whose avatar goes top right, image: big picture (url), author: user } */
+function sendWebhook(url, embed, opts = {}) {
   if (!url) return;
+  const thumb = opts.thumb ? avatarOf(opts.thumb) : null;
+  const image = httpsUrl(opts.image);
+  const full = {
+    ...embed,
+    url: embed.url || SITE_URL,
+    footer: { text: 'Pet Duel · petduel.win' },
+    ...(thumb ? { thumbnail: { url: thumb } } : {}),
+    ...(image ? { image: { url: image } } : {}),
+    ...(opts.author ? { author: { name: clip(opts.author.username, 80), ...(avatarOf(opts.author) ? { icon_url: avatarOf(opts.author) } : {}) } } : {})
+  };
   fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       username: 'Pet Duel',
       allowed_mentions: { parse: [] },
-      embeds: [embed]
+      embeds: [full]
     }),
     signal: AbortSignal.timeout(8000)
   }).catch(err => console.error('Webhook error:', err.message));
@@ -812,6 +843,7 @@ function publicMatch(match) {
     oppValue: match.oppValue,
     value: match.hostValue,
     createdAt: match.createdAt,
+    maxJoin: match.maxJoin || 0,
     countdownEnd: match.startedAt ? match.startedAt + 3000 : null
   };
 
@@ -1048,7 +1080,7 @@ function finishMatch(match) {
       { name: 'Match / Hash', value: clip(`${match.id}\n${match.hash}`, 300) }
     ],
     timestamp: new Date().toISOString()
-  });
+  }, { thumb: winner, author: winner, image: topImage([...match.hostItems, ...match.oppItems]) });
 
   io.emit('match:update', publicMatch(match));
   emitMe(winner);
@@ -1081,6 +1113,10 @@ app.post('/api/match/create', auth, actionLimit, (req, res) => {
   if (!selected) return bad(res, 'Invalid item selection');
   if (valueOf(selected) <= 0) return bad(res, 'Value too low');
 
+  /* optional limit: how many pets the opponent may join with (empty = no limit) */
+  const maxJoinRaw = Math.floor(Number(req.body.maxJoin));
+  const maxJoin = Number.isInteger(maxJoinRaw) && maxJoinRaw >= 1 && maxJoinRaw < MAX_ITEMS ? maxJoinRaw : 0;
+
   const items = takeItems(user, uids, MAX_ITEMS);
   const seed = rid(32);
   const id = rid(10);
@@ -1091,11 +1127,24 @@ app.post('/api/match/create', auth, actionLimit, (req, res) => {
     hostItems: items, oppItems: [],
     hostValue: valueOf(items), oppValue: 0,
     createdAt: now(), startedAt: 0, finishedAt: 0,
-    winnerSide: null, winnerId: null
+    winnerSide: null, winnerId: null, maxJoin
   };
 
   S.matches[id] = match;
   io.emit('match:new', publicMatch(match));
+
+  sendWebhook(WEBHOOK_CF, {
+    title: '🪙 New coinflip',
+    color: 0x4da3ff,
+    fields: [
+      { name: 'Host', value: clip(user.username, 100), inline: true },
+      { name: 'Value', value: String(match.hostValue), inline: true },
+      { name: 'Join range', value: `${round2(match.hostValue * (1 - RANGE))} - ${round2(match.hostValue * (1 + RANGE))}`, inline: true },
+      ...(maxJoin ? [{ name: 'Max pets to join', value: String(maxJoin), inline: true }] : []),
+      { name: `Pets (${items.length})`, value: itemLine(items) }
+    ],
+    timestamp: new Date().toISOString()
+  }, { thumb: user, author: user, image: topImage(items) });
   emitMe(user);
   res.json({ match: publicMatch(match) });
 });
@@ -1108,7 +1157,10 @@ app.post('/api/match/join', auth, actionLimit, (req, res) => {
   if (!match || match.state !== 'waiting') return bad(res, 'This match is no longer available');
   if (match.host.id === user.id) return bad(res, 'You cannot join your own match');
 
-  const selected = pickItems(user, uids, MAX_ITEMS);
+  const joinLimit = match.maxJoin || MAX_ITEMS;
+  if (Array.isArray(uids) && uids.length > joinLimit) return bad(res, `This game allows at most ${joinLimit} pet${joinLimit === 1 ? '' : 's'}`);
+
+  const selected = pickItems(user, uids, joinLimit);
   if (!selected) return bad(res, 'Invalid item selection');
 
   const value = valueOf(selected);
@@ -1118,7 +1170,7 @@ app.post('/api/match/join', auth, actionLimit, (req, res) => {
     return bad(res, 'Your value must be inside the required range');
   }
 
-  const items = takeItems(user, uids, MAX_ITEMS);
+  const items = takeItems(user, uids, joinLimit);
 
   match.opp = publicUser(user);
   match.oppItems = items;
@@ -1197,7 +1249,7 @@ function endGiveaway(id) {
           { name: 'Items', value: itemLine(g.items) }
         ],
         timestamp: new Date().toISOString()
-      });
+      }, { thumb: winner, author: winner, image: topImage(g.items) });
       emitMe(winner);
       system(`${winner.username} won ${g.items.length} item(s) worth ${g.value} from ${g.host.username}'s giveaway!`);
     }
@@ -1260,7 +1312,7 @@ app.post('/api/giveaway/create', auth, actionLimit, (req, res) => {
       { name: 'Items', value: itemLine(g.items) }
     ],
     timestamp: new Date().toISOString()
-  });
+  }, { thumb: user, author: user, image: topImage(g.items) });
 
   io.emit('giveaway:new', publicGiveaway(g));
   emitMe(user);
@@ -1339,7 +1391,7 @@ function claimBounty(winner, loser, match) {
       { name: 'Match', value: clip(match.id, 100), inline: true }
     ],
     timestamp: new Date().toISOString()
-  });
+  }, { thumb: winner, author: winner, image: topImage([b.prize]) });
 }
 
 app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
@@ -1362,6 +1414,13 @@ app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
 });
 
 const UPDATE_LOG = [
+  { version: '2.4', title: 'Pet limits, withdraw status and Discord pictures', changes: [
+    'Create Coinflip: choose how many pets the opponent may join with (1, 2, 3, 5, 10 or any); the server enforces it',
+    'Wallet: players see their withdraw requests (pending / sent / refunded); the wallet opens with an animation',
+    'Profile history pages are shortened (1 … 4 5 6 … 42) instead of one button per page',
+    'Discord moved to the right end of the menu',
+    'Webhooks: avatar, author and the most valuable pet picture in every embed; new coinflip and withdraw request webhooks; URLs can be pasted at the top of server.js'
+  ] },
   { version: '2.3', title: 'Owner tag, catalog browser and smoother pages', changes: [
     'Purple glowing "Owner" tag instead of ADMIN in chat and on profiles',
     'Admin: Open Catalog shows the whole catalog in an animated window with name search, version filter and sorting',
@@ -1496,7 +1555,7 @@ app.post('/api/admin/bounty', auth, adminOnly, (req, res) => {
       { name: 'Prize', value: itemLine([b.prize]) }
     ],
     timestamp: new Date().toISOString()
-  });
+  }, { thumb: target, author: req.user, image: topImage([b.prize]) });
 
   res.json({ ok: true });
 });
@@ -1644,7 +1703,7 @@ function finishJackpot(j) {
       { name: 'Round / Hash', value: clip(`${j.id}\n${j.hash}`, 300) }
     ],
     timestamp: new Date().toISOString()
-  });
+  }, { thumb: winEntry.user, author: winEntry.user, image: topImage(j.entries.flatMap(e => e.items)) });
 
   emitJackpot(j);
   jpLater(() => newJackpot(), JP_RESULT_MS);
@@ -1765,6 +1824,16 @@ app.post('/api/withdraw', auth, actionLimit, (req, res) => {
 
   S.withdrawals.unshift(request);
   notifyAdmins('withdraw', `${user.username} requested a withdraw worth ${request.value}`);
+  sendWebhook(WEBHOOK_WD, {
+    title: '📤 Withdraw request',
+    color: 0xffb52e,
+    fields: [
+      { name: 'Player', value: clip(user.username, 100), inline: true },
+      { name: 'Value', value: String(request.value), inline: true },
+      { name: `Pets (${items.length})`, value: itemLine(items) }
+    ],
+    timestamp: new Date().toISOString()
+  }, { thumb: user, author: user, image: topImage(items) });
   addTransaction(user, 'Withdraw Request', request.id, -request.value);
   emitMe(user);
 
@@ -1772,6 +1841,18 @@ app.post('/api/withdraw', auth, actionLimit, (req, res) => {
     ok: true,
     message: 'Withdraw successful! An admin will send your items to you shortly.',
     request: { id: request.id, value: request.value, status: request.status }
+  });
+});
+
+/* the player's own withdraw requests (pending ones first), shown in the wallet */
+app.get('/api/withdrawals', auth, (req, res) => {
+  const mine = S.withdrawals.filter(w => w.user.id === req.user.id).slice(0, 30);
+  mine.sort((a, b) => (Number(b.status === 'pending') - Number(a.status === 'pending')) || b.ts - a.ts);
+  res.json({
+    list: mine.map(w => ({
+      id: w.id, status: w.status, value: w.value, ts: w.ts, doneAt: w.doneAt || 0,
+      items: w.items.map(publicItem)
+    }))
   });
 });
 
@@ -1884,7 +1965,7 @@ function awardPrize(user, ev) {
       { name: 'Prize', value: itemLine([item]) }
     ],
     timestamp: new Date().toISOString()
-  });
+  }, { thumb: user, author: user, image: topImage([item]) });
 }
 
 function eventBusy() {
@@ -2482,6 +2563,8 @@ app.post('/api/admin/withdraw/done', auth, adminOnly, (req, res) => {
   w.status = 'done';
   w.doneAt = now();
   markDirty();
+  const owner = S.users[w.user.id];
+  if (owner) emitMe(owner);
   res.json({ ok: true });
 });
 
@@ -2491,6 +2574,8 @@ app.post('/api/admin/withdraw/refund', auth, adminOnly, (req, res) => {
   const user = S.users[w.user.id];
   if (!user) return bad(res, 'User not found');
   w.status = 'refunded';
+  w.doneAt = now();
+  markDirty();
   user.inventory.push(...w.items);
   addTransaction(user, 'Withdraw Refund', w.id, w.value);
   emitMe(user);
