@@ -61,18 +61,19 @@
     }
     .nav-item:hover { color: #fff; }
     .nav-item.active { color: #fff; border-bottom-color: var(--green); }
-    .nav-item.has-new { flex-direction: column; justify-content: center; gap: 0; }
-    .nav-main { display: flex; align-items: center; gap: 8px; }
+    .nav-text { display: flex; flex-direction: column; justify-content: center; line-height: 1.1; }
     .nav-ico { width: 20px; height: 20px; }
 
-    /* chroma glowing NEW!! tag */
-    .new-tag {
-      align-self: center; margin-top: 1px; font-size: 9px; font-weight: 800; letter-spacing: 1px; line-height: 1;
-      background: linear-gradient(90deg, #ff0080, #ff8c00, #ffe600, #00ff6a, #00cfff, #8a2be2, #ff0080);
-      background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
-      filter: drop-shadow(0 0 5px rgba(140, 200, 255, .85)); animation: chroma 2.5s linear infinite;
+    .nav-sub {
+      display: flex; align-items: center; gap: 4px; margin-top: 2px; color: var(--green);
+      font-size: 11px; font-weight: 800; line-height: 1; letter-spacing: .2px;
     }
-    @keyframes chroma { to { background-position: 300% 0; } }
+    .nav-sub .gem-i { width: 12px; height: 12px; }
+    .ico { width: 1.1em; height: 1.1em; vertical-align: -.18em; }
+    .medal { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; color: #1a1305; font-size: 13px; font-weight: 800; }
+    .medal.m1 { background: #ffd24a; } .medal.m2 { background: #c0c7d1; } .medal.m3 { background: #cd7f32; }
+    .seen { margin-top: 3px; color: var(--muted); font-size: 12px; font-weight: 600; }
+    .seen.on { color: var(--green); }
     .header-right { display: flex; align-items: center; gap: 12px; }
     .wallet {
       display: flex; align-items: stretch; overflow: hidden; height: 44px;
@@ -335,15 +336,9 @@
     .message .txt { color: #a3a6b0; font-size: 14px; font-weight: 500; }
     .message .ava-click { cursor: pointer; }
 
-    .uname.r-Roller { color: var(--blue); }
-    .uname.r-Highroller { color: var(--red); }
-    .uname.r-Whale { color: var(--orange); }
     .uname.r-ADMIN { color: var(--red); }
 
     .rank-badge { width: 20px; height: 20px; flex: none; }
-    .rank-badge.r-Roller { color: var(--blue); }
-    .rank-badge.r-Highroller { color: var(--red); }
-    .rank-badge.r-Whale { color: var(--orange); }
 
     .tag-admin { padding: 1px 6px; border-radius: 4px; color: #fff; background: #d94453; font-size: 10px; font-weight: 800; }
 
@@ -519,22 +514,6 @@
     .hwin { width: 46px; height: 46px; }
 
     /* ---------- DEPOSIT / BOTS ---------- */
-    .game-card {
-      position: relative; display: grid; place-items: center; width: 100%; max-width: 360px; aspect-ratio: 16 / 9; overflow: hidden;
-      border: 1px solid #7a1f4a; border-radius: 10px; cursor: pointer;
-      background:
-        radial-gradient(circle at 18% 22%, rgba(255, 130, 180, .55), transparent 45%),
-        radial-gradient(circle at 88% 85%, rgba(110, 0, 50, .5), transparent 50%),
-        linear-gradient(135deg, #e8296f, #b5155a);
-      transition: transform .2s, border-color .2s, box-shadow .2s;
-    }
-    .game-card:hover { transform: translateY(-3px); border-color: #ff7aa8; box-shadow: 0 10px 28px -8px rgba(255, 60, 120, .6); }
-    .adopt-logo {
-      font-family: Fredoka, "Baloo 2", "Arial Rounded MT Bold", Arial, sans-serif; font-weight: 700;
-      font-size: clamp(36px, 9vw, 62px); line-height: 1; letter-spacing: -1px; color: #fff; text-align: center;
-      text-shadow: 0 4px 0 rgba(120, 0, 50, .35), 0 10px 26px rgba(0, 0, 0, .28);
-      -webkit-text-stroke: 1px rgba(255, 255, 255, .2); pointer-events: none; user-select: none;
-    }
 
     .warn {
       display: flex; align-items: center; gap: 12px; margin-bottom: 14px; padding: 13px 16px;
@@ -807,31 +786,15 @@
     }
 
     /* ---- game tabs ---- */
-    .game-tabs-wrap { margin-bottom: 14px; }
-    .game-tabs { display: flex; gap: 6px; width: max-content; max-width: 100%; padding: 6px; border-radius: 8px; background: #14171f; }
-    .game-tab { padding: 9px 18px; border-radius: 6px; color: #cfd2db; background: transparent; font-weight: 800; transition: background .2s, color .2s; }
-    .game-tab:hover { color: #fff; }
-    .game-tab.on { color: #04120b; background: var(--green); }
-    .game-pill { position: absolute; top: 6px; left: 6px; padding: 1px 6px; border-radius: 4px; color: #fff; background: #0f6e8c; font-size: 9px; font-weight: 800; }
 
     /* ---- deposit cards ---- */
-    .deposit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .deposit-grid .game-card { max-width: none; }
-    .game-card.ctd {
-      border-color: #1f6d8f;
-      background: radial-gradient(circle at 20% 20%, rgba(80, 200, 255, .45), transparent 45%), linear-gradient(135deg, #123a5a, #0a1a2e);
-    }
-    .game-card.ctd:hover { border-color: #5fd0ff; box-shadow: 0 10px 28px -8px rgba(60, 170, 255, .6); }
-    .ctd-logo { display: flex; flex-direction: column; align-items: center; gap: 4px; font-family: Fredoka, "Baloo 2", Arial, sans-serif; font-weight: 700; font-size: clamp(34px, 8vw, 54px); line-height: 1; color: #fff; text-shadow: 0 4px 0 rgba(0, 30, 60, .45); pointer-events: none; }
-    .ctd-logo small { font-size: 11px; letter-spacing: .6px; text-transform: uppercase; opacity: .85; text-shadow: none; }
-    @media (max-width: 650px) { .deposit-grid { grid-template-columns: 1fr; } }
 
     /* ---- bounty ---- */
     .bounty-strip {
       display: flex; align-items: center; gap: 12px; margin-bottom: 10px; padding: 12px 16px;
-      border: 1px solid #a8323f; border-radius: 8px; background: linear-gradient(100deg, #3a1a1f, #1f1e22);
+      border: 1px solid #5a2a31; border-radius: 8px; background: #25191c;
     }
-    .bounty-strip .bt-ico { font-size: 28px; }
+    .bounty-strip .bt-ico { display: grid; place-items: center; width: 30px; height: 30px; color: #ff6b78; font-size: 28px; }
     .bounty-strip .bt-text { flex: 1; min-width: 0; line-height: 1.5; }
     .bounty-strip small { color: #e0c4c7; font-size: 12px; }
     .bt-badge { margin-left: 4px; }
@@ -915,9 +878,24 @@
         <path d="M6 3 2 9h6zM18 3l4 6h-6zM9 9l3-6 3 6z" fill="#8bffd8"/>
       </symbol>
 
-      <symbol id="rank-badge" viewBox="0 0 24 24">
-        <path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5z" fill="currentColor"/>
-        <path d="M12 7l1.6 3.3 3.6.5-2.6 2.5.6 3.6L12 15.2 8.8 16.9l.6-3.6L6.8 10.8l3.6-.5z" fill="#14161e"/>
+      <symbol id="rk-medal" viewBox="0 0 24 24">
+        <path d="M8 14 6 22l6-3 6 3-2-8z" fill="currentColor" opacity=".65"/>
+        <circle cx="12" cy="9" r="6.5" fill="currentColor"/>
+        <circle cx="12" cy="9" r="2.6" fill="#14161e"/>
+      </symbol>
+      <symbol id="rk-gem" viewBox="0 0 24 24">
+        <path d="M6 3h12l4 6-10 12L2 9z" fill="currentColor"/>
+        <path d="M2 9h20M9 9l3 12 3-12M9 9l3-6 3 6" stroke="#14161e" stroke-width="1.2" fill="none" opacity=".5"/>
+      </symbol>
+      <symbol id="rk-star" viewBox="0 0 24 24">
+        <path d="m12 2 2.9 6.3 6.9.8-5.1 4.7 1.4 6.8-6.1-3.4-6.1 3.4 1.4-6.8L2.2 9.1l6.9-.8z" fill="currentColor"/>
+      </symbol>
+      <symbol id="rk-crown" viewBox="0 0 24 24">
+        <path d="m3 8 4.5 4L12 4l4.5 8L21 8l-2 11H5z" fill="currentColor"/>
+        <rect x="5" y="20" width="14" height="2" rx="1" fill="currentColor"/>
+      </symbol>
+      <symbol id="rk-bolt" viewBox="0 0 24 24">
+        <path d="M13.5 2 5 13.5h6L10 22l9-12h-6.5z" fill="currentColor"/>
       </symbol>
 
       <symbol id="logo-mark" viewBox="0 0 100 100">
@@ -954,14 +932,11 @@
       <nav class="nav">
         <div class="nav-item active" data-action="home" data-nav="home">
           <svg class="nav-ico" viewBox="0 0 24 24"><ellipse cx="9" cy="16" rx="7" ry="3.5" fill="currentColor" opacity=".7"/><ellipse cx="9" cy="12" rx="7" ry="3.5" fill="currentColor" opacity=".85"/><ellipse cx="15" cy="8" rx="7" ry="3.5" fill="currentColor"/></svg>
-          Coinflip
+          <span class="nav-text">Coinflip<span class="nav-sub" id="navCf"></span></span>
         </div>
-        <div class="nav-item has-new" data-action="jackpot" data-nav="jackpot">
-          <span class="nav-main">
-            <svg class="nav-ico" viewBox="0 0 24 24"><circle cx="10" cy="14.5" r="7" fill="currentColor"/><path d="M15 8.5 18 5.5M18 5.5 20.5 4M18 5.5V3M18 5.5H21" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
-            Jackpot
-          </span>
-          <span class="new-tag">NEW!!</span>
+        <div class="nav-item" data-action="jackpot" data-nav="jackpot">
+          <svg class="nav-ico" viewBox="0 0 24 24"><circle cx="10" cy="14.5" r="7" fill="currentColor"/><path d="M15 8.5 18 5.5M18 5.5 20.5 4M18 5.5V3M18 5.5H21" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+          <span class="nav-text">Jackpot<span class="nav-sub" id="navJp"></span></span>
         </div>
         <div class="nav-item alt" data-action="leaderboard">Leaderboard</div>
         <a class="discord-btn" href="https://discord.gg/TaPXaAseP" target="_blank" rel="noopener noreferrer" title="Join our Discord">
@@ -1009,8 +984,6 @@
           <div class="chips" id="bannerChips"></div>
         </div>
 
-        <div id="gameTabsHome" class="game-tabs-wrap"></div>
-
         <div class="summary">
           <div><b id="summaryItems">0</b><small>Total Items</small></div>
           <div><b><svg class="gem-i" viewBox="0 0 24 24"><use href="#gem"/></svg><span id="summaryValue">0</span></b><small>Total Value</small></div>
@@ -1019,7 +992,6 @@
 
         <div class="section-head">
           <div style="flex:1;min-width:0"><h2>COINFLIP GAMES</h2><div class="sub-total" id="activeValue"></div></div>
-          <span class="pill" id="gameCount">0 GAMES</span>
           <button class="btn gray" data-action="history">History</button>
           <button class="btn" data-action="create">+ Create Game</button>
         </div>
@@ -1102,8 +1074,28 @@
     const EYE = '<svg viewBox="0 0 24 24"><path d="M12 5C6.5 5 2.5 9 1 12c1.5 3 5.5 7 11 7s9.5-4 11-7c-1.5-3-5.5-7-11-7z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3.2" fill="currentColor"/></svg>';
     const LOGO_MARK = '<svg viewBox="0 0 100 100"><use href="#logo-mark"/></svg>';
 
+    const rankIcon = rank => {
+      const r = ((STATE.config && STATE.config.ranks) || []).find(x => x.name === rank);
+      return r && r.icon ? r.icon : "medal";
+    };
     const rankBadge = rank => (rank && rank !== "Rookie" && rank !== "ADMIN")
-      ? `<svg class="rank-badge" style="color:${rankColor(rank)}" viewBox="0 0 24 24"><use href="#rank-badge"/></svg>` : "";
+      ? `<svg class="rank-badge" style="color:${rankColor(rank)}" viewBox="0 0 24 24"><use href="#rk-${rankIcon(rank)}"/></svg>` : "";
+
+    const ICO = {
+      target: '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/></svg>',
+      trophy: '<svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M7 3h10v5a5 5 0 0 1-10 0zM4 4h3v2.5A2.5 2.5 0 0 1 4 4zm13 0h3a2.5 2.5 0 0 1-3 2.5zM11 13h2v4h3v3H8v-3h3z"/></svg>',
+      bell: '<svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a6 6 0 0 0-6 6v4l-2 3h16l-2-3V9a6 6 0 0 0-6-6zm-2 15a2 2 0 0 0 4 0z"/></svg>'
+    };
+
+    const ago = ts => {
+      if (!ts) return "a long time ago";
+      const m = Math.floor((Date.now() - clockSkew - ts) / 60000);
+      if (m < 1) return "just now";
+      if (m < 60) return m + " min ago";
+      if (m < 1440) return Math.floor(m / 60) + " h ago";
+      return Math.floor(m / 1440) + " d ago";
+    };
+    let clockSkew = 0;
 
     /* ---------- Utilities ---------- */
     const $ = selector => document.querySelector(selector);
@@ -1138,10 +1130,6 @@
     let viewMatchId = null, viewSig = "", viewCache = null, viewPrev = "", viewTimer = null;
     let loginData = null, createSide = "dog";
     let giveawayMode = "easy", giveawayDur = 30;
-
-    /* ---- games: every game has its own coinflip lobby, jackpot and items ---- */
-    const GAMES = [{ id: "adoptme", name: "Adopt Me" }, { id: "ctd", name: "CTD" }];
-    let currentGame = localStorage.getItem("pd_game") === "ctd" ? "ctd" : "adoptme";
 
     let HISTORY = [], REPLAY = null, replayTimers = [];
 
@@ -1216,32 +1204,13 @@
     const itemId = item => String(item.uid || item.id || item.catalogId || "");
     const itemImage = item => item.image || item.imageUrl || "";
     const inventory = () => ME ? asArray(ME.inventory) : [];
-    const itemGame = item => item && item.game === "ctd" ? "ctd" : "adoptme";
-    const gameNameOf = id => (GAMES.find(g => g.id === id) || GAMES[0]).name;
-    /* selection grids only show items of the game they are for (null = everything, e.g. the wallet) */
-    const gridItems = () => inventory().filter(i => !gridContext || !gridContext.game || itemGame(i) === gridContext.game);
-
-    const gameTabsHTML = () => `<div class="game-tabs">${GAMES.map(g =>
-      `<button class="game-tab ${g.id === currentGame ? "on" : ""}" data-action="game" data-game="${g.id}">${g.name}</button>`).join("")}</div>`;
-
-    const renderGameTabs = () => { const el = $("#gameTabsHome"); if (el) el.innerHTML = gameTabsHTML(); };
-
-    function setGame(id) {
-      if (!GAMES.some(g => g.id === id) || id === currentGame) return;
-      currentGame = id;
-      localStorage.setItem("pd_game", id);
-      renderGameTabs();
-      lobbySig = "";
-      renderLobby();
-      jpSig = "";
-      if (currentPage === "jackpot") renderJackpot(true);
-    }
+    const gridItems = () => inventory();
 
     const taxHint = () => Number(STATE.config && STATE.config.tax) > 0
       ? `<p class="hint">A ${Number(STATE.config.tax)}% tax is taken from the pot (in items) when the game ends.</p>` : "";
 
     const bountyBadge = id => asArray(STATE.bounties).some(b => b.target && b.target.id === id)
-      ? ' <span class="bt-badge" title="Bounty! Beat this player in a coinflip to win a prize">🎯</span>' : "";
+      ? ' <span class="bt-badge" title="Bounty! Beat this player in a coinflip to win a prize">${ICO.target}</span>' : "";
     const totalValue = items => items.reduce((t, i) => t + Number(i.value || 0), 0);
     const selectedItems = () => inventory().filter(i => selected.has(itemId(i)));
     const selectedUids = () => selectedItems().map(itemId);
@@ -1259,12 +1228,6 @@
         </div>`).join("");
       if (arr.length > max) html += `<div class="item-thumb"><b>+${arr.length - max}</b></div>`;
       return html;
-    }
-
-    function wagerBarHTML() {
-      const w = Number(ME && ME.wagerLeft || 0);
-      if (w <= 0.001) return "";
-      return `<div class="warn"><i>!</i><span>Wager requirement: you must wager <b>${GEM}${fmt(w)}</b> more in coinflips before you can withdraw items you received from giveaways or admins.</span></div>`;
     }
 
     function requireLogin() {
@@ -1405,6 +1368,12 @@
         setTimeout(() => walletFx(diff), 80);
       }
 
+      const ci = $("#chatInput");
+      if (ci) {
+        const locked = ME && !ME.isAdmin && Number(ME.totalBet || 0) <= 0;
+        ci.placeholder = !ME ? "Login to chat" : locked ? "Place a bet to chat" : "Say something!";
+      }
+
       const sig = JSON.stringify(ME ? [ME.id, ME.username, ME.avatar, ME.isAdmin, inv.length, value, NOTIFS.unread, NOTIFS.list.length] : null);
       if (sig === headerSig) return;
       headerSig = sig;
@@ -1421,7 +1390,7 @@
 
       const bell = ME.isAdmin ? `
         <div class="bell-wrap">
-          <button class="bell" data-action="bell" title="Notifications">🔔${NOTIFS.unread > 0 ? `<span class="bell-badge" id="bellBadge">${NOTIFS.unread > 9 ? "9+" : NOTIFS.unread}</span>` : ""}</button>
+          <button class="bell" data-action="bell" title="Notifications">${ICO.bell}${NOTIFS.unread > 0 ? `<span class="bell-badge" id="bellBadge">${NOTIFS.unread > 9 ? "9+" : NOTIFS.unread}</span>` : ""}</button>
           <div class="bell-menu ${bellOpen ? "open" : ""}" id="bellMenu">
             ${asArray(NOTIFS.list).length
               ? asArray(NOTIFS.list).map(n => `
@@ -1486,7 +1455,7 @@
 
     function renderLobby() {
       const matches = asArray(STATE.matches)
-        .filter(m => m.state !== "cancelled" && (m.game || "adoptme") === currentGame)
+        .filter(m => m.state !== "cancelled")
         .slice()
         .sort((a, b) =>
           (Number(a.state === "finished") - Number(b.state === "finished")) ||
@@ -1495,15 +1464,15 @@
       const liveMatches = matches.filter(m => m.state !== "finished");
       $("#summaryGames").textContent = liveMatches.length;
       $("#summaryItems").textContent = liveMatches.reduce((n, m) => n + asArray(m.hostItems).length + asArray(m.joinerItems || m.oppItems).length, 0);
-      $("#gameCount").textContent = matches.length + " GAMES";
       $("#summaryValue").textContent = fmt(liveMatches.reduce((s, m) => s + Number(m.hostValue || 0) + Number(m.oppValue || 0), 0));
 
       const active = matches.filter(m => m.state !== "finished").reduce((s, m) => s + Number(m.hostValue || 0) + Number(m.oppValue || 0), 0);
       $("#activeValue").innerHTML = `${GEM}<b>${fmt(active)}</b> in active games`;
+      $("#navCf").innerHTML = `<svg class="gem-i" viewBox="0 0 24 24"><use href="#gem"/></svg>${fmt(active)}`;
 
       const sig = JSON.stringify([
         matches.map(m => [m.id, m.state, m.joiner && m.joiner.id, m.winnerId]),
-        ME && ME.id, currentGame, asArray(STATE.bounties).map(b => b.id)
+        ME && ME.id, asArray(STATE.bounties).map(b => b.id)
       ]);
 
       if (sig === lobbySig) return;
@@ -1836,7 +1805,7 @@
       viewMatchId = null;
       gridContext = null;
 
-      REPLAY = { match, phase: "count", end: Date.now() + 3000 };
+      REPLAY = { match, phase: "count", end: Date.now() - clockSkew + 3000 };
 
       openModal("", "view");
       renderReplay();
@@ -2066,6 +2035,8 @@
       const text = input.value.trim();
       if (!text) return;
 
+      if (ME && !ME.isAdmin && Number(ME.totalBet || 0) <= 0) return toast("Place a bet to chat", "err");
+
       if (!socket || !socket.connected) return toast("Chat is connecting", "err");
 
       socket.emit("chat:send", { text }, response => {
@@ -2077,14 +2048,14 @@
     $("#chatInput").addEventListener("keydown", e => { if (e.key === "Enter") sendChat(); });
 
     /* ---------- User card (profile popup) ---------- */
-    let ucUser = null, ucTab = "adoptme";
+    let ucUser = null;
 
     function ucRender() {
       const user = ucUser;
       if (!user) return;
 
       const rank = user.rank || "Rookie";
-      const st = (user.games && user.games[ucTab]) || { totalBet: 0, totalWon: 0, totalLost: 0, profit: 0 };
+      const st = user;
       const profit = Number(st.profit || 0);
 
       $("#modal2").innerHTML = `
@@ -2093,12 +2064,9 @@
           <div>
             <div class="uc-name">${esc(user.username)}</div>
             <div class="uc-rank" style="color:${rankColor(rank)}">${esc(rank)} ${rankBadge(rank)}</div>
+            <div class="seen ${user.online ? "on" : ""}">${user.online ? "Online now" : "Last seen " + ago(user.lastSeen)}</div>
           </div>
           <button class="x" data-action="close2">×</button>
-        </div>
-
-        <div class="game-tabs" style="width:100%;margin-bottom:10px">
-          ${GAMES.map(g => `<button class="game-tab ${g.id === ucTab ? "on" : ""}" style="flex:1" data-action="uc-tab" data-game="${g.id}">${g.name}</button>`).join("")}
         </div>
 
         <div class="uc-grid">
@@ -2118,7 +2086,6 @@
       try {
         const { user } = await api("/api/user/" + encodeURIComponent(id));
         ucUser = user;
-        ucTab = currentGame;
         ucRender();
       } catch (error) {
         closeModal2();
@@ -2165,8 +2132,6 @@
         renderChat();
       });
 
-      socket.on("bots:update", bots => { STATE.bots = bots; });
-
       socket.on("bounty:update", list => {
         STATE.bounties = list;
         renderBountyStrip();
@@ -2177,17 +2142,15 @@
       socket.on("bounty:claimed", showBountyPopup);
 
       socket.on("jackpot:update", j => {
-        if (j) {
-          STATE.jackpots = STATE.jackpots || {};
-          STATE.jackpots[j.game] = j;
-        }
-        if (currentPage === "jackpot" && j && j.game === currentGame) renderJackpot();
+        if (j) STATE.jackpot = j;
+        renderJpNav();
+        if (currentPage === "jackpot" && j) renderJackpot();
       });
 
       socket.on("admin:notify", n => {
         NOTIFS.list.unshift(n);
         NOTIFS.unread += 1;
-        toast("🔔 " + n.text, "ok");
+        toast(n.text, "ok");
         renderHeader();
       });
 
@@ -2213,6 +2176,7 @@
 
       try {
         const state = await api("/api/state");
+        if (state.now) clockSkew = Date.now() - state.now;
         STATE = { ...STATE, ...state };
 
         if (token) {
@@ -2236,6 +2200,7 @@
 
         renderHeader();
         renderLobby();
+        renderJpNav();
         renderGiveaways();
         renderBanner();
         if (STATE.event && !lastEventId) lastEventId = STATE.event.id;
@@ -2264,11 +2229,18 @@
     setInterval(() => { if (!document.hidden) refresh(); }, 3000);
 
     setInterval(() => {
-      const time = Date.now();
+      const time = Date.now() - clockSkew;
 
       document.querySelectorAll(".ticker-countdown").forEach(el => {
         const s = Math.ceil((Number(el.dataset.end) - time) / 1000);
-        el.textContent = s > 0 ? s : "…";
+        if (s > 0) { el.textContent = s; return; }
+
+        /* the countdown is over: the coin starts spinning right away, the server result lands a moment later */
+        if (el.classList.contains("big-count") && el.parentNode) {
+          const wrap = document.createElement("div");
+          wrap.innerHTML = coinHTML("spin", "dog", "big");
+          el.replaceWith(...wrap.childNodes);
+        } else el.textContent = "";
       });
 
       document.querySelectorAll(".ticker-giveaway").forEach(el => {
@@ -2284,7 +2256,7 @@
         const dur = Math.max(1, Number(el.dataset.dur)) * 1000;
         el.style.width = Math.max(0, Math.min(100, ((Number(el.dataset.end) - time) / dur) * 100)) + "%";
       });
-    }, 250);
+    }, 100);
 
     /* ---------- Login ---------- */
     function showLogin() {
@@ -2422,7 +2394,6 @@
         return `
           <div class="inventory-item ${checked ? "selected" : ""}" data-action="pick" data-id="${esc(id)}">
             ${checked ? '<span class="check">✓</span>' : ""}
-            ${!gridContext.game && itemGame(item) === "ctd" ? '<span class="game-pill">CTD</span>' : ""}
             <img src="${esc(itemImage(item))}" alt="">
             <div class="name">${esc(item.name)}</div>
             <div class="value">${GEM}${fmt(item.value)}</div>
@@ -2538,8 +2509,6 @@
       gridContext = {
         max: 50,
         info() {
-          const wb = $("#wagerBar");
-          if (wb) wb.innerHTML = wagerBarHTML();
           const items = selectedItems();
           const btn = $("#withdrawButton");
           if (btn) btn.textContent = "Withdraw " + fmt(totalValue(items));
@@ -2548,7 +2517,6 @@
 
       openModal(`
         ${modalHeader("Inventory")}
-        <div id="wagerBar">${wagerBarHTML()}</div>
         <div class="hint" style="margin:0 0 7px">Select Item</div>
 
         ${selectionGridHTML()}
@@ -2566,9 +2534,6 @@
 
       const uids = selectedUids();
       if (!uids.length) return toast("Select items first", "err");
-
-      const need = Number(ME && ME.wagerLeft || 0);
-      if (need > 0.001) return toast(`You must wager ${fmt(need)} more before withdrawing`, "err");
 
       const btn = $("#withdrawButton");
       if (btn) btn.disabled = true;
@@ -2600,30 +2565,15 @@
 
     function showDeposit() {
       if (!requireLogin()) return;
+      openBotsModal();
+    }
+
+    function openBotsModal() {
+      const bot = STATE.bot || {};
+      const name = bot.username || BOT_NAME;
 
       openModal2(`
         ${modalHeader("Deposit", "close2")}
-        <div class="deposit-grid">
-          <div class="game-card" data-action="bots" data-game="adoptme" title="Adopt Me"><span class="adopt-logo">ADOPT ME!</span></div>
-          <div class="game-card ctd" data-action="bots" data-game="ctd" title="Cameraman Tower Defense"><span class="ctd-logo">CTD<small>Cameraman Tower Defense</small></span></div>
-        </div>`);
-    }
-
-    function openBotsModal(game = "adoptme") {
-      const bot = (STATE.bots && STATE.bots[game]) || (game === "adoptme" ? STATE.bot : null) || {};
-      const title = game === "ctd" ? "Cameraman Tower Defense" : "Adopt Me";
-      const name = bot.username || (game === "adoptme" ? BOT_NAME : "");
-      const online = bot.online !== false;
-
-      if (!name) {
-        openModal2(`
-          ${modalHeader(title, "close2")}
-          <div class="empty">Deposits for this game are not set up yet.<br>Please try again later.</div>`);
-        return;
-      }
-
-      openModal2(`
-        ${modalHeader(title, "close2")}
 
         <div class="warn">
           <i>!</i>
@@ -2634,16 +2584,11 @@
           <div class="bot-main">
             ${avatar({ username: name, avatar: bot.avatar }, "sm")}
             <span>${esc(name)}</span>
-            <span class="dot ${online ? "" : "off"}"></span>
-            <span class="muted" style="font-size:12px">${online ? "Online" : "Offline"}</span>
           </div>
-          ${online
-            ? `<button class="join" data-action="bot-join" data-game="${esc(game)}">Join</button>`
-            : '<button class="join" disabled>Offline</button>'}
+          <button class="join" data-action="bot-join">Join</button>
         </div>
-        ${online ? "" : '<p class="hint" style="color:#ffc65a">This bot is offline right now. Please wait until it is back online before depositing.</p>'}
 
-        <p class="hint">To initiate a trade with the bot, send the bot a trade request in ${esc(title)}. Items you deposit can only be used in ${esc(title)}.</p>`);
+        <p class="hint">To deposit, join the bot's server in Adopt Me and send it a trade request with the pets you want to deposit. They appear in your inventory once an admin confirms them.</p>`);
     }
 
     /* ---------- Create / Join ---------- */
@@ -2656,7 +2601,6 @@
 
       gridContext = {
         max: 20,
-        game: currentGame,
         info() {
           const items = selectedItems();
           const value = totalValue(items);
@@ -2672,8 +2616,7 @@
       };
 
       openModal(`
-        ${modalHeader("Create Coinflip · " + gameNameOf(currentGame))}
-        <p class="hint">Only ${gameNameOf(currentGame)} items can be used in this game.</p>
+        ${modalHeader("Create Coinflip")}
         ${taxHint()}
 
         <div class="sides" id="sides">
@@ -2697,7 +2640,7 @@
       if (!uids.length) return toast("Select items first", "err");
 
       try {
-        await api("/api/match/create", { body: { uids, side: createSide, game: currentGame } });
+        await api("/api/match/create", { body: { uids, side: createSide } });
         closeModal();
         toast("Game created!", "ok");
         await refresh();
@@ -2779,18 +2722,14 @@
       window.scrollTo(0, 0);
     }
 
-    let profileGames = {}, profileTab = "adoptme";
+    let profileStats = {};
 
     function pfRender() {
-      const tabs = $("#pfTabs");
       const grid = $("#pfStats");
-      if (!tabs || !grid) return;
+      if (!grid) return;
 
-      const st = profileGames[profileTab] || { totalBet: 0, totalWon: 0, totalLost: 0, profit: 0 };
+      const st = profileStats;
       const profit = Number(st.profit || 0);
-
-      tabs.innerHTML = `<div class="game-tabs" style="margin:14px 0 0">${GAMES.map(g =>
-        `<button class="game-tab ${g.id === profileTab ? "on" : ""}" data-action="pf-tab" data-game="${g.id}">${g.name}</button>`).join("")}</div>`;
 
       grid.innerHTML = `
         <div class="stat"><small>Total Bet</small><b>${GEM}${fmt(st.totalBet)}</b></div>
@@ -2827,7 +2766,6 @@
               <button class="btn gray" data-action="home">← Back</button>
             </div>
 
-            <div id="pfTabs"></div>
             <div class="stats" id="pfStats"></div>
 
             <div class="section-head">
@@ -2854,8 +2792,7 @@
                 <button class="${i + 1 === Number(result.page) ? "on" : ""}" data-action="profile-page" data-page="${i + 1}">${i + 1}</button>`).join("")}
             </div>
           </div>`;
-        profileGames = stats.games || {};
-        profileTab = currentGame;
+        profileStats = stats;
         pfRender();
       } catch (error) {
         fail(error);
@@ -3104,7 +3041,7 @@
               : '<button class="btn sun" data-action="event-join">Join the wheel</button>');
       } else if (finished) {
         status = ev.winner
-          ? `<div class="ev-winner">🏆 ${esc(ev.winner.username)} won!${prizeHTML(ev.prize)}</div>`
+          ? `<div class="ev-winner">${ICO.trophy} ${esc(ev.winner.username)} won!${prizeHTML(ev.prize)}</div>`
           : `<div class="ev-status">${esc(ev.note || "The event has ended.")}</div>`;
       } else if (ev.phase === "reveal") {
         status = '<div class="ev-status" id="wheelMsg"></div>';
@@ -3155,7 +3092,7 @@
                </div>`);
       } else {
         bottom = (ev.winner
-          ? `<div class="ev-winner">🏆 ${esc(ev.winner.username)} solved it!${prizeHTML(ev.prize)}</div>`
+          ? `<div class="ev-winner">${ICO.trophy} ${esc(ev.winner.username)} solved it!${prizeHTML(ev.prize)}</div>`
           : `<div class="ev-status">${esc(ev.note || "The event has ended.")}</div>`) +
           (ev.word ? `<p class="hint" style="text-align:center;font-size:14px">The word was <b>${esc(ev.word)}</b></p>` : "");
       }
@@ -3252,7 +3189,7 @@
       try {
         const result = await api("/api/event/guess", { body: { id: ev.id, guess } });
         input.value = "";
-        if (result.correct) toast("Correct! 🎉", "ok");
+        if (result.correct) toast("Correct!", "ok");
         else { toast("Wrong answer, try again", "err"); input.focus(); }
       } catch (error) { fail(error); }
     }
@@ -3326,7 +3263,7 @@
 
       $("#bountyStrip").innerHTML = list.map(b => `
         <div class="bounty-strip enter">
-          <div class="bt-ico">🎯</div>
+          <div class="bt-ico">${ICO.target}</div>
           ${avatar(b.target, "md", "ring-orange")}
           <div class="bt-text">
             <b>BOUNTY on ${esc(getUsername(b.target))}</b><br>
@@ -3353,10 +3290,10 @@
       el.innerHTML = `
         ${confetti}
         <div class="bounty-card">
-          <div class="bp-title">🎯 BOUNTY CLAIMED!</div>
+          <div class="bp-title">${ICO.target} BOUNTY CLAIMED</div>
           <div class="bp-avatar">${avatar(d.winner, "xl")}</div>
           <div class="bp-name">${esc(getUsername(d.winner))}</div>
-          <div class="bp-text">Congratulations, our king! We are proud of you! 👑</div>
+          <div class="bp-text">Congratulations, our king! We are proud of you!</div>
           <div class="bp-sub">beat <b>${esc(getUsername(d.target))}</b> and won</div>
           ${prizeHTML(d.prize)}
           <small>Click anywhere to close</small>
@@ -3486,8 +3423,6 @@
 
       return `
         <div class="jp-page enter">
-          <div class="jp-tag">${gameTabsHTML()}</div>
-
           <div class="jp-grid">
             <div>
               <div class="jp-wheel">
@@ -3529,7 +3464,7 @@
       setTimeout(() => {
         const winner = asArray(j.entries).find(e => e.user.id === j.winnerId);
         const sub = $("#jpSub");
-        if (sub && winner) sub.innerHTML = `🏆 <b>${esc(getUsername(winner.user))}</b> wins!`;
+        if (sub && winner) sub.innerHTML = `${ICO.trophy} <b>${esc(getUsername(winner.user))}</b> wins!`;
 
         document.querySelectorAll(".jp-row").forEach(row => {
           row.classList.add(row.dataset.uid === j.winnerId ? "win" : "lose");
@@ -3537,9 +3472,17 @@
       }, 2100);
     }
 
+    function renderJpNav() {
+      const j = STATE.jackpot;
+      const el = $("#navJp");
+      if (!el) return;
+      const total = j && j.state !== "finished" ? Number(j.total || 0) : 0;
+      el.innerHTML = `<svg class="gem-i" viewBox="0 0 24 24"><use href="#gem"/></svg>${fmt(total)}`;
+    }
+
     function renderJackpot(force) {
       const box = $("#jackpotView");
-      const j = STATE.jackpots && STATE.jackpots[currentGame];
+      const j = STATE.jackpot;
       if (!box || !j) return;
 
       const sig = [j.id, j.state, asArray(j.entries).length, j.total, j.winnerId, ME && ME.id].join("|");
@@ -3554,7 +3497,7 @@
     function showJpJoin() {
       if (!requireLogin()) return;
 
-      const j = STATE.jackpots && STATE.jackpots[currentGame];
+      const j = STATE.jackpot;
       if (!j || (j.state !== "waiting" && j.state !== "countdown")) {
         return toast("This round is already rolling. Join the next round.", "err");
       }
@@ -3566,7 +3509,6 @@
 
       gridContext = {
         max: 20,
-        game: currentGame,
         info() {
           const items = selectedItems();
           const value = totalValue(items);
@@ -3584,7 +3526,7 @@
 
       openModal(`
         ${modalHeader("Join Jackpot")}
-        <p class="hint">Your chance is your share of the total pot. The winner takes everything. Only ${gameNameOf(currentGame)} items can be used here.</p>
+        <p class="hint">Your chance is your share of the total pot. The winner takes everything.</p>
 
         ${selectionGridHTML()}
 
@@ -3602,7 +3544,7 @@
       if (!uids.length) return toast("Select items first", "err");
 
       try {
-        await api("/api/jackpot/join", { body: { uids, game: currentGame } });
+        await api("/api/jackpot/join", { body: { uids } });
         closeModal();
         toast("You joined the jackpot!", "ok");
         await refresh();
@@ -3611,14 +3553,14 @@
 
     async function jpLeave() {
       try {
-        await api("/api/jackpot/leave", { body: { game: currentGame } });
+        await api("/api/jackpot/leave", { body: {} });
         toast("Items returned", "ok");
         await refresh();
       } catch (error) { fail(error); }
     }
 
     async function verifyJackpot() {
-      const j = STATE.jackpots && STATE.jackpots[currentGame];
+      const j = STATE.jackpot;
       if (!j || j.state !== "finished") return;
 
       try {
@@ -3651,7 +3593,7 @@
     }
 
     /* ---------- Leaderboard ---------- */
-    let lbBy = "totalBet", lbGame = "all";
+    let lbBy = "totalBet";
 
     async function showLeaderboard(by = "totalBet") {
       gridContext = null;
@@ -3659,17 +3601,12 @@
       clearReplay();
 
       lbBy = by;
-      lbGame = "all";
 
       openModal(`
         ${modalHeader("Leaderboard")}
         <div class="seg" id="lbTabs">
           <button data-action="lb-tab" data-by="totalBet">Most Wagered</button>
           <button data-action="lb-tab" data-by="profit">Top Profit</button>
-        </div>
-        <div class="seg" id="lbGames">
-          <button data-action="lb-game" data-game="all">All games</button>
-          ${GAMES.map(g => `<button data-action="lb-game" data-game="${g.id}">${g.name}</button>`).join("")}
         </div>
         <div id="lbBody"><div class="empty">Loading…</div></div>`, "small");
 
@@ -3678,19 +3615,16 @@
 
     async function loadLeaderboard() {
       document.querySelectorAll("#lbTabs button").forEach(b => b.classList.toggle("on", b.dataset.by === lbBy));
-      document.querySelectorAll("#lbGames button").forEach(b => b.classList.toggle("on", b.dataset.game === lbGame));
 
       try {
-        const { list } = await api("/api/leaderboard?by=" + encodeURIComponent(lbBy) + "&game=" + encodeURIComponent(lbGame));
+        const { list } = await api("/api/leaderboard?by=" + encodeURIComponent(lbBy));
         const body = $("#lbBody");
         if (!body) return;
-
-        const medals = ["🥇", "🥈", "🥉"];
 
         body.innerHTML = asArray(list).length
           ? asArray(list).map((u, i) => `
             <div class="lb-row ${i < 3 ? "top" + (i + 1) : ""}" data-action="user" data-id="${esc(u.id)}">
-              <div class="lb-pos">${medals[i] || i + 1}</div>
+              <div class="lb-pos">${i < 3 ? `<span class="medal m${i + 1}">${i + 1}</span>` : i + 1}</div>
               <div class="lb-user">
                 ${avatar(u, "md")}
                 <span class="n">${esc(u.username)}</span>
@@ -3707,9 +3641,6 @@
       home() { closeModal(); closeModal2(); showPage("home"); },
       leaderboard() { showLeaderboard("totalBet"); },
       "lb-tab"(el) { lbBy = el.dataset.by; loadLeaderboard(); },
-      "lb-game"(el) { lbGame = el.dataset.game; loadLeaderboard(); },
-      "uc-tab"(el) { ucTab = el.dataset.game; ucRender(); },
-      "pf-tab"(el) { profileTab = el.dataset.game; pfRender(); },
       jackpot: openJackpot,
       "jp-join": showJpJoin,
       "jp-submit": submitJpJoin,
@@ -3737,16 +3668,10 @@
 
       wallet: showWallet,
       deposit: showDeposit,
-      bots(el) { openBotsModal(el.dataset.game || "adoptme"); },
-      "bot-join"(el) {
-        const game = el.dataset.game || "adoptme";
-        const bot = (STATE.bots && STATE.bots[game]) || {};
-        if (bot.online === false) return toast("This bot is offline right now", "err");
-        const link = bot.link || (game === "adoptme" ? BOT_LINK : "");
-        if (!link) return toast("The bot link is not set yet", "err");
+      "bot-join"() {
+        const link = (STATE.bot && STATE.bot.link) || BOT_LINK;
         window.open(link, "_blank", "noopener,noreferrer");
       },
-      game(el) { setGame(el.dataset.game); },
       withdraw,
 
       create: showCreate,
@@ -3834,7 +3759,6 @@
       else if (document.body.classList.contains("chat-open")) closeChat();
     });
 
-    renderGameTabs();
     renderHeader();
     renderLobby();
     refresh();
