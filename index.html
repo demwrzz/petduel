@@ -201,15 +201,30 @@
 
     /* ---------- COINFLIP TOOLBAR ---------- */
     .cf-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-bottom: 12px; }
-    .cf-sort {
-      position: relative; display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px;
-      border: 1px solid var(--border); border-radius: 8px; background: var(--panel); cursor: pointer;
+    .cf-sort { position: relative; z-index: 20; }
+    .cf-sort-btn {
+      display: flex; align-items: center; gap: 9px; height: 42px; padding: 0 12px; border: 1px solid var(--border); border-radius: 8px;
+      color: #fff; background: var(--panel); font-weight: 700; transition: border-color .15s, background .15s;
     }
-    .cf-sort svg { width: 16px; height: 16px; color: #cfd2db; }
-    .cf-sort select { appearance: none; -webkit-appearance: none; padding-right: 18px; border: 0; color: #fff; font-weight: 700; cursor: pointer;
-      background: linear-gradient(45deg, transparent 50%, #8d909a 50%) right 5px center / 5px 5px no-repeat,
-                  linear-gradient(135deg, #8d909a 50%, transparent 50%) right 0 center / 5px 5px no-repeat; }
-    .cf-sort select option { background: #191c25; }
+    .cf-sort-btn:hover, .cf-sort.open .cf-sort-btn { border-color: #3a4050; background: #1d2029; }
+    .cf-sort-btn svg { width: 16px; height: 16px; color: #cfd2db; }
+    .cf-sort-btn .caret { width: 18px; height: 18px; color: #8d909a; transition: transform .25s cubic-bezier(.2, .8, .2, 1); }
+    .cf-sort.open .caret { transform: rotate(180deg); }
+    .cf-menu {
+      position: absolute; top: calc(100% + 6px); left: 0; min-width: 100%; padding: 5px; border: 1px solid #2f3442; border-radius: 10px;
+      background: #1b1e27; box-shadow: 0 16px 40px #000a; transform-origin: top left;
+      opacity: 0; visibility: hidden; transform: translateY(-6px) scale(.96); transition: opacity .18s, transform .22s cubic-bezier(.2, .9, .3, 1.2), visibility .18s;
+    }
+    .cf-sort.open .cf-menu { opacity: 1; visibility: visible; transform: none; }
+    .cf-menu button {
+      display: block; width: 100%; padding: 10px 12px; border-radius: 7px; color: #cfd2db; background: transparent;
+      font-weight: 700; text-align: left; white-space: nowrap; opacity: 0; transform: translateX(-6px); transition: background .15s, color .15s, opacity .2s, transform .2s;
+    }
+    .cf-sort.open .cf-menu button { opacity: 1; transform: none; }
+    .cf-sort.open .cf-menu button:nth-child(2) { transition-delay: .04s; }
+    .cf-sort.open .cf-menu button:nth-child(3) { transition-delay: .08s; }
+    .cf-menu button:hover { color: #fff; background: #262a35; }
+    .cf-menu button.on { color: var(--green); background: #15372d; }
     .cf-sep { width: 1px; height: 26px; background: var(--border); }
     .cf-stat { display: inline-flex; align-items: center; gap: 7px; font-size: 16px; font-weight: 800; }
     .cf-stat svg { width: 20px; height: 20px; color: #fff; }
@@ -429,11 +444,30 @@
     .message .txt { color: #a3a6b0; font-size: 14px; font-weight: 500; }
     .message .ava-click { cursor: pointer; }
 
-    .uname.r-ADMIN { color: var(--red); }
+    .uname.r-ADMIN { color: #c084fc; }
 
     .rank-badge { width: 20px; height: 20px; flex: none; }
 
-    .tag-admin { padding: 1px 6px; border-radius: 4px; color: #fff; background: #d94453; font-size: 10px; font-weight: 800; }
+    .tag-admin, .tag-owner {
+      position: relative; display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 5px; overflow: hidden;
+      color: #fff; font-size: 10px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase;
+      background: linear-gradient(90deg, #6d28d9, #a855f7, #d946ef, #8b5cf6, #6d28d9); background-size: 300% 100%;
+      box-shadow: 0 0 10px rgba(168, 85, 247, .7), 0 0 2px rgba(217, 70, 239, .9) inset;
+      text-shadow: 0 0 6px rgba(255, 255, 255, .6); animation: owner-chroma 3s linear infinite, owner-glow 1.8s ease-in-out infinite;
+    }
+    .tag-owner::after, .tag-admin::after {
+      content: ""; position: absolute; top: 0; bottom: 0; left: -60%; width: 40%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent); transform: skewX(-20deg);
+      animation: owner-shine 2.4s ease-in-out infinite;
+    }
+    .tag-owner svg { width: 10px; height: 10px; }
+    @keyframes owner-chroma { to { background-position: 300% 0; } }
+    @keyframes owner-glow { 50% { box-shadow: 0 0 16px rgba(192, 132, 252, .95), 0 0 2px rgba(217, 70, 239, .9) inset; } }
+    @keyframes owner-shine { 0%, 40% { left: -60%; } 80%, 100% { left: 130%; } }
+    .uname.owner-name {
+      background: linear-gradient(90deg, #c084fc, #f0abfc, #a78bfa, #c084fc); background-size: 300% 100%;
+      -webkit-background-clip: text; background-clip: text; color: transparent; animation: owner-chroma 3s linear infinite;
+    }
 
     .chat-input { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 12px; }
     .chat-input .field { position: relative; }
@@ -531,6 +565,15 @@
     .side-choice:hover { transform: translateY(-2px); }
     .side-choice.selected { border-color: var(--green); background: #19372f; }
     .side-choice div { width: 70px; height: 70px; }
+    .side-pick { display: flex; gap: 6px; padding: 3px; border: 1px solid var(--border); border-radius: 10px; background: #14171f; }
+    .side-mini {
+      display: grid; place-items: center; width: 40px; height: 40px; padding: 4px; border-radius: 8px; background: transparent;
+      opacity: .45; filter: grayscale(.5); transition: opacity .15s, filter .15s, background .15s, transform .12s;
+    }
+    .side-mini:hover { opacity: .8; }
+    .side-mini:active { transform: scale(.92); }
+    .side-mini.selected { opacity: 1; filter: none; background: #1d3b31; box-shadow: 0 0 0 2px var(--green) inset; }
+    .side-mini svg { width: 32px; height: 32px; }
 
     /* ---------- VIEW MATCH ---------- */
     .vw-top { position: relative; display: flex; align-items: center; justify-content: center; min-height: 34px; margin-bottom: 14px; }
@@ -858,6 +901,9 @@
     }
     .nav-link:hover { color: #fff; background: #1d2029; }
     .nav-link svg { width: 16px; height: 16px; }
+    .header-right .btn { white-space: nowrap; }
+    @media (max-width: 1500px) { .nav-link .nl-t { display: none; } .nav-link { padding: 8px; } }
+    @media (max-width: 650px) { .nav-link .nl-t { display: inline; } }
     .nl-new { padding: 1px 5px; border-radius: 4px; color: #04120b; background: var(--green); font-size: 9px; font-weight: 800; letter-spacing: .4px; }
     @media (max-width: 1450px) { .nav-link.hide-md { display: none; } }
 
@@ -1074,6 +1120,10 @@
       </div>
 
       <nav class="nav">
+        <a class="discord-btn first" href="https://discord.gg/TaPXaAseP" target="_blank" rel="noopener noreferrer" title="Join our Discord">
+          <svg viewBox="0 0 24 24"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189z"/></svg>
+          <span>Discord</span>
+        </a>
         <div class="nav-item active" data-action="home" data-nav="home">
           <svg class="nav-ico" viewBox="0 0 24 24"><ellipse cx="9" cy="16" rx="7" ry="3.5" fill="currentColor" opacity=".7"/><ellipse cx="9" cy="12" rx="7" ry="3.5" fill="currentColor" opacity=".85"/><ellipse cx="15" cy="8" rx="7" ry="3.5" fill="currentColor"/></svg>
           <span class="nav-text">Coinflip<span class="nav-sub" id="navCf"></span></span>
@@ -1083,25 +1133,21 @@
           <span class="nav-text">Jackpot<span class="nav-sub" id="navJp"></span></span>
         </div>
         <div class="nav-item alt" data-action="leaderboard">Leaderboard</div>
-        <a class="discord-btn" href="https://discord.gg/TaPXaAseP" target="_blank" rel="noopener noreferrer" title="Join our Discord">
-          <svg viewBox="0 0 24 24"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189z"/></svg>
-          <span>Discord</span>
-        </a>
         <button class="nav-link" data-action="info" data-page="updates">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 9.5 8.5 3 9.3l4.9 4.5L6.6 21 12 17.6 17.4 21l-1.3-7.2L21 9.3l-6.5-.8z"/></svg>
           Updates<span class="nl-new">NEW</span>
         </button>
-        <button class="nav-link" data-action="info" data-page="tos">
+        <button class="nav-link" title="Terms of Service" data-action="info" data-page="tos">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm7 1.5V8h4.5zM8 12v1.6h8V12zm0 3.5v1.6h8v-1.6zm0-7v1.6h4V8.5z"/></svg>
-          Terms of Service
+          <span class="nl-t">Terms of Service</span>
         </button>
-        <button class="nav-link" data-action="info" data-page="fair">
+        <button class="nav-link" title="Provably Fair" data-action="info" data-page="fair">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5zm-1.2 13.6-3.4-3.4 1.4-1.4 2 2 4.6-4.6 1.4 1.4z"/></svg>
-          Provably Fair
+          <span class="nl-t">Provably Fair</span>
         </button>
-        <button class="nav-link" data-action="info" data-page="faq">
+        <button class="nav-link" title="FAQ" data-action="info" data-page="faq">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1.2 16h-2.4v-2.4h2.4zm2.3-7.6c-.5.7-1.1 1.1-1.6 1.5-.6.4-.8.7-.8 1.6h-2.3c0-1.7.6-2.4 1.5-3 .7-.5 1.2-.8 1.2-1.6 0-.7-.6-1.3-1.5-1.3-1 0-1.6.6-1.7 1.6H8c.1-2.3 1.7-3.8 4.1-3.8 2.3 0 3.9 1.3 3.9 3.3 0 .6-.2 1.2-.5 1.7z"/></svg>
-          FAQ
+          <span class="nl-t">FAQ</span>
         </button>
       </nav>
       <div class="header-right" id="headerRight"></div>
@@ -1145,14 +1191,18 @@
         </div>
 
         <div class="cf-bar">
-          <label class="cf-sort">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 4v16M3 16l4 4 4-4M14 6h7M14 11h5M14 16h3"/></svg>
-            <select id="cfSort">
-              <option value="high">Value sort high to low</option>
-              <option value="low">Value sort low to high</option>
-              <option value="new">Newest first</option>
-            </select>
-          </label>
+          <div class="cf-sort" id="cfSortBox">
+            <button class="cf-sort-btn" data-action="sort-toggle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 4v16M3 16l4 4 4-4M14 6h7M14 11h5M14 16h3"/></svg>
+              <span id="cfSortLabel">Value sort high to low</span>
+              <svg class="caret" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+            </button>
+            <div class="cf-menu" id="cfMenu">
+              <button class="on" data-action="sort-pick" data-sort="high">Value sort high to low</button>
+              <button data-action="sort-pick" data-sort="low">Value sort low to high</button>
+              <button data-action="sort-pick" data-sort="new">Newest first</button>
+            </div>
+          </div>
           <span class="cf-sep"></span>
           <span class="cf-stat" title="Games">
             <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4" fill="currentColor"/><g fill="#101218"><circle cx="8" cy="8" r="1.7"/><circle cx="16" cy="8" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="8" cy="16" r="1.7"/><circle cx="16" cy="16" r="1.7"/></g></svg>
@@ -1160,7 +1210,7 @@
           </span>
           <span class="cf-stat green" title="Total value in games"><svg class="gem-i" viewBox="0 0 24 24"><use href="#gem"/></svg><b id="summaryValue">0</b></span>
           <span style="flex:1"></span>
-          <button class="btn" data-action="create">Bet Items</button>
+          <button class="btn" data-action="create">Create Coinflip</button>
           <button class="btn gray" data-action="history">History</button>
         </div>
 
@@ -1249,6 +1299,7 @@
     const rankBadge = rank => (rank && rank !== "Rookie" && rank !== "ADMIN")
       ? `<svg class="rank-badge" style="color:${rankColor(rank)}" viewBox="0 0 24 24"><use href="#rk-${rankIcon(rank)}"/></svg>` : "";
 
+    const OWNER_TAG = '<span class="tag-owner"><svg viewBox="0 0 24 24" fill="currentColor"><path d="m3 8 4.5 4L12 4l4.5 8L21 8l-2 11H5z"/></svg>Owner</span>';
     const ICO = {
       target: '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/></svg>',
       trophy: '<svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M7 3h10v5a5 5 0 0 1-10 0zM4 4h3v2.5A2.5 2.5 0 0 1 4 4zm13 0h3a2.5 2.5 0 0 1-3 2.5zM11 13h2v4h3v3H8v-3h3z"/></svg>',
@@ -1680,7 +1731,7 @@
     const findMatch = id => asArray(STATE.matches).find(m => m.id === id);
 
     function renderLobby() {
-      const sortBy = ($("#cfSort") && $("#cfSort").value) || "high";
+      const sortBy = lobbySort;
       const potOf = m => Number(m.hostValue || 0) + Number(m.oppValue || 0);
       const matches = asArray(STATE.matches)
         .filter(m => m.state !== "cancelled")
@@ -1861,7 +1912,6 @@
 
       return `
         <div class="vw-top">
-          <span class="status ${status[0]}">${status[1]}</span>
           <div class="view-logo big">${LOGO_MARK}<div>PET<span>DUEL</span></div></div>
           <button class="x" data-action="${replay ? "replay-back" : "close"}">×</button>
         </div>
@@ -2227,8 +2277,8 @@
           <span class="ava-click" ${click}>${avatar(user, "md")}</span>
           <div style="min-width:0">
             <div class="who">
-              <span class="uname r-${esc(rank)}" ${rank === "ADMIN" ? "" : `style="color:${rank === "Rookie" ? "#fff" : rankColor(rank)}"`} ${click}>${esc(getUsername(user) || "System")}</span>
-              ${m.admin ? '<span class="tag-admin">ADMIN</span>' : rankBadge(rank)}
+              <span class="uname r-${esc(rank)} ${rank === "ADMIN" ? "owner-name" : ""}" ${rank === "ADMIN" ? "" : `style="color:${rank === "Rookie" ? "#fff" : rankColor(rank)}"`} ${click}>${esc(getUsername(user) || "System")}</span>
+              ${m.admin ? OWNER_TAG : rankBadge(rank)}
             </div>
             <div class="txt">${esc(m.text || "")}</div>
             ${m.event === true ? '<button class="btn sun sm chat-event-btn" data-action="event">Click to open the event</button>' : ""}
@@ -2268,7 +2318,10 @@
       });
     }
 
-    $("#cfSort").addEventListener("change", () => { lobbySig = ""; renderLobby(); });
+    let lobbySort = "high";
+    document.addEventListener("click", e => {
+      if (!e.target.closest || !e.target.closest("#cfSortBox")) $("#cfSortBox")?.classList.remove("open");
+    });
     $("#chatInput").addEventListener("keydown", e => { if (e.key === "Enter") sendChat(); });
 
     /* ---------- User card (profile popup) ---------- */
@@ -2286,7 +2339,7 @@
         <div class="uc-head">
           ${avatar(user, "lg", "ring-green")}
           <div>
-            <div class="uc-name">${esc(user.username)}</div>
+            <div class="uc-name">${esc(user.username)} ${user.owner ? OWNER_TAG : ""}</div>
             <div class="uc-rank" style="color:${rankColor(rank)}">${esc(rank)} ${rankBadge(rank)}</div>
             <div class="seen ${user.online ? "on" : ""}">${user.online ? '<span class="live-dot"></span><span class="live-text">Online now</span>' : "Last seen " + ago(user.lastSeen)}</div>
           </div>
@@ -2879,15 +2932,14 @@
         ${modalHeader("Create Coinflip")}
         ${taxHint()}
 
-        <div class="sides" id="sides">
-          <div class="side-choice selected" data-action="side" data-side="dog"><div>${chip("dog")}</div></div>
-          <div class="side-choice" data-action="side" data-side="cat"><div>${chip("cat")}</div></div>
-        </div>
-
         ${selectionGridHTML()}
 
         <div class="modal-footer">
           <span id="createInfo" style="margin-right:auto;align-self:center"></span>
+          <div class="side-pick" id="sides" title="Pick your side">
+            <button class="side-mini selected" data-action="side" data-side="dog" title="Paw">${chip("dog")}</button>
+            <button class="side-mini" data-action="side" data-side="cat" title="Cat">${chip("cat")}</button>
+          </div>
           <button class="btn gray" data-action="select-none">Clear</button>
           <button class="btn" data-action="submit-create">Create Game</button>
         </div>`, "wide");
@@ -3075,6 +3127,12 @@
 
     /* public update log: only things players see and can be shared openly */
     const PUBLIC_UPDATES = [
+      { v: "2.3", title: "Smoother and shinier", items: [
+        "Animated sort menu and a Create Coinflip button",
+        "Pick your coin side right next to Create Game",
+        "The event and jackpot pages no longer jump around on phones",
+        "Look out for the glowing purple Owner tag in chat"
+      ] },
       { v: "2.2", title: "New coinflip lobby", items: [
         "Games are shown as Player vs Player with all pets in one row",
         "Sort games by value (high to low, low to high) or newest",
@@ -3538,6 +3596,16 @@
       }, 1800);
     }
 
+    /* re-rendering a block changes its height for a moment; this keeps the page where the user is */
+    let focusedEventId = null;
+    function keepScroll(box, fn) {
+      const y = window.scrollY;
+      box.style.minHeight = box.offsetHeight + "px";
+      fn();
+      if (Math.abs(window.scrollY - y) > 1) window.scrollTo({ top: y, behavior: "instant" });
+      requestAnimationFrame(() => { box.style.minHeight = ""; if (Math.abs(window.scrollY - y) > 1) window.scrollTo({ top: y, behavior: "instant" }); });
+    }
+
     function renderEventPage(force) {
       const box = $("#eventView");
       if (!box) return;
@@ -3557,10 +3625,15 @@
         return;
       }
 
-      box.innerHTML = ev.type === "wheel" ? wheelPageHTML(ev) : scramblePageHTML(ev);
+      keepScroll(box, () => { box.innerHTML = ev.type === "wheel" ? wheelPageHTML(ev) : scramblePageHTML(ev); });
 
       if (ev.type === "wheel" && ev.status === "running" && ev.phase === "reveal") landWheel(ev);
-      if (ev.type === "scramble" && ev.status === "running") setTimeout(() => { const i = $("#guessInput"); if (i) i.focus(); }, 50);
+
+      /* focus the answer box once per event, and never on touch screens (that scrolls the page and opens the keyboard) */
+      if (ev.type === "scramble" && ev.status === "running" && focusedEventId !== ev.id && !matchMedia("(hover: none)").matches) {
+        focusedEventId = ev.id;
+        setTimeout(() => { const i = $("#guessInput"); if (i) i.focus({ preventScroll: true }); }, 50);
+      }
     }
 
     async function joinEvent() {
@@ -3887,7 +3960,7 @@
       if (!force && sig === jpSig) return;
       jpSig = sig;
 
-      box.innerHTML = jackpotHTML(j);
+      keepScroll(box, () => { box.innerHTML = jackpotHTML(j); });
 
       if (j.state === "finished") landJackpot(j);
     }
@@ -4065,6 +4138,15 @@
       admin: openAdmin,
 
       info(el) { showInfo(el.dataset.page); },
+      "sort-toggle"() { $("#cfSortBox").classList.toggle("open"); },
+      "sort-pick"(el) {
+        lobbySort = el.dataset.sort;
+        $("#cfSortLabel").textContent = el.textContent;
+        document.querySelectorAll("#cfMenu button").forEach(b => b.classList.toggle("on", b === el));
+        $("#cfSortBox").classList.remove("open");
+        lobbySig = "";
+        renderLobby();
+      },
       wallet: showWallet,
       deposit: showDeposit,
       "bot-join"(el) {
@@ -4079,7 +4161,7 @@
 
       side(el) {
         createSide = el.dataset.side;
-        document.querySelectorAll("#sides .side-choice").forEach(s => s.classList.toggle("selected", s === el));
+        document.querySelectorAll("#sides .side-mini, #sides .side-choice").forEach(s => s.classList.toggle("selected", s === el));
       },
 
       join(el) { closeModal(); showJoin(el.dataset.id); },

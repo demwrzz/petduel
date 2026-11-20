@@ -906,7 +906,8 @@ app.get('/api/user/:id', (req, res) => {
       totalLost: round2(user.totalLost || 0),
       profit: round2(user.profit),
       online: socketsByUser.has(user.id),
-      lastSeen: user.lastSeen || 0
+      lastSeen: user.lastSeen || 0,
+      owner: isAdmin(user) && user.adminTag !== false
     }
   });
 });
@@ -1361,6 +1362,13 @@ app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
 });
 
 const UPDATE_LOG = [
+  { version: '2.3', title: 'Owner tag, catalog browser and smoother pages', changes: [
+    'Purple glowing "Owner" tag instead of ADMIN in chat and on profiles',
+    'Admin: Open Catalog shows the whole catalog in an animated window with name search, version filter and sorting',
+    'Animated sort menu in the lobby; "Create Coinflip" button; Discord is the first item in the menu',
+    'Create Coinflip: the side picker is two small coins next to Clear; the match window has no status pill any more',
+    'Phones: the event and jackpot pages no longer jump while you watch'
+  ] },
   { version: '2.2', title: 'New lobby, info pages and easier pet adding', changes: [
     'Coinflip lobby rebuilt: Player vs Player, all pets in one row with badges, value and join range on the right, Join / View buttons',
     'Sort games by value or newest; game count and total value in the toolbar',
@@ -2868,7 +2876,37 @@ function adminUI() {
       </div>
 
       <h4 style="margin:16px 0 8px">📦 Catalog</h4>
-      <div id="adm-cat" style="display:block"></div>
+      <button id="cat-open" class="btn" style="width:100%;min-height:52px;font-size:15px">📦 Open Catalog <span id="cat-count"></span></button>
+
+      <style>
+        #cat-panel { position: fixed; inset: 0; z-index: 170; display: flex; align-items: flex-end; justify-content: center; padding: 18px;
+          background: rgba(5, 6, 10, 0); pointer-events: none; transition: background .3s; }
+        #cat-panel.open { background: rgba(5, 6, 10, .72); pointer-events: auto; }
+        #cat-panel .cat-sheet { display: flex; flex-direction: column; width: min(1180px, 100%); height: min(88vh, 900px); padding: 18px;
+          border: 1px solid #343842; border-radius: 16px; background: #171a22; box-shadow: 0 30px 80px #000c;
+          transform: translateY(110%) scale(.96); opacity: 0; transition: transform .45s cubic-bezier(.2, .9, .25, 1.05), opacity .3s; }
+        #cat-panel.open .cat-sheet { transform: none; opacity: 1; }
+        #cat-panel .cat-top { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+        #cat-panel .cat-top h3 { margin: 0; flex: 1; }
+        #cat-panel .cat-scroll { flex: 1; overflow-y: auto; padding: 4px; }
+        #cat-panel .cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+        #cat-panel .cat-card { animation: cat-in .35s cubic-bezier(.2, .8, .2, 1) both; transition: transform .15s, border-color .15s; }
+        #cat-panel .cat-card:hover { transform: translateY(-3px); border-color: #00efa0 !important; }
+        @keyframes cat-in { from { opacity: 0; transform: translateY(14px) scale(.95); } }
+      </style>
+      <div id="cat-panel">
+        <div class="cat-sheet">
+          <div class="cat-top">
+            <h3>📦 Catalog <small id="cat-shown" class="hint"></small></h3>
+            <input id="cat-q" class="in" placeholder="Search pet name..." autocomplete="off" style="flex:1;min-width:200px;max-width:360px">
+            <select id="cat-age" class="in"><option value="">All versions</option><option value="normal">Normal</option><option value="neon">Neon</option><option value="mega">Mega</option></select>
+            <select id="cat-sort" class="in"><option value="value">Value: high to low</option><option value="value-asc">Value: low to high</option><option value="name">Name A-Z</option></select>
+            <button id="cat-x" class="x">✕</button>
+          </div>
+          <p class="hint" style="margin:0 0 8px">To give items, write the username in "Give Items" first, then press Give. Change a value and click outside the box to save it.</p>
+          <div class="cat-scroll"><div id="adm-cat"></div></div>
+        </div>
+      </div>
 
       <h4 style="margin:16px 0 8px">👥 Users</h4>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">
@@ -2895,6 +2933,15 @@ function adminUI() {
   overlay.addEventListener('mousedown', e => { if (e.target === overlay) overlay.remove(); });
 
   let catalogCache = [];
+  let catRender = () => {};
+  const catPanel = $('cat-panel');
+  overlay.appendChild(catPanel); /* outside the animated modal, so it covers the whole screen */
+  $('cat-open').onclick = () => { catRender(); catPanel.classList.add('open'); setTimeout(() => $('cat-q').focus({ preventScroll: true }), 300); };
+  $('cat-x').onclick = () => catPanel.classList.remove('open');
+  catPanel.addEventListener('mousedown', e => { if (e.target === catPanel) catPanel.classList.remove('open'); });
+  $('cat-q').oninput = () => catRender();
+  $('cat-age').onchange = () => catRender();
+  $('cat-sort').onchange = () => catRender();
   const varKey = (age, fly, ride) => `${age}-${fly && ride ? 'fr' : fly ? 'f' : ride ? 'r' : 'none'}`;
   const setPreview = () => {
     const v = $('a-img').value.trim();
@@ -2950,9 +2997,20 @@ function adminUI() {
         </div>`;
     };
 
-    $('adm-cat').innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:10px">
-      ${data.catalog.map(catCard).join('') || '<p class="hint">No items yet.</p>'}
-    </div>`;
+    catRender = () => {
+      const q = $('cat-q').value.trim().toLowerCase();
+      const age = $('cat-age').value;
+      const sort = $('cat-sort').value;
+      const list = data.catalog
+        .filter(i => (!q || i.name.toLowerCase().includes(q)) && (!age || (i.age || 'normal') === age))
+        .sort((a, b) => sort === 'name' ? a.name.localeCompare(b.name) : sort === 'value-asc' ? a.value - b.value : b.value - a.value);
+      $('cat-shown').textContent = `${list.length} / ${data.catalog.length}`;
+      $('adm-cat').innerHTML = list.length
+        ? `<div class="cat-grid">${list.slice(0, 400).map((item, i) => catCard(item).replace('<div style="border', `<div class="cat-card" style="animation-delay:${Math.min(i, 30) * 18}ms;border`)).join('')}</div>`
+        : `<p class="hint" style="text-align:center;padding:30px">${data.catalog.length ? 'No pet matches your search.' : 'No items yet.'}</p>`;
+    };
+    $('cat-count').textContent = `(${data.catalog.length})`;
+    catRender();
 
     catalogCache = data.catalog || [];
     $('a-names').innerHTML = [...new Set(catalogCache.map(c => c.name))].map(n => `<option value="${esc(n)}"></option>`).join('');
