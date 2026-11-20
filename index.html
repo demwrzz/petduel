@@ -82,7 +82,18 @@
     .medal { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; color: #1a1305; font-size: 13px; font-weight: 800; }
     .medal.m1 { background: #ffd24a; } .medal.m2 { background: #c0c7d1; } .medal.m3 { background: #cd7f32; }
     .seen { margin-top: 3px; color: var(--muted); font-size: 12px; font-weight: 600; }
-    .seen.on { color: var(--green); }
+    .seen.on { display: inline-flex; align-items: center; gap: 7px; color: var(--green); }
+    .live-dot { position: relative; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+    .live-dot::after {
+      content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--green);
+      animation: live-ping 1.6s cubic-bezier(0, 0, .2, 1) infinite;
+    }
+    @keyframes live-ping { 75%, 100% { transform: scale(2.6); opacity: 0; } }
+    .seen.on .live-text {
+      background: linear-gradient(90deg, var(--green) 0%, #b9ffe6 50%, var(--green) 100%); background-size: 200% 100%;
+      -webkit-background-clip: text; background-clip: text; color: transparent; animation: live-shine 2.4s linear infinite;
+    }
+    @keyframes live-shine { to { background-position: -200% 0; } }
     .header-right { display: flex; align-items: center; gap: 12px; }
     .wallet {
       display: flex; align-items: stretch; overflow: hidden; height: 44px;
@@ -198,6 +209,10 @@
       transition: border-color .25s, background .25s, transform .2s;
     }
     .match:hover { border-color: #3a4050; transform: translateY(-1px); }
+    /* open games glow softly; games that are starting glow orange */
+    .match.st-waiting { border-color: #1f5a47; box-shadow: 0 0 0 1px rgba(0, 239, 160, .06), 0 0 22px -8px rgba(0, 239, 160, .45); animation: m-glow 3s ease-in-out infinite; }
+    .match.st-countdown, .match.st-flipping { border-color: #7a5a1c; box-shadow: 0 0 26px -8px rgba(255, 181, 46, .6); }
+    @keyframes m-glow { 50% { box-shadow: 0 0 0 1px rgba(0, 239, 160, .1), 0 0 30px -6px rgba(0, 239, 160, .6); } }
     .match.finished { border-color: #715322; background: #24221f; }
 
     .m-opp { display: flex; align-items: center; gap: 14px; min-width: 0; }
@@ -208,15 +223,34 @@
     .player.clickable:hover .player-name { color: var(--green); }
     .player-name { overflow: hidden; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; transition: color .15s; }
 
-    .items { display: flex; align-items: center; min-width: 0; padding-left: 10px; }
+    .items { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 2px 0 8px; }
     .item-thumb {
-      display: grid; place-items: center; flex: none; width: 48px; height: 48px; margin-left: -10px; overflow: hidden;
-      border: 2px solid var(--thumb-border, #191c25); border-radius: 50%; background: #20242e; font-weight: 800; font-size: 12px;
-      transition: transform .2s;
+      position: relative; display: grid; place-items: center; flex: none; width: 46px; height: 46px; cursor: pointer;
+      border-radius: 50%; background: radial-gradient(circle at 50% 40%, #2a2f3b, #171a22 70%);
+      color: #8d909a; font-weight: 800; font-size: 13px; transition: transform .2s, box-shadow .2s;
     }
-    .match.finished { --thumb-border: #24221f; }
-    .item-thumb:hover { transform: translateY(-2px); position: relative; z-index: 2; }
-    .item-thumb img { width: 100%; height: 100%; object-fit: contain; }
+    .item-thumb.more { cursor: default; background: transparent; }
+    .item-thumb.g-mega { box-shadow: 0 0 0 1.5px rgba(168, 85, 247, .55), 0 0 14px -2px rgba(168, 85, 247, .55); }
+    .item-thumb.g-neon { box-shadow: 0 0 0 1.5px rgba(34, 197, 94, .5), 0 0 14px -2px rgba(34, 197, 94, .5); }
+    .item-thumb:not(.more):hover { transform: translateY(-3px); z-index: 2; }
+    .item-thumb img { width: 84%; height: 84%; object-fit: contain; }
+    .tb { position: absolute; left: 50%; bottom: -7px; display: flex; gap: 2px; transform: translateX(-50%); }
+    .tb i {
+      display: grid; place-items: center; width: 15px; height: 15px; border-radius: 50%; border: 1.5px solid var(--panel);
+      color: #fff; font-size: 8px; font-style: normal; font-weight: 800; line-height: 1;
+    }
+    .tb .M { background: #a855f7; } .tb .N { background: #22c55e; } .tb .F { background: #3b82f6; } .tb .R { background: #ec4899; }
+
+    /* pet tooltip (hover or tap) */
+    .pet-tip {
+      position: fixed; z-index: 300; padding: 8px 12px; border: 1px solid #2f3442; border-radius: 9px;
+      background: #1d2029; box-shadow: 0 10px 28px #000a; text-align: center; pointer-events: none;
+      opacity: 0; transform: translate(-50%, calc(-100% - 4px)); transition: opacity .12s, transform .12s;
+    }
+    .pet-tip.show { opacity: 1; transform: translate(-50%, calc(-100% - 10px)); }
+    .pet-tip::after { content: ""; position: absolute; left: 50%; bottom: -6px; width: 10px; height: 10px; background: #1d2029; border-right: 1px solid #2f3442; border-bottom: 1px solid #2f3442; transform: translateX(-50%) rotate(45deg); }
+    .pet-tip b { display: block; font-size: 13px; white-space: nowrap; }
+    .pet-tip span { display: block; margin-top: 3px; color: #cfd2db; font-size: 13px; font-weight: 700; }
 
     /* centered middle column: countdown / coin / value */
     .match-middle { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; min-height: 64px; }
@@ -280,18 +314,23 @@
       position: absolute; inset: 0; display: grid; place-items: center; color: #fff;
       font-size: 64px; font-weight: 800; text-shadow: 0 4px 18px #000;
     }
-    .countdown {
-      display: grid; place-items: center; width: 54px; height: 54px; margin: 0 auto;
-      border: 3px solid var(--orange); border-radius: 50%; color: var(--orange);
-      font-size: 24px; font-weight: 800; animation: pulse 1s ease-in-out infinite;
-    }
     @keyframes pulse { 50% { transform: scale(1.12); } }
 
-    /* view modal: only the number during the countdown */
-    .big-count {
-      color: #fff; font-size: 110px; font-weight: 800; line-height: 1;
-      text-shadow: 0 6px 30px rgba(0, 0, 0, .7); animation: pulse 1s ease-in-out infinite;
-    }
+    /* countdown: a ring that empties smoothly, the number drops in each second */
+    .cd { position: relative; display: grid; place-items: center; width: 58px; height: 58px; margin: 0 auto; }
+    .cd svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+    .cd circle { fill: none; stroke-width: 3; }
+    .cd .cd-bg { stroke: #2a2e39; }
+    .cd .cd-fg { stroke: var(--orange); stroke-linecap: round; stroke-dasharray: 107; transition: stroke-dashoffset .1s linear; }
+    .cd-num { position: relative; color: #fff; font-size: 22px; font-weight: 800; line-height: 1; }
+    .cd-num.tick { animation: cd-tick .45s cubic-bezier(.2, .9, .3, 1.2) both; }
+    @keyframes cd-tick { from { opacity: 0; transform: translateY(-8px) scale(1.25); } }
+
+    .big-count.cd { width: 170px; height: 170px; }
+    .big-count .cd-fg { stroke-width: 2.4; }
+    .big-count.cd { filter: drop-shadow(0 0 10px rgba(255, 181, 46, .35)); }
+    .big-count .cd-bg { stroke-width: 2.4; }
+    .big-count .cd-num { font-size: 84px; text-shadow: 0 6px 24px rgba(0, 0, 0, .6); }
 
     /* avatar rings (winner ring draws itself) */
     .ring-wrap { position: relative; display: inline-block; padding: 0; border-radius: 50%; }
@@ -478,6 +517,18 @@
 
     .vw-center { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 220px; }
     .vs-text { font-size: 18px; font-weight: 800; color: var(--muted); letter-spacing: 3px; }
+    .vs-big {
+      font-size: 76px; font-weight: 800; font-style: italic; line-height: 1; letter-spacing: -4px; color: #fff;
+      text-shadow: 3px 4px 0 #0b0d12, 0 10px 30px rgba(0, 0, 0, .6); transform: skewX(-6deg); animation: vs-in .5s cubic-bezier(.2, .9, .3, 1.3) both;
+    }
+    @keyframes vs-in { from { opacity: 0; transform: skewX(-6deg) scale(1.6); } }
+    .vw-pct { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+    .vw-pct > div { display: flex; justify-content: space-between; align-items: center; padding: 13px 16px; border-radius: 10px; background: #1d2029; font-weight: 800; }
+    .vw-pct span { color: #cfd2db; }
+    .vw-wait-list { display: grid; place-items: center; min-height: 80px; color: var(--muted); font-weight: 600; }
+    .vw-created { margin: 4px 0 2px; color: var(--muted); font-size: 12px; text-align: center; }
+    .view-logo.big { font-size: 26px; }
+    .view-logo.big svg { width: 38px; height: 38px; }
     .vw-range { padding: 7px 12px; border-radius: 6px; background: #1b1e27; color: #bfc1c9; font-size: 12px; font-weight: 700; text-align: center; }
     .winner-text { font-size: 18px; font-weight: 800; color: var(--green); text-align: center; animation: enter .4s both; }
     .winner-text small { display: block; margin-top: 3px; color: #a6aab5; font-size: 12px; font-weight: 700; }
@@ -1158,7 +1209,11 @@
 
       const text = await response.text();
       let data = {};
-      try { data = text ? JSON.parse(text) : {}; } catch { data = { message: text }; }
+      try { data = text ? JSON.parse(text) : {}; }
+      catch {
+        /* an HTML error page (e.g. Cloudflare 502) is never shown as raw text */
+        data = { message: /<html|<!doctype/i.test(text) ? `Server error (HTTP ${response.status}), please try again` : text.slice(0, 200) };
+      }
 
       if (!response.ok) {
         const error = new Error(data.error || data.message || `HTTP ${response.status}`);
@@ -1229,15 +1284,63 @@
       return [value * (1 - t), value * (1 + t)];
     }
 
+    const isMega = i => i.age === "mega" || i.mega;
+    const isNeon = i => !isMega(i) && (i.age === "neon" || i.neon);
+
+    /* "Mega Polar Bear", "Neon Shadow Dragon (Fly Ride)" */
+    function itemLabel(i) {
+      const pre = isMega(i) ? "Mega " : isNeon(i) ? "Neon " : "";
+      const pot = [i.fly ? "Fly" : "", i.ride ? "Ride" : ""].filter(Boolean).join(" ");
+      return pre + (i.name || "") + (pot ? ` (${pot})` : "");
+    }
+
+    function thumbBadges(i) {
+      let r = "";
+      if (isMega(i)) r += '<i class="M">M</i>';
+      else if (isNeon(i)) r += '<i class="N">N</i>';
+      if (i.fly) r += '<i class="F">F</i>';
+      if (i.ride) r += '<i class="R">R</i>';
+      return r ? `<span class="tb">${r}</span>` : "";
+    }
+
     function thumbs(items, max = 6) {
       const arr = byValue(items);
       let html = arr.slice(0, max).map(i => `
-        <div class="item-thumb ${glow(i)}" title="${esc(i.name)} • ${fmt(i.value)}">
+        <div class="item-thumb ${isMega(i) ? "g-mega" : isNeon(i) ? "g-neon" : ""}" data-tip="${esc(itemLabel(i))}" data-tip-value="${esc(fmt(i.value))}">
           <img src="${esc(itemImage(i))}" alt="">
+          ${thumbBadges(i)}
         </div>`).join("");
-      if (arr.length > max) html += `<div class="item-thumb"><b>+${arr.length - max}</b></div>`;
+      if (arr.length > max) html += `<div class="item-thumb more">+${arr.length - max}</div>`;
       return html;
     }
+
+    /* ---------- Pet tooltip (hover on desktop, tap on phones) ---------- */
+    const petTip = document.createElement("div");
+    petTip.className = "pet-tip";
+    document.body.appendChild(petTip);
+    let tipFor = null;
+
+    function showPetTip(el) {
+      tipFor = el;
+      petTip.innerHTML = `<b>${esc(el.dataset.tip)}</b><span>${GEM}${esc(el.dataset.tipValue)}</span>`;
+      const r = el.getBoundingClientRect();
+      petTip.style.left = Math.max(80, Math.min(window.innerWidth - 80, r.left + r.width / 2)) + "px";
+      petTip.style.top = r.top + "px";
+      petTip.classList.add("show");
+    }
+    function hidePetTip() { tipFor = null; petTip.classList.remove("show"); }
+
+    document.addEventListener("mouseover", e => {
+      const el = e.target.closest && e.target.closest("[data-tip]");
+      if (el) { if (el !== tipFor) showPetTip(el); }
+      else if (tipFor) hidePetTip();
+    });
+    document.addEventListener("click", e => {
+      const el = e.target.closest && e.target.closest("[data-tip]");
+      if (el && el !== tipFor) showPetTip(el);
+      else if (!el && tipFor) hidePetTip();
+    }, true);
+    window.addEventListener("scroll", hidePetTip, { passive: true });
 
     function requireLogin() {
       if (ME) return true;
@@ -1457,7 +1560,12 @@
         </div>`;
     }
 
-    const countdownHTML = end => `<div class="countdown ticker-countdown" data-end="${Number(end || 0)}">3</div>`;
+    const CD_LEN = 107; /* circumference of the countdown ring (r = 17) */
+    const countdownHTML = (end, big = false) => `
+      <div class="cd ${big ? "big-count" : ""} ticker-countdown" data-end="${Number(end || 0)}">
+        <svg viewBox="0 0 40 40"><circle class="cd-bg" cx="20" cy="20" r="17"/><circle class="cd-fg" cx="20" cy="20" r="17"/></svg>
+        <span class="cd-num"></span>
+      </div>`;
 
     /* ---------- Lobby ---------- */
     const findMatch = id => asArray(STATE.matches).find(m => m.id === id);
@@ -1527,7 +1635,7 @@
         }
 
         return `
-          <div class="match ${finished ? "finished" : ""} ${isNew ? "enter" : ""}">
+          <div class="match st-${esc(match.state)} ${finished ? "finished" : ""} ${isNew ? "enter" : ""}">
             <div class="m-left">
               <div class="player clickable" data-action="user" data-id="${esc(match.host?.id)}">
                 ${playerAvatar(match.host, match.hostSide, "", finished && hostWon ? "ring-orange" : "")}
@@ -1595,7 +1703,7 @@
 
       if (phase === "count") {
         const end = replay ? REPLAY.end : match.countdownEnd;
-        center = `<div class="big-count ticker-countdown" data-end="${Number(end || 0)}">3</div>`;
+        center = countdownHTML(end, true);
       } else if (phase === "flip") {
         center = (replay || match.winnerSide) ? coinHTML("land", match.winnerSide, "big") : coinHTML("spin", "dog", "big");
       } else if (settling) {
@@ -1605,9 +1713,7 @@
         center = `${coinHTML("final", match.winnerSide, "big")}
           <div class="winner-text">${esc(getUsername(winner))} wins!<small>${GEM}${fmt(pot)} won</small></div>`;
       } else {
-        center = `<div style="opacity:.55">${coinHTML("idle", hostSide, "big")}</div>
-          <div class="vs-text">VS</div>
-          <div class="vw-range">Join with ${GEM}${fmt(low)} – ${fmt(high)}</div>`;
+        center = `<div class="vs-big">Vs</div>`;
       }
 
       const ringSvg = state => `<svg class="ring-svg" viewBox="0 0 100 100">${state ? `<circle class="r-win ${state === "anim" ? "anim" : ""}" cx="50" cy="50" r="46"/>` : ""}</svg>`;
@@ -1617,7 +1723,7 @@
           return `<div class="vw-player">
             <div class="vp-wait">?</div>
             <div class="vw-name muted">Waiting…</div>
-            <div class="vw-bet muted">—</div>
+            <div class="vw-range">Join with ${GEM}${fmt(low)} – ${fmt(high)}</div>
           </div>`;
         }
 
@@ -1655,7 +1761,7 @@
       return `
         <div class="vw-top">
           <span class="status ${status[0]}">${status[1]}</span>
-          <div class="view-logo">${LOGO_MARK}<div>PET<span>DUEL</span></div></div>
+          <div class="view-logo big">${LOGO_MARK}<div>PET<span>DUEL</span></div></div>
           <button class="x" data-action="${replay ? "replay-back" : "close"}">×</button>
         </div>
 
@@ -1667,6 +1773,11 @@
 
         <div class="view-hash"><b>#</b> ${esc(String(match.hash || "").slice(0, 22))}…</div>
 
+        <div class="vw-pct">
+          <div><span>${pot ? (hv / pot * 100).toFixed(2) : "100.00"} %</span><b>${GEM}${fmt(hv)}</b></div>
+          <div><span>${pot ? (ov / pot * 100).toFixed(2) : "0.00"} %</span><b>${GEM}${fmt(ov)}</b></div>
+        </div>
+
         <div class="vw-lists">
           <div class="vw-col">
             <h4>${esc(getUsername(match.host))}'s items <span>${hostItems.length} · ${GEM}${short(hv)}</span></h4>
@@ -1674,9 +1785,11 @@
           </div>
           <div class="vw-col">
             <h4>${joiner ? esc(getUsername(joiner)) + "'s items" : "Opponent"} <span>${joiner ? oppItems.length + " · " + GEM + short(ov) : "—"}</span></h4>
-            <div class="vlist">${itemRows(oppItems)}</div>
+            <div class="vlist">${joiner ? itemRows(oppItems) : '<div class="vw-wait-list">Waiting for the opponent to join…</div>'}</div>
           </div>
         </div>
+
+        ${match.createdAt ? `<div class="vw-created">Created ${ago(Number(match.createdAt))}</div>` : ""}
 
         ${footer ? `<div class="modal-footer">${footer}</div>` : ""}
 
@@ -2073,7 +2186,7 @@
           <div>
             <div class="uc-name">${esc(user.username)}</div>
             <div class="uc-rank" style="color:${rankColor(rank)}">${esc(rank)} ${rankBadge(rank)}</div>
-            <div class="seen ${user.online ? "on" : ""}">${user.online ? "Online now" : "Last seen " + ago(user.lastSeen)}</div>
+            <div class="seen ${user.online ? "on" : ""}">${user.online ? '<span class="live-dot"></span><span class="live-text">Online now</span>' : "Last seen " + ago(user.lastSeen)}</div>
           </div>
           <button class="x" data-action="close2">×</button>
         </div>
@@ -2248,15 +2361,28 @@
       const time = Date.now() - clockSkew;
 
       document.querySelectorAll(".ticker-countdown").forEach(el => {
-        const s = Math.ceil((Number(el.dataset.end) - time) / 1000);
-        if (s > 0) { el.textContent = s; return; }
+        const left = Number(el.dataset.end) - time;
+        const s = Math.ceil(left / 1000);
+
+        if (s > 0) {
+          const num = el.querySelector(".cd-num") || el;
+          if (el.dataset.last !== String(s)) {
+            el.dataset.last = String(s);
+            num.textContent = s;
+            num.classList.remove("tick");
+            void num.offsetWidth;
+            num.classList.add("tick");
+          }
+          const fg = el.querySelector(".cd-fg");
+          if (fg) fg.style.strokeDashoffset = String(CD_LEN * (1 - Math.max(0, Math.min(1, left / 3000))));
+          return;
+        }
 
         /* the countdown is over: the coin starts spinning right away, the server result lands a moment later */
-        if (el.classList.contains("big-count") && el.parentNode) {
-          const wrap = document.createElement("div");
-          wrap.innerHTML = coinHTML("spin", "dog", "big");
-          el.replaceWith(...wrap.childNodes);
-        } else el.textContent = "";
+        if (!el.parentNode) return;
+        const wrap = document.createElement("div");
+        wrap.innerHTML = el.classList.contains("big-count") ? coinHTML("spin", "dog", "big") : coinHTML("spin");
+        el.replaceWith(...wrap.childNodes);
       });
 
       document.querySelectorAll(".ticker-giveaway").forEach(el => {
@@ -2793,6 +2919,7 @@
               <div style="flex:1">
                 <h2>${esc(ME.username)}</h2>
                 <span class="pill">${esc(ME.rank || "Rookie")}</span>
+                <div class="seen on" style="margin-top:6px"><span class="live-dot"></span><span class="live-text">Online now</span></div>
               </div>
 
               <button class="btn gray" data-action="home">← Back</button>

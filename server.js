@@ -1361,6 +1361,14 @@ app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
 });
 
 const UPDATE_LOG = [
+  { version: '2.1', title: 'New match view, countdown and pet tooltips', changes: [
+    'Match window: big VS in the middle while waiting, site logo on top, win chance bars and "Created ... ago"',
+    'New 3-2-1 countdown with a ring that empties smoothly, in the lobby and in the match window',
+    'Open games glow; pets show round M / N / F / R badges and a soft glow for Mega and Neon',
+    'Hover or tap a pet to see its full name and value',
+    'Animated "Online now" on profiles',
+    'Elvebredd lookup stops after 20 seconds and shows a clear error instead of an error page'
+  ] },
   { version: '2.0', title: 'Deposit bots, elvebredd values and a new look', changes: [
     'Deposit lists every bot with its Online / Offline status; offline bots cannot be joined',
     'Admin panel: add / remove deposit bots, change join links and switch each bot online or offline',
@@ -2240,16 +2248,21 @@ function extractJson(text) {
   return found;
 }
 
-async function fetchText(url) {
+async function fetchText(url, ms = 7000) {
   const response = await fetch(url, {
-    signal: AbortSignal.timeout(15000),
+    signal: AbortSignal.timeout(ms),
     headers: {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
       Accept: 'application/json, text/html;q=0.9, */*;q=0.8'
     }
   });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response.text();
+  if (!response.ok) {
+    const blocked = [401, 403, 429, 503].includes(response.status);
+    throw new Error(blocked ? `blocked by the site (HTTP ${response.status})` : `HTTP ${response.status}`);
+  }
+  const type = response.headers.get('content-type') || '';
+  if (!/json|html|text|javascript/i.test(type)) throw new Error('not a web page');
+  return (await response.text()).slice(0, 8 * 1024 * 1024);
 }
 
 async function loadElve(force) {
@@ -2261,13 +2274,15 @@ async function loadElve(force) {
     const queue = custom ? [custom, ...ELVE_DEFAULT_URLS] : [...ELVE_DEFAULT_URLS];
     const tried = new Set();
     const errors = [];
+    /* Cloudflare in front of the site cuts requests after ~100 s, so the whole lookup must stay short */
+    const deadline = now() + 20000;
 
-    while (queue.length && tried.size < 14) {
+    while (queue.length && tried.size < 8 && deadline - now() > 1500) {
       const url = queue.shift();
       if (tried.has(url)) continue;
       tried.add(url);
       try {
-        const text = await fetchText(url);
+        const text = await fetchText(url, Math.min(7000, deadline - now()));
         const pets = [];
         for (const data of extractJson(text)) pets.push(...collectPets(data, url));
 
@@ -2285,10 +2300,11 @@ async function loadElve(force) {
         }
         errors.push(`${url}: no pet data`);
       } catch (error) {
-        errors.push(`${url}: ${error.message}`);
+        errors.push(`${url.replace(ELVE_ORIGIN, '') || '/'}: ${error.name === 'TimeoutError' ? 'timed out' : error.message}`);
       }
     }
-    throw new Error('Could not read elvebredd values (' + errors.slice(0, 4).join(' | ') + ')');
+    throw new Error('Could not read elvebredd values. ' + errors.slice(0, 4).join(' | ') +
+      '. You can still add the item by hand, or paste the exact data URL under "Data source".');
   })();
 
   try { return await elveLoading; } finally { elveLoading = null; }
