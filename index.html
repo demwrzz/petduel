@@ -511,6 +511,77 @@
       box-shadow: 0 20px 70px #000a; animation: pop .25s cubic-bezier(.2, .8, .2, 1) both;
     }
     .modal.wide { width: min(1024px, 100%); }
+
+    /* ---------- LOGIN ---------- */
+    .modal.login {
+      position: relative; width: min(470px, 100%); padding: 74px 38px 64px; overflow: hidden auto;
+      border: 1px solid #262a35; border-radius: 18px; background: #151820;
+      animation: login-in .45s cubic-bezier(.18, .9, .25, 1.12) both;
+    }
+    @keyframes login-in { from { opacity: 0; transform: translateY(26px) scale(.96); } }
+    .lg-deco { position: absolute; pointer-events: none; }
+    .lg-deco.c1 { top: -52px; right: -48px; width: 132px; height: 132px; opacity: .85; animation: lg-float 6s ease-in-out infinite; }
+    .lg-deco.c2 { bottom: -70px; left: -62px; width: 140px; height: 140px; opacity: .35; animation: lg-float 7s ease-in-out infinite reverse; }
+    .lg-deco.p1 { top: 64%; right: 22px; width: 46px; height: 46px; color: #ffffff; opacity: .05; transform: rotate(18deg); }
+    .lg-deco.p2 { top: 20px; left: 26px; width: 34px; height: 34px; color: #ffffff; opacity: .05; transform: rotate(-20deg); }
+    @keyframes lg-float { 50% { transform: translateY(10px) rotate(6deg); } }
+    .lg-x { position: absolute; top: 14px; right: 14px; z-index: 3; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; color: #fff; background: rgba(20, 23, 31, .7); font-size: 26px; line-height: 1; transition: background .15s, transform .15s; }
+    .lg-x:hover { background: #262a35; transform: rotate(90deg); }
+    .lg-body { position: relative; z-index: 2; }
+    .lg-body h2 { margin: 0 0 10px; color: #fff; font-size: 30px; font-weight: 800; letter-spacing: -.5px; line-height: 1.15; }
+    .lg-body h2 span { color: var(--green); }
+    .lg-sub { margin: 0 0 26px; color: #7f8492; font-size: 15px; line-height: 1.6; }
+    .lg-label { display: block; margin-bottom: 9px; color: #fff; font-size: 15px; font-weight: 800; }
+    .lg-input {
+      width: 100%; height: 54px; padding: 0 18px; border: 1px solid #262a35; border-radius: 12px; color: #fff;
+      background: #10131a; font-size: 16px; transition: border-color .15s, box-shadow .15s;
+    }
+    .lg-input::placeholder { color: #5f6472; }
+    .lg-input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(0, 239, 160, .14); }
+    .lg-check { display: flex; align-items: flex-start; gap: 12px; margin: 18px 0 20px; color: #fff; font-size: 15px; font-weight: 700; line-height: 1.35; cursor: pointer; user-select: none; }
+    .lg-check input { position: absolute; opacity: 0; pointer-events: none; }
+    .lg-box { display: grid; place-items: center; flex: none; width: 24px; height: 24px; margin-top: 1px; border: 2px solid var(--green); border-radius: 7px; transition: background .15s, transform .15s; }
+    .lg-box svg { width: 15px; height: 15px; color: #04120b; opacity: 0; transform: scale(.4); transition: opacity .15s, transform .2s cubic-bezier(.2, .9, .3, 1.5); }
+    .lg-check input:checked + .lg-box { background: var(--green); }
+    .lg-check input:checked + .lg-box svg { opacity: 1; transform: none; }
+    .lg-check input:focus-visible + .lg-box { box-shadow: 0 0 0 3px rgba(0, 239, 160, .3); }
+    .lg-check a { color: var(--green); text-decoration: none; cursor: pointer; }
+    .lg-check a:hover { text-decoration: underline; }
+    .lg-btn {
+      width: 100%; height: 54px; border-radius: 12px; color: #04120b; background: #12a46d; font-size: 17px; font-weight: 800;
+      transition: background .2s, transform .12s, box-shadow .2s;
+    }
+    .lg-btn.ready { background: var(--green); box-shadow: 0 10px 30px -10px rgba(0, 239, 160, .7); }
+    .lg-btn:hover:not(:disabled) { filter: brightness(1.06); }
+    .lg-btn:active:not(:disabled) { transform: scale(.98); }
+    .lg-cap { margin-top: 16px; }
+    .lg-cap-ts { display: flex; justify-content: center; min-height: 66px; }
+    .lg-cap-img { display: flex; gap: 8px; align-items: stretch; padding: 10px; border: 1px solid #262a35; border-radius: 12px; background: #10131a; }
+    .lg-cap-img img { flex: 1; min-width: 0; height: 56px; border-radius: 8px; background: #1b1e27; object-fit: contain; }
+    .lg-cap-img button { flex: none; width: 44px; border-radius: 8px; color: #cfd2db; background: #222631; font-size: 18px; }
+    .lg-cap-img + .lg-input { margin-top: 8px; height: 48px; text-transform: uppercase; letter-spacing: 3px; }
+    .lg-cap-img + .lg-input::placeholder { text-transform: none; letter-spacing: 0; }
+    .lg-steps { display: flex; gap: 6px; margin-bottom: 18px; }
+    .lg-steps i { height: 4px; flex: 1; border-radius: 4px; background: #262a35; }
+    .lg-steps i.on { background: var(--green); }
+    .lg-code {
+      display: flex; align-items: center; gap: 10px; margin: 6px 0 14px; padding: 14px 14px 14px 18px; border: 1px dashed var(--green); border-radius: 12px;
+      background: #12241e; color: var(--green); font-size: 17px; font-weight: 800; line-height: 1.4; word-break: break-word;
+    }
+    .lg-code span { flex: 1; user-select: all; }
+    .lg-code button { flex: none; padding: 9px 12px; border-radius: 8px; color: #04120b; background: var(--green); font-size: 13px; font-weight: 800; }
+    .lg-list { margin: 0 0 20px; padding-left: 20px; color: #a8adb9; line-height: 1.8; }
+    .lg-list b { color: #fff; }
+    .lg-back { display: block; margin: 14px auto 0; color: #7f8492; background: none; font-weight: 700; }
+    .lg-back:hover { color: #fff; }
+    @media (max-width: 650px) {
+      #overlay:has(.modal.login) { padding: 0; }
+      .modal.login { width: 100%; height: 100%; max-height: none; border: 0; border-radius: 0; padding: 96px 24px 90px; animation: login-up .4s cubic-bezier(.2, .9, .25, 1) both; }
+      @keyframes login-up { from { transform: translateY(40px); opacity: 0; } }
+      .lg-body h2 { font-size: 28px; }
+      .lg-deco.c1 { width: 140px; height: 140px; top: -44px; right: -36px; }
+      .lg-deco.c2 { width: 170px; height: 170px; bottom: -70px; left: -60px; opacity: .4; }
+    }
     .modal.view { width: min(900px, 100%); }
     .modal.small { width: min(640px, 100%); }
     .modal.card-user { width: min(440px, 100%); padding: 22px; }
@@ -2622,47 +2693,147 @@
     }, 100);
 
     /* ---------- Login ---------- */
+    /* ---------- Login ---------- */
+    const LOGIN_DECO = `
+      <svg class="lg-deco c1" viewBox="0 0 100 100"><use href="#chip-dog"/></svg>
+      <svg class="lg-deco c2" viewBox="0 0 100 100"><use href="#chip-cat"/></svg>
+      <svg class="lg-deco p1" viewBox="-14 -16 28 30" fill="currentColor"><ellipse cx="0" cy="8" rx="9" ry="7.5"/><ellipse cx="-10" cy="-3" rx="3.6" ry="4.8"/><ellipse cx="-3.6" cy="-9" rx="3.6" ry="5"/><ellipse cx="3.6" cy="-9" rx="3.6" ry="5"/><ellipse cx="10" cy="-3" rx="3.6" ry="4.8"/></svg>
+      <svg class="lg-deco p2" viewBox="-14 -16 28 30" fill="currentColor"><ellipse cx="0" cy="8" rx="9" ry="7.5"/><ellipse cx="-10" cy="-3" rx="3.6" ry="4.8"/><ellipse cx="-3.6" cy="-9" rx="3.6" ry="5"/><ellipse cx="3.6" cy="-9" rx="3.6" ry="5"/><ellipse cx="10" cy="-3" rx="3.6" ry="4.8"/></svg>
+      <button class="lg-x" data-action="close" aria-label="Close">×</button>`;
+
+    let loginCaptcha = null;      /* fields sent with /api/auth/start */
+    let loginCaptchaId = "";
+
     function showLogin() {
       gridContext = null;
       viewMatchId = null;
+      loginData = null;
+      loginCaptcha = null;
 
       openModal(`
-        ${modalHeader("Login with Roblox")}
+        ${LOGIN_DECO}
+        <div class="lg-body">
+          <h2>Welcome to Pet<span>Duel</span></h2>
+          <p class="lg-sub">By logging in, you confirm that you are old enough to bet items where you live, that any pets you wager are not stolen, and that you agree to our Terms of Service.</p>
 
-        <p class="hint">
-          Enter your Roblox username. Put the code in your Roblox profile's
-          About section, save it, then press Verify.
-        </p>
+          <label class="lg-label" for="loginUsername">Username</label>
+          <input class="lg-input" id="loginUsername" type="text" maxlength="20" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="Enter your Roblox username...">
 
-        <div class="row">
-          <input class="in" id="loginUsername" type="text" maxlength="20" placeholder="Roblox username">
-          <button class="btn" data-action="login-start">Get code</button>
+          <label class="lg-check">
+            <input type="checkbox" id="loginTos">
+            <span class="lg-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg></span>
+            <span>By checking this box you agree to <a data-action="login-tos">our terms and service</a></span>
+          </label>
+
+          <button class="lg-btn" id="loginBtn" data-action="login-start">Login</button>
+
+          <div class="lg-cap" id="loginCap"></div>
+        </div>`, "login");
+
+      const update = () => $("#loginBtn")?.classList.toggle("ready", Boolean($("#loginUsername")?.value.trim() && $("#loginTos")?.checked && loginCaptchaReady()));
+      $("#loginUsername").addEventListener("input", update);
+      $("#loginUsername").addEventListener("keydown", e => { if (e.key === "Enter") loginStart(); });
+      $("#loginTos").addEventListener("change", update);
+      loginUpdate = update;
+
+      mountLoginCaptcha();
+      if (!matchMedia("(hover: none)").matches) setTimeout(() => $("#loginUsername")?.focus({ preventScroll: true }), 80);
+    }
+
+    let loginUpdate = () => {};
+    const loginCaptchaReady = () => {
+      const mode = ((STATE.config && STATE.config.captcha) || {}).mode;
+      return mode === "turnstile" ? Boolean(loginCaptcha) : Boolean($("#loginCapAns")?.value.trim());
+    };
+
+    /* the captcha sits inside the login card (Cloudflare Turnstile, or the built-in image captcha) */
+    async function mountLoginCaptcha() {
+      const box = $("#loginCap");
+      if (!box) return;
+      const config = (STATE.config && STATE.config.captcha) || { mode: "builtin" };
+
+      if (config.mode === "turnstile") {
+        box.innerHTML = '<div class="lg-cap-ts" id="loginTs"></div>';
+        try {
+          await loadTurnstile();
+          if (!$("#loginTs")) return;
+          window.turnstile.render("#loginTs", {
+            sitekey: config.siteKey, theme: "dark",
+            callback: t => { loginCaptcha = { captchaToken: t }; loginUpdate(); },
+            "expired-callback": () => { loginCaptcha = null; loginUpdate(); }
+          });
+        } catch (error) { toast(error.message, "err"); }
+        return;
+      }
+
+      box.innerHTML = `
+        <div class="lg-cap-img">
+          <img id="loginCapImg" alt="captcha">
+          <button data-action="login-cap-new" title="New image" aria-label="New image">↻</button>
         </div>
+        <input class="lg-input" id="loginCapAns" maxlength="8" autocomplete="off" placeholder="Type the characters above">`;
+      $("#loginCapAns").addEventListener("input", () => loginUpdate());
+      $("#loginCapAns").addEventListener("keydown", e => { if (e.key === "Enter") loginStart(); });
+      await newLoginCaptcha();
+    }
 
-        <div id="loginStep"></div>`);
-
-      setTimeout(() => $("#loginUsername")?.focus(), 60);
+    async function newLoginCaptcha() {
+      try {
+        const c = await api("/api/captcha");
+        loginCaptchaId = c.id;
+        const img = $("#loginCapImg");
+        if (img) img.src = "data:image/svg+xml;utf8," + encodeURIComponent(c.image);
+        const ans = $("#loginCapAns");
+        if (ans) ans.value = "";
+        loginUpdate();
+      } catch (error) { fail(error); }
     }
 
     async function loginStart() {
-      const username = $("#loginUsername").value.trim();
-      if (!username) return toast("Enter your username", "err");
+      const username = $("#loginUsername")?.value.trim();
+      if (!username) { $("#loginUsername")?.focus(); return toast("Enter your username", "err"); }
+      if (!$("#loginTos")?.checked) return toast("Please accept the terms and service", "err");
+
+      const mode = ((STATE.config && STATE.config.captcha) || {}).mode;
+      const captcha = mode === "turnstile"
+        ? loginCaptcha
+        : ($("#loginCapAns")?.value.trim() ? { captchaId: loginCaptchaId, captchaAnswer: $("#loginCapAns").value.trim() } : null);
+      if (!captcha) return toast("Please complete the captcha", "err");
+
+      const btn = $("#loginBtn");
+      if (btn) { btn.disabled = true; btn.textContent = "Please wait…"; }
 
       try {
-        const captcha = await captchaBox("Verify to continue");
-        if (!captcha) return;
-
         loginData = await api("/api/auth/start", { body: { username, ...captcha } });
+        showLoginCode(username);
+      } catch (error) {
+        fail(error);
+        if (btn) { btn.disabled = false; btn.textContent = "Login"; }
+        /* a captcha can only be used once */
+        if (mode === "turnstile") { loginCaptcha = null; try { window.turnstile.reset("#loginTs"); } catch { /* ignore */ } }
+        else newLoginCaptcha();
+      }
+    }
 
-        const t = $("#loginStep");
-        if (!t) return;
+    function showLoginCode(username) {
+      $("#modal").innerHTML = `
+        ${LOGIN_DECO}
+        <div class="lg-body">
+          <div class="lg-steps"><i class="on"></i><i class="on"></i></div>
+          <h2>Verify it's <span>you</span></h2>
+          <p class="lg-sub">Logging in as <b style="color:#fff">${esc(username)}</b>. Paste this code in the About section of your Roblox profile:</p>
 
-        t.innerHTML = `
-          <p class="hint">Put this code in your Roblox profile About section:</p>
-          <div class="code">${esc(loginData.code)}</div>
-          <p class="hint">Save the profile, then press Verify.</p>
-          <button class="btn" style="width:100%" data-action="login-verify">Verify</button>`;
-      } catch (error) { fail(error); }
+          <div class="lg-code"><span>${esc(loginData.code)}</span><button data-action="login-copy">Copy</button></div>
+
+          <ol class="lg-list">
+            <li>Open <b>Roblox</b> → your profile → <b>About</b></li>
+            <li>Paste the code and <b>save</b></li>
+            <li>Come back here and press <b>Verify</b></li>
+          </ol>
+
+          <button class="lg-btn ready" data-action="login-verify">Verify</button>
+          <button class="lg-back" data-action="login-back">← Use another username</button>
+        </div>`;
     }
 
     async function loginVerify() {
@@ -3252,6 +3423,11 @@
     /* public update log: only things players see and can be shared openly */
     /* newest first; "note" is the short text shown in the banner in the middle of the home page */
     const PUBLIC_UPDATES = [
+      { v: "2.6", title: "New login", note: "Logging in is now one simple screen: username, accept the terms, captcha and you're in. Works great on phones too!", items: [
+        "Brand new login screen with the captcha built in",
+        "Full screen login on phones",
+        "Copy button for your verification code"
+      ] },
       { v: "2.5", title: "Smoother wallet", note: "Your balance now counts up when you win and only pending withdrawals are shown in your wallet. Good luck!", items: [
         "Your wallet balance counts up (or down) smoothly when it changes",
         "The wallet only lists withdrawals that are still pending",
@@ -4262,6 +4438,13 @@
       close2: closeModal2,
       login: showLogin,
       "login-start": loginStart,
+      "login-cap-new"() { newLoginCaptcha(); },
+      "login-tos"(el, e) { if (e) e.preventDefault(); openModal2(`${modalHeader("Terms of Service", "close2")}<div class="info-scroll">${infoHTML("tos")}</div>`); },
+      "login-copy"() {
+        if (!loginData) return;
+        navigator.clipboard?.writeText(loginData.code).then(() => toast("Code copied", "ok"), () => toast("Select the code and copy it", "err"));
+      },
+      "login-back"() { loginData = null; showLogin(); },
       "login-verify": loginVerify,
       logout,
 

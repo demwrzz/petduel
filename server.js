@@ -1414,6 +1414,10 @@ app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
 });
 
 const UPDATE_LOG = [
+  { version: '2.6', title: 'New login screen', changes: [
+    'Login is one card: username, terms checkbox, Login button and the captcha inside the card (Turnstile or built-in image)',
+    'Full screen on phones; step 2 shows the code with a Copy button and short instructions; "Use another username" goes back'
+  ] },
   { version: '2.5', title: 'Wallet counter and update banner', changes: [
     'Wallet balance counts up / down (starts slow, speeds up, 1-1.8 s) instead of the falling gems',
     'Wallet only shows pending withdrawals',
