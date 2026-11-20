@@ -786,27 +786,121 @@ app.post('/api/auth/verify', authLimit, async (req, res) => {
   pending.delete(id);
   const avatar = await robloxAvatar(id);
 
+  const result = loginUser(id, p.username, p.displayName, avatar);
+  if (result.error) return bad(res, result.error, 403);
+  res.json(result);
+});
+
+/* creates the account on first login, updates name / avatar, and returns a new session */
+function loginUser(id, username, displayName, avatar) {
   let user = S.users[id];
   if (!user) {
     user = ensureUser({
-      id, username: p.username, displayName: p.displayName,
+      id, username, displayName,
       avatar: null, createdAt: now(), banned: false
     });
     S.users[id] = user;
     notifyAdmins('register', `New player registered: ${user.username}`);
   }
 
-  if (user.banned) return bad(res, 'Account banned', 403);
+  if (user.banned) return { error: 'Account banned' };
 
-  user.username = p.username;
-  user.displayName = p.displayName;
+  user.username = username;
+  user.displayName = displayName || username;
   if (avatar) user.avatar = avatar;
 
   const token = rid(32);
   S.sessions[sha(token)] = { userId: id, exp: now() + 30 * 24 * 60 * 60 * 1000 };
   markDirty();
+  return { token, user: meView(user) };
+}
 
-  res.json({ token, user: meView(user) });
+/* ---------- Sign in with Roblox (official OAuth 2.0, authorization code + PKCE) ----------
+   Create the app at create.roblox.com > OAuth 2.0 Apps, scopes "openid" + "profile",
+   redirect URL: SITE_URL + /api/auth/roblox/callback. Then set ROBLOX_CLIENT_ID and ROBLOX_CLIENT_SECRET. */
+const ROBLOX_CLIENT_ID = E.ROBLOX_CLIENT_ID || '';
+const ROBLOX_CLIENT_SECRET = E.ROBLOX_CLIENT_SECRET || '';
+const oauthOn = () => Boolean(ROBLOX_CLIENT_ID && ROBLOX_CLIENT_SECRET);
+const oauthRedirect = () => SITE_URL.replace(/\/+$/, '') + '/api/auth/roblox/callback';
+const oauthStates = new Map();   /* state -> { verifier, exp } */
+const oauthTickets = new Map();  /* one-time ticket -> { token, user, exp }: the session token never goes in a URL */
+const b64url = buf => buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+app.get('/api/auth/roblox', authLimit, (req, res) => {
+  if (!oauthOn()) return res.redirect('/?oauth_error=' + encodeURIComponent('Sign in with Roblox is not set up yet'));
+  if (oauthStates.size > 5000) oauthStates.clear();
+
+  const state = rid(16);
+  const verifier = b64url(crypto.randomBytes(32));
+  const challenge = b64url(crypto.createHash('sha256').update(verifier).digest());
+  oauthStates.set(state, { verifier, exp: now() + 10 * 60 * 1000 });
+
+  const url = new URL('https://apis.roblox.com/oauth/v1/authorize');
+  url.searchParams.set('client_id', ROBLOX_CLIENT_ID);
+  url.searchParams.set('redirect_uri', oauthRedirect());
+  url.searchParams.set('scope', 'openid profile');
+  url.searchParams.set('response_type', 'code');
+  url.searchParams.set('state', state);
+  url.searchParams.set('code_challenge', challenge);
+  url.searchParams.set('code_challenge_method', 'S256');
+  res.redirect(url.toString());
+});
+
+app.get('/api/auth/roblox/callback', authLimit, async (req, res) => {
+  const fail = msg => res.redirect('/?oauth_error=' + encodeURIComponent(msg));
+  if (!oauthOn()) return fail('Sign in with Roblox is not set up yet');
+  if (req.query.error) return fail(req.query.error === 'access_denied' ? 'Login cancelled' : 'Roblox login failed');
+
+  const state = String(req.query.state || '');
+  const code = String(req.query.code || '');
+  const st = oauthStates.get(state);
+  oauthStates.delete(state);
+  if (!st || st.exp <= now() || !code) return fail('Login expired, please try again');
+
+  try {
+    const tokenRes = await fetch('https://apis.roblox.com/oauth/v1/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code', code, code_verifier: st.verifier,
+        client_id: ROBLOX_CLIENT_ID, client_secret: ROBLOX_CLIENT_SECRET
+      }),
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!tokenRes.ok) throw new Error('token ' + tokenRes.status);
+    const tok = await tokenRes.json();
+
+    const infoRes = await fetch('https://apis.roblox.com/oauth/v1/userinfo', {
+      headers: { Authorization: 'Bearer ' + tok.access_token },
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!infoRes.ok) throw new Error('userinfo ' + infoRes.status);
+    const info = await infoRes.json();
+
+    const id = String(info.sub || '');
+    const username = String(info.preferred_username || info.name || '').slice(0, 40);
+    if (!/^\d{1,20}$/.test(id) || !username) throw new Error('bad userinfo');
+
+    const avatar = (await robloxAvatar(id)) || httpsUrl(info.picture);
+    const result = loginUser(id, username, String(info.nickname || info.name || username).slice(0, 40), avatar);
+    if (result.error) return fail(result.error);
+
+    const ticket = rid(16);
+    oauthTickets.set(ticket, { ...result, exp: now() + 60 * 1000 });
+    res.redirect('/?oauth=' + ticket);
+  } catch (error) {
+    console.error('Roblox OAuth error:', error.message);
+    fail('Roblox login failed, please try again');
+  }
+});
+
+/* the page swaps the one-time ticket for the session token */
+app.post('/api/auth/roblox/finish', authLimit, (req, res) => {
+  const ticket = String(req.body.ticket || '');
+  const t = oauthTickets.get(ticket);
+  oauthTickets.delete(ticket);
+  if (!t || t.exp <= now()) return bad(res, 'Login expired, please try again');
+  res.json({ token: t.token, user: t.user });
 });
 
 app.post('/api/auth/logout', auth, (req, res) => {
@@ -819,6 +913,8 @@ setInterval(() => {
   const t = now();
   for (const [k, s] of Object.entries(S.sessions)) if (s.exp <= t) delete S.sessions[k];
   for (const [k, v] of pending.entries()) if (v.exp <= t) pending.delete(k);
+  for (const [k, v] of oauthStates.entries()) if (v.exp <= t) oauthStates.delete(k);
+  for (const [k, v] of oauthTickets.entries()) if (v.exp <= t) oauthTickets.delete(k);
 }, 10 * 60 * 1000);
 
 /* ================= PUBLIC DATA ================= */
@@ -888,7 +984,8 @@ function buildState() {
     config: {
       range: RANGE, maxItems: MAX_ITEMS, ranks: RANKS,
       tax: Number(S.settings.taxPercent) || 0,
-      captcha: { mode: TURNSTILE_SECRET && TURNSTILE_SITE_KEY ? 'turnstile' : 'builtin', siteKey: TURNSTILE_SITE_KEY }
+      captcha: { mode: TURNSTILE_SECRET && TURNSTILE_SITE_KEY ? 'turnstile' : 'builtin', siteKey: TURNSTILE_SITE_KEY },
+      robloxLogin: oauthOn()
     }
   };
 }
@@ -1414,6 +1511,10 @@ app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
 });
 
 const UPDATE_LOG = [
+  { version: '2.7', title: 'Sign in with Roblox', changes: [
+    'Official Roblox OAuth login (one click, no code) next to the bio code login; shown once ROBLOX_CLIENT_ID and ROBLOX_CLIENT_SECRET are set',
+    'PKCE + state check; the session token is handed over with a one-time ticket, never in a URL'
+  ] },
   { version: '2.6', title: 'New login screen', changes: [
     'Login is one card: username, terms checkbox, Login button and the captcha inside the card (Turnstile or built-in image)',
     'Full screen on phones; step 2 shows the code with a Copy button and short instructions; "Use another username" goes back'

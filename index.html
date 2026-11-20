@@ -531,6 +531,21 @@
     .lg-body h2 { margin: 0 0 10px; color: #fff; font-size: 30px; font-weight: 800; letter-spacing: -.5px; line-height: 1.15; }
     .lg-body h2 span { color: var(--green); }
     .lg-sub { margin: 0 0 26px; color: #7f8492; font-size: 15px; line-height: 1.6; }
+    .lg-oauth {
+      display: flex; align-items: center; gap: 14px; width: 100%; padding: 16px 18px; border: 1px solid #2c3140; border-radius: 14px;
+      color: #fff; background: linear-gradient(135deg, #1d2130, #171a24); text-align: left; transition: border-color .2s, transform .15s, box-shadow .2s;
+    }
+    .lg-oauth:hover { border-color: var(--green); box-shadow: 0 10px 28px -14px rgba(0, 239, 160, .6); transform: translateY(-1px); }
+    .lg-oauth-ico { display: grid; place-items: center; flex: none; width: 46px; height: 46px; border-radius: 12px; color: #fff; background: #10131a; border: 1px solid #2c3140; }
+    .lg-oauth-ico svg { width: 22px; height: 22px; }
+    .lg-oauth-t { display: flex; flex: 1; flex-direction: column; gap: 3px; }
+    .lg-oauth-t b { font-size: 16px; }
+    .lg-oauth-t small { color: #7f8492; font-size: 13px; font-weight: 600; }
+    .lg-oauth-go { width: 20px; height: 20px; color: var(--green); }
+    .lg-or { display: flex; align-items: center; gap: 12px; margin: 20px 0 18px; color: #5f6472; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; }
+    .lg-or::before, .lg-or::after { content: ""; flex: 1; height: 1px; background: #262a35; }
+    .lg-check.shake { animation: lg-shake .4s; }
+    @keyframes lg-shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
     .lg-label { display: block; margin-bottom: 9px; color: #fff; font-size: 15px; font-weight: 800; }
     .lg-input {
       width: 100%; height: 54px; padding: 0 18px; border: 1px solid #262a35; border-radius: 12px; color: #fff;
@@ -538,7 +553,7 @@
     }
     .lg-input::placeholder { color: #5f6472; }
     .lg-input:focus { border-color: var(--green); box-shadow: 0 0 0 3px rgba(0, 239, 160, .14); }
-    .lg-check { display: flex; align-items: flex-start; gap: 12px; margin: 18px 0 20px; color: #fff; font-size: 15px; font-weight: 700; line-height: 1.35; cursor: pointer; user-select: none; }
+    .lg-check { display: flex; align-items: flex-start; gap: 12px; margin: 0 0 20px; color: #fff; font-size: 15px; font-weight: 700; line-height: 1.35; cursor: pointer; user-select: none; }
     .lg-check input { position: absolute; opacity: 0; pointer-events: none; }
     .lg-box { display: grid; place-items: center; flex: none; width: 24px; height: 24px; margin-top: 1px; border: 2px solid var(--green); border-radius: 7px; transition: background .15s, transform .15s; }
     .lg-box svg { width: 15px; height: 15px; color: #04120b; opacity: 0; transform: scale(.4); transition: opacity .15s, transform .2s cubic-bezier(.2, .9, .3, 1.5); }
@@ -2228,7 +2243,7 @@
 
     function renderBanner() {
       const a = STATE.announcement || null;
-      const sig = JSON.stringify(a);
+      const sig = JSON.stringify([a, publicUpdates()[0].v]);
       if (sig === bannerSig) return;
       bannerSig = sig;
 
@@ -2242,7 +2257,7 @@
         banner.classList.remove("update");
       } else {
         /* no admin announcement: show a short note about the latest update */
-        const u = PUBLIC_UPDATES[0];
+        const u = publicUpdates()[0];
         $("#bannerTitle").innerHTML = `<span class="upd-chip">NEW</span> Update v${esc(u.v)} · ${esc(u.title)}`;
         $("#bannerText").textContent = u.note || u.items[0];
         $("#bannerBtn").hidden = false;
@@ -2716,16 +2731,24 @@
           <h2>Welcome to Pet<span>Duel</span></h2>
           <p class="lg-sub">By logging in, you confirm that you are old enough to bet items where you live, that any pets you wager are not stolen, and that you agree to our Terms of Service.</p>
 
-          <label class="lg-label" for="loginUsername">Username</label>
-          <input class="lg-input" id="loginUsername" type="text" maxlength="20" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="Enter your Roblox username...">
-
           <label class="lg-check">
             <input type="checkbox" id="loginTos">
             <span class="lg-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg></span>
             <span>By checking this box you agree to <a data-action="login-tos">our terms and service</a></span>
           </label>
 
-          <button class="lg-btn" id="loginBtn" data-action="login-start">Login</button>
+          ${STATE.config && STATE.config.robloxLogin ? `
+            <button class="lg-oauth" data-action="login-roblox">
+              <span class="lg-oauth-ico"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5.2 2 2 18.8 18.8 22 22 5.2zm8.6 12.7-4.5-.9.9-4.5 4.5.9z"/></svg></span>
+              <span class="lg-oauth-t"><b>Sign in with Roblox</b><small>One click, no code needed</small></span>
+              <svg class="lg-oauth-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="m9 6 6 6-6 6"/></svg>
+            </button>
+            <div class="lg-or"><span>or verify with your profile bio</span></div>` : ""}
+
+          <label class="lg-label" for="loginUsername">Username</label>
+          <input class="lg-input" id="loginUsername" type="text" maxlength="20" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="Enter your Roblox username...">
+
+          <button class="lg-btn" style="margin-top:14px" id="loginBtn" data-action="login-start">Login</button>
 
           <div class="lg-cap" id="loginCap"></div>
         </div>`, "login");
@@ -3423,6 +3446,10 @@
     /* public update log: only things players see and can be shared openly */
     /* newest first; "note" is the short text shown in the banner in the middle of the home page */
     const PUBLIC_UPDATES = [
+      { v: "2.7", needs: "robloxLogin", title: "Sign in with Roblox", note: "You can now log in with your Roblox account in one click, no code in your bio needed!", items: [
+        "Sign in with Roblox: one click, no code needed",
+        "The bio code login still works too"
+      ] },
       { v: "2.6", title: "New login", note: "Logging in is now one simple screen: username, accept the terms, captcha and you're in. Works great on phones too!", items: [
         "Brand new login screen with the captcha built in",
         "Full screen login on phones",
@@ -3476,6 +3503,9 @@
       ] }
     ];
 
+    /* entries with "needs" only show once that feature is switched on */
+    const publicUpdates = () => PUBLIC_UPDATES.filter(u => !u.needs || (STATE.config && STATE.config[u.needs]));
+
     function infoHTML(page) {
       const range = Math.round(Number(STATE.config && STATE.config.range || 0.1) * 100);
       const maxItems = Number(STATE.config && STATE.config.maxItems || 20);
@@ -3490,7 +3520,7 @@
             <div class="coins">${COIN_LOGOS.map(coinLogo).join("")}</div>
           </div>
           <div class="info">
-            ${PUBLIC_UPDATES.map((u, i) => `
+            ${publicUpdates().map((u, i) => `
               <div class="upd"><b>v${esc(u.v)} · ${esc(u.title)}</b>${i === 0 ? '<span class="tag">LATEST</span>' : ""}
                 <ul>${u.items.map(x => `<li>${esc(x)}</li>`).join("")}</ul>
               </div>`).join("")}
@@ -4439,6 +4469,15 @@
       login: showLogin,
       "login-start": loginStart,
       "login-cap-new"() { newLoginCaptcha(); },
+      "login-roblox"() {
+        const tos = $("#loginTos");
+        if (tos && !tos.checked) {
+          tos.closest(".lg-check")?.classList.add("shake");
+          setTimeout(() => tos.closest(".lg-check")?.classList.remove("shake"), 500);
+          return toast("Please accept the terms and service first", "err");
+        }
+        window.location.href = API_BASE + "/api/auth/roblox";
+      },
       "login-tos"(el, e) { if (e) e.preventDefault(); openModal2(`${modalHeader("Terms of Service", "close2")}<div class="info-scroll">${infoHTML("tos")}</div>`); },
       "login-copy"() {
         if (!loginData) return;
@@ -4564,6 +4603,26 @@
       else if ($("#overlay").classList.contains("open")) closeModal();
       else if (document.body.classList.contains("chat-open")) closeChat();
     });
+
+    /* back from "Sign in with Roblox": swap the one-time ticket for a session */
+    (async () => {
+      const q = new URLSearchParams(window.location.search);
+      const ticket = q.get("oauth"), oauthError = q.get("oauth_error");
+      if (!ticket && !oauthError) return;
+      history.replaceState(null, "", window.location.pathname);
+      if (oauthError) { toast(oauthError.slice(0, 120), "err"); return; }
+      try {
+        const result = await api("/api/auth/roblox/finish", { body: { ticket } });
+        token = result.token;
+        ME = result.user;
+        localStorage.setItem("amp_token", token);
+        connectSocket();
+        headerSig = "";
+        renderHeader();
+        toast("Welcome!", "ok");
+        await refresh();
+      } catch (error) { fail(error); }
+    })();
 
     renderHeader();
     renderLobby();
