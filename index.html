@@ -199,20 +199,66 @@
     @keyframes fade { from { opacity: 0; } }
     @keyframes pop { from { opacity: 0; transform: translateY(12px) scale(.97); } }
 
+    /* ---------- COINFLIP TOOLBAR ---------- */
+    .cf-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-bottom: 12px; }
+    .cf-sort {
+      position: relative; display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px;
+      border: 1px solid var(--border); border-radius: 8px; background: var(--panel); cursor: pointer;
+    }
+    .cf-sort svg { width: 16px; height: 16px; color: #cfd2db; }
+    .cf-sort select { appearance: none; -webkit-appearance: none; padding-right: 18px; border: 0; color: #fff; font-weight: 700; cursor: pointer;
+      background: linear-gradient(45deg, transparent 50%, #8d909a 50%) right 5px center / 5px 5px no-repeat,
+                  linear-gradient(135deg, #8d909a 50%, transparent 50%) right 0 center / 5px 5px no-repeat; }
+    .cf-sort select option { background: #191c25; }
+    .cf-sep { width: 1px; height: 26px; background: var(--border); }
+    .cf-stat { display: inline-flex; align-items: center; gap: 7px; font-size: 16px; font-weight: 800; }
+    .cf-stat svg { width: 20px; height: 20px; color: #fff; }
+    .cf-stat.green { color: var(--green); }
+    .cf-stat.green svg { width: 18px; height: 18px; margin: 0; }
+
     /* ---------- MATCHES ---------- */
     .match-list { display: flex; flex-direction: column; gap: 8px; }
 
     .match {
-      display: grid; grid-template-columns: minmax(0, 1fr) 130px minmax(0, 1fr);
-      align-items: center; gap: 14px; min-height: 96px; padding: 14px;
-      border: 1px solid var(--border); border-radius: 6px; background: var(--panel);
+      display: grid; grid-template-columns: auto minmax(0, 1fr) 170px 86px; grid-template-areas: "duel items val btns";
+      align-items: center; gap: 18px; min-height: 92px; padding: 10px 16px;
+      border: 1px solid var(--border); border-radius: 10px; background: var(--panel);
       transition: border-color .25s, background .25s, transform .2s;
+    }
+    .m-duel { grid-area: duel; display: flex; align-items: center; gap: 10px; }
+    .m-av { position: relative; display: grid; place-items: center; width: 64px; height: 64px; flex: none; }
+    .m-av .av { width: 64px; height: 64px; font-size: 22px; background: #232733; box-shadow: none; }
+    .m-av .m-chip { position: absolute; top: -2px; left: -2px; z-index: 2; width: 22px; height: 22px; }
+    .m-av.opp .m-chip { left: auto; right: -2px; }
+    .m-av.win .av { box-shadow: 0 0 0 3px var(--orange); }
+    .m-av .m-q { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: #1f232d; color: #6f7380; font-size: 26px; font-weight: 800; }
+    .m-bounty { position: absolute; right: -4px; bottom: -2px; z-index: 2; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; color: #fff; background: #d94453; font-size: 13px; }
+    .m-vs { font-size: 22px; font-weight: 800; font-style: italic; letter-spacing: -2px; color: #fff; text-shadow: 2px 2px 0 #0b0d12; }
+    .m-items { grid-area: items; display: flex; align-items: center; min-width: 0; padding-bottom: 6px; overflow: hidden; }
+    .m-items .item-thumb { width: 54px; height: 54px; margin-right: -2px; }
+    .m-items .item-thumb.more { width: auto; margin-left: 12px; color: #8d909a; font-size: 17px; box-shadow: none; }
+    .m-val { grid-area: val; display: flex; flex-direction: column; align-items: center; gap: 3px; text-align: center; }
+    .m-val .v1 { display: flex; align-items: center; gap: 6px; font-size: 20px; font-weight: 800; }
+    .m-val .v1 svg { width: 20px; height: 20px; margin: 0; }
+    .m-val .v2 { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 13px; font-weight: 700; }
+    .m-val .v2 svg { width: 13px; height: 13px; margin: 0; }
+    .m-val .v-win { color: var(--orange); font-size: 12px; font-weight: 800; }
+    .m-btns { grid-area: btns; display: flex; flex-direction: column; gap: 6px; }
+    .m-btns .btn { width: 100%; min-height: 32px; padding: 0 10px; font-size: 13px; }
+    .m-btns .btn.ghost { color: #8d909a; background: #222631; }
+    .m-btns .btn.ghost:hover { color: #fff; }
+    @media (max-width: 1150px) {
+      .match { grid-template-columns: auto minmax(0, 1fr) 86px; grid-template-areas: "duel val btns" "items items items"; }
+    }
+    @media (max-width: 650px) {
+      .match { grid-template-columns: 1fr auto; grid-template-areas: "duel val" "items items" "btns btns"; gap: 10px; }
+      .m-btns { flex-direction: row; }
+      .m-av, .m-av .av, .m-av .m-q { width: 50px; height: 50px; }
+      .m-items .item-thumb { width: 44px; height: 44px; }
     }
     .match:hover { border-color: #3a4050; transform: translateY(-1px); }
     /* open games glow softly; games that are starting glow orange */
-    .match.st-waiting { border-color: #1f5a47; box-shadow: 0 0 0 1px rgba(0, 239, 160, .06), 0 0 22px -8px rgba(0, 239, 160, .45); animation: m-glow 3s ease-in-out infinite; }
-    .match.st-countdown, .match.st-flipping { border-color: #7a5a1c; box-shadow: 0 0 26px -8px rgba(255, 181, 46, .6); }
-    @keyframes m-glow { 50% { box-shadow: 0 0 0 1px rgba(0, 239, 160, .1), 0 0 30px -6px rgba(0, 239, 160, .6); } }
+    .match.st-countdown, .match.st-flipping { border-color: #5c4a22; }
     .match.finished { border-color: #715322; background: #24221f; }
 
     .m-opp { display: flex; align-items: center; gap: 14px; min-width: 0; }
@@ -226,18 +272,17 @@
     .items { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 2px 0 8px; }
     .item-thumb {
       position: relative; display: grid; place-items: center; flex: none; width: 46px; height: 46px; cursor: pointer;
-      border-radius: 50%; background: radial-gradient(circle at 50% 40%, #2a2f3b, #171a22 70%);
+      border-radius: 50%; background: radial-gradient(circle at 50% 45%, #262a35 0%, #14161d 72%); box-shadow: 0 0 0 2px var(--panel);
       color: #8d909a; font-weight: 800; font-size: 13px; transition: transform .2s, box-shadow .2s;
     }
     .item-thumb.more { cursor: default; background: transparent; }
-    .item-thumb.g-mega { box-shadow: 0 0 0 1.5px rgba(168, 85, 247, .55), 0 0 14px -2px rgba(168, 85, 247, .55); }
-    .item-thumb.g-neon { box-shadow: 0 0 0 1.5px rgba(34, 197, 94, .5), 0 0 14px -2px rgba(34, 197, 94, .5); }
+
     .item-thumb:not(.more):hover { transform: translateY(-3px); z-index: 2; }
     .item-thumb img { width: 84%; height: 84%; object-fit: contain; }
-    .tb { position: absolute; left: 50%; bottom: -7px; display: flex; gap: 2px; transform: translateX(-50%); }
+    .tb { position: absolute; left: 50%; bottom: -6px; display: flex; gap: 2px; transform: translateX(-50%); }
     .tb i {
-      display: grid; place-items: center; width: 15px; height: 15px; border-radius: 50%; border: 1.5px solid var(--panel);
-      color: #fff; font-size: 8px; font-style: normal; font-weight: 800; line-height: 1;
+      display: grid; place-items: center; width: 17px; height: 17px; border-radius: 50%; border: 2px solid var(--panel);
+      color: #fff; font-size: 9px; font-style: normal; font-weight: 800; line-height: 1;
     }
     .tb .M { background: #a855f7; } .tb .N { background: #22c55e; } .tb .F { background: #3b82f6; } .tb .R { background: #ec4899; }
 
@@ -807,6 +852,45 @@
       color: #fff; background: #5865f2; font-weight: 800; text-decoration: none; transition: filter .2s, transform .12s;
     }
     .discord-btn:hover { filter: brightness(1.12); transform: translateY(-1px); }
+    .nav-link {
+      display: inline-flex; align-items: center; gap: 7px; flex: none; padding: 8px 10px; border-radius: 7px;
+      color: #8d909a; background: transparent; font-weight: 700; font-size: 13px; white-space: nowrap; transition: color .15s, background .15s;
+    }
+    .nav-link:hover { color: #fff; background: #1d2029; }
+    .nav-link svg { width: 16px; height: 16px; }
+    .nl-new { padding: 1px 5px; border-radius: 4px; color: #04120b; background: var(--green); font-size: 9px; font-weight: 800; letter-spacing: .4px; }
+    @media (max-width: 1450px) { .nav-link.hide-md { display: none; } }
+
+    /* info pages (ToS / Provably Fair / FAQ / Updates) */
+    .info { color: #c3c6cf; line-height: 1.65; font-size: 14px; }
+    .info h4 { margin: 18px 0 6px; color: #fff; font-size: 15px; }
+    .info h4:first-child { margin-top: 0; }
+    .info p { margin: 0 0 10px; }
+    .info ul { margin: 0 0 10px; padding-left: 20px; }
+    .info code { padding: 1px 5px; border-radius: 4px; color: #e5e7ec; background: #252a35; font-size: 12px; }
+    .info details { margin-bottom: 8px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; background: #1b1e27; }
+    .info details summary { color: #fff; font-weight: 800; cursor: pointer; }
+    .info details[open] summary { margin-bottom: 8px; }
+    .info-scroll { max-height: min(68vh, 640px); overflow-y: auto; padding-right: 4px; }
+
+    .next-up {
+      position: relative; overflow: hidden; margin-bottom: 16px; padding: 18px; border: 1px solid #2e5a4b; border-radius: 12px;
+      background: radial-gradient(circle at 85% 20%, rgba(0, 239, 160, .16), transparent 55%), linear-gradient(135deg, #15241f, #161922 70%);
+    }
+    .next-up small { color: var(--green); font-size: 11px; font-weight: 800; letter-spacing: 1.2px; }
+    .next-up h3 { display: flex; align-items: center; gap: 10px; margin: 6px 0 4px; color: #fff; font-size: 22px; }
+    .soon { padding: 3px 9px; border-radius: 999px; color: #211500; background: var(--orange); font-size: 11px; font-weight: 800; letter-spacing: 1px; animation: soon-pulse 1.8s ease-in-out infinite; }
+    @keyframes soon-pulse { 50% { box-shadow: 0 0 0 6px rgba(255, 181, 46, 0); } 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 181, 46, .45); } }
+    .next-up p { margin: 0 0 14px; color: #aeb3bf; }
+    .coins { display: flex; flex-wrap: wrap; gap: 10px; }
+    .coin-logo { display: flex; align-items: center; gap: 7px; padding: 6px 11px 6px 6px; border-radius: 999px; background: #0f1116; color: #fff; font-size: 12px; font-weight: 800; animation: coin-float 3s ease-in-out infinite; }
+    .coin-logo:nth-child(2) { animation-delay: .3s; } .coin-logo:nth-child(3) { animation-delay: .6s; } .coin-logo:nth-child(4) { animation-delay: .9s; } .coin-logo:nth-child(5) { animation-delay: 1.2s; }
+    @keyframes coin-float { 50% { transform: translateY(-3px); } }
+    .coin-logo svg { width: 26px; height: 26px; }
+    .upd { margin-bottom: 10px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; background: #1b1e27; }
+    .upd b { color: #fff; }
+    .upd .tag { margin-left: 6px; padding: 1px 7px; border-radius: 4px; color: var(--green); background: #15372d; font-size: 10px; font-weight: 800; }
+    .upd ul { margin: 8px 0 0; padding-left: 18px; }
     .discord-btn svg { width: 20px; height: 20px; fill: currentColor; }
 
     .banner.announce { border-color: var(--green); background: linear-gradient(100deg, #12332a, #1b2420); box-shadow: 0 0 26px -10px rgba(0, 239, 160, .5); }
@@ -1003,6 +1087,22 @@
           <svg viewBox="0 0 24 24"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189z"/></svg>
           <span>Discord</span>
         </a>
+        <button class="nav-link" data-action="info" data-page="updates">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 9.5 8.5 3 9.3l4.9 4.5L6.6 21 12 17.6 17.4 21l-1.3-7.2L21 9.3l-6.5-.8z"/></svg>
+          Updates<span class="nl-new">NEW</span>
+        </button>
+        <button class="nav-link" data-action="info" data-page="tos">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm7 1.5V8h4.5zM8 12v1.6h8V12zm0 3.5v1.6h8v-1.6zm0-7v1.6h4V8.5z"/></svg>
+          Terms of Service
+        </button>
+        <button class="nav-link" data-action="info" data-page="fair">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5zm-1.2 13.6-3.4-3.4 1.4-1.4 2 2 4.6-4.6 1.4 1.4z"/></svg>
+          Provably Fair
+        </button>
+        <button class="nav-link" data-action="info" data-page="faq">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1.2 16h-2.4v-2.4h2.4zm2.3-7.6c-.5.7-1.1 1.1-1.6 1.5-.6.4-.8.7-.8 1.6h-2.3c0-1.7.6-2.4 1.5-3 .7-.5 1.2-.8 1.2-1.6 0-.7-.6-1.3-1.5-1.3-1 0-1.6.6-1.7 1.6H8c.1-2.3 1.7-3.8 4.1-3.8 2.3 0 3.9 1.3 3.9 3.3 0 .6-.2 1.2-.5 1.7z"/></svg>
+          FAQ
+        </button>
       </nav>
       <div class="header-right" id="headerRight"></div>
     </header>
@@ -1044,16 +1144,24 @@
           <div class="chips" id="bannerChips"></div>
         </div>
 
-        <div class="summary">
-          <div><b id="summaryItems">0</b><small>Total Items</small></div>
-          <div><b><svg class="gem-i" viewBox="0 0 24 24"><use href="#gem"/></svg><span id="summaryValue">0</span></b><small>Total Value</small></div>
-          <div><b id="summaryGames">0</b><small>Active Games</small></div>
-        </div>
-
-        <div class="section-head">
-          <div style="flex:1;min-width:0"><h2>COINFLIP GAMES</h2><div class="sub-total" id="activeValue"></div></div>
+        <div class="cf-bar">
+          <label class="cf-sort">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 4v16M3 16l4 4 4-4M14 6h7M14 11h5M14 16h3"/></svg>
+            <select id="cfSort">
+              <option value="high">Value sort high to low</option>
+              <option value="low">Value sort low to high</option>
+              <option value="new">Newest first</option>
+            </select>
+          </label>
+          <span class="cf-sep"></span>
+          <span class="cf-stat" title="Games">
+            <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4" fill="currentColor"/><g fill="#101218"><circle cx="8" cy="8" r="1.7"/><circle cx="16" cy="8" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="8" cy="16" r="1.7"/><circle cx="16" cy="16" r="1.7"/></g></svg>
+            <b id="summaryGames">0</b>
+          </span>
+          <span class="cf-stat green" title="Total value in games"><svg class="gem-i" viewBox="0 0 24 24"><use href="#gem"/></svg><b id="summaryValue">0</b></span>
+          <span style="flex:1"></span>
+          <button class="btn" data-action="create">Bet Items</button>
           <button class="btn gray" data-action="history">History</button>
-          <button class="btn" data-action="create">+ Create Game</button>
         </div>
 
         <div class="match-list" id="lobby"></div>
@@ -1273,6 +1381,7 @@
     const taxHint = () => Number(STATE.config && STATE.config.tax) > 0
       ? `<p class="hint">A ${Number(STATE.config.tax)}% tax is taken from the pot (in items) when the game ends.</p>` : "";
 
+    const hasBounty = id => Boolean(id) && asArray(STATE.bounties).some(b => b.target && b.target.id === id);
     const bountyBadge = id => asArray(STATE.bounties).some(b => b.target && b.target.id === id)
       ? ' <span class="bt-badge" title="Bounty! Beat this player in a coinflip to win a prize">${ICO.target}</span>' : "";
     const totalValue = items => items.reduce((t, i) => t + Number(i.value || 0), 0);
@@ -1571,32 +1680,31 @@
     const findMatch = id => asArray(STATE.matches).find(m => m.id === id);
 
     function renderLobby() {
+      const sortBy = ($("#cfSort") && $("#cfSort").value) || "high";
+      const potOf = m => Number(m.hostValue || 0) + Number(m.oppValue || 0);
       const matches = asArray(STATE.matches)
         .filter(m => m.state !== "cancelled")
         .slice()
         .sort((a, b) =>
           (Number(a.state === "finished") - Number(b.state === "finished")) ||
-          (Number(b.hostValue) - Number(a.hostValue)));
+          (sortBy === "low" ? potOf(a) - potOf(b) : sortBy === "new" ? Number(b.createdAt || 0) - Number(a.createdAt || 0) : potOf(b) - potOf(a)));
 
       const liveMatches = matches.filter(m => m.state !== "finished");
+      const active = liveMatches.reduce((sum, m) => sum + potOf(m), 0);
       $("#summaryGames").textContent = liveMatches.length;
-      $("#summaryItems").textContent = liveMatches.reduce((n, m) => n + asArray(m.hostItems).length + asArray(m.joinerItems || m.oppItems).length, 0);
-      $("#summaryValue").textContent = fmt(liveMatches.reduce((s, m) => s + Number(m.hostValue || 0) + Number(m.oppValue || 0), 0));
-
-      const active = matches.filter(m => m.state !== "finished").reduce((s, m) => s + Number(m.hostValue || 0) + Number(m.oppValue || 0), 0);
-      $("#activeValue").innerHTML = `${GEM}<b>${fmt(active)}</b> in active games`;
+      $("#summaryValue").textContent = fmt(active);
       $("#navCf").innerHTML = `<svg class="gem-i" viewBox="0 0 24 24"><use href="#gem"/></svg>${fmt(active)}`;
 
       const sig = JSON.stringify([
         matches.map(m => [m.id, m.state, m.joiner && m.joiner.id, m.winnerId]),
-        ME && ME.id, asArray(STATE.bounties).map(b => b.id)
+        ME && ME.id, asArray(STATE.bounties).map(b => b.id), sortBy
       ]);
 
       if (sig === lobbySig) return;
       lobbySig = sig;
 
       if (!matches.length) {
-        $("#lobby").innerHTML = `<div class="card empty enter">No games right now.<br>Create the first coinflip!</div>`;
+        $("#lobby").innerHTML = `<div class="card empty enter">No games right now.<br>Bet your items and start the first coinflip!</div>`;
         return;
       }
 
@@ -1606,55 +1714,48 @@
         const hostWon = finished && match.winnerId === match.host?.id;
         const [low, high] = matchRange(Number(match.hostValue || 0));
         const isNew = !seenMatches.has(match.id);
+        const hostSide = match.hostSide || "dog";
+        const joinSide = match.joinSide || (hostSide === "dog" ? "cat" : "dog");
+        const items = [...asArray(match.hostItems), ...asArray(match.joinerItems || match.oppItems)];
 
-        let middle;
+        const hostAv = `
+          <div class="m-av clickable ${finished && hostWon ? "win" : ""}" data-action="user" data-id="${esc(match.host?.id)}" title="${esc(getUsername(match.host))}">
+            ${avatar(match.host)}<span class="m-chip">${chip(hostSide)}</span>${hasBounty(match.host?.id) ? `<span class="m-bounty" title="Bounty! Beat this player to win a prize">${ICO.target}</span>` : ""}
+          </div>`;
 
-        if (match.state === "waiting") {
-          middle = `<b>${GEM}${short(match.hostValue)}</b><small>${short(low)} – ${short(high)}</small>`;
-        } else if (match.state === "countdown") {
-          middle = countdownHTML(match.countdownEnd);
-        } else if (match.state === "flipping") {
-          middle = match.winnerSide ? coinHTML("landsm", match.winnerSide) : coinHTML("spin");
-        } else {
-          middle = `${coinHTML("idle", match.winnerSide)}<small>${GEM}${short(Number(match.hostValue || 0) + Number(match.oppValue || 0))}</small>`;
-        }
-
-        const opponent = match.joiner
-          ? `<div class="player clickable" data-action="user" data-id="${esc(match.joiner.id)}">
-              ${playerAvatar(match.joiner, match.joinSide, "", finished && !hostWon ? "ring-orange" : "")}
-              <div class="player-name">${esc(getUsername(match.joiner))}${bountyBadge(match.joiner.id)}</div>
+        const oppAv = match.joiner
+          ? `<div class="m-av opp clickable ${finished && !hostWon ? "win" : ""}" data-action="user" data-id="${esc(match.joiner.id)}" title="${esc(getUsername(match.joiner))}">
+              ${avatar(match.joiner)}<span class="m-chip">${chip(joinSide)}</span>${hasBounty(match.joiner.id) ? `<span class="m-bounty" title="Bounty! Beat this player to win a prize">${ICO.target}</span>` : ""}
             </div>`
-          : `<div class="player muted">Waiting for player…</div>`;
+          : `<div class="m-av opp"><span class="m-q">?</span><span class="m-chip">${chip(joinSide)}</span></div>`;
 
-        let action = "";
-
-        if (match.state === "waiting") {
-          action = mine
-            ? `<button class="btn red sm" data-action="cancel" data-id="${esc(match.id)}">Cancel</button>`
-            : `<button class="btn sm" data-action="join" data-id="${esc(match.id)}">Join</button>`;
+        let value;
+        if (match.state === "countdown") {
+          value = countdownHTML(match.countdownEnd);
+        } else if (match.state === "flipping") {
+          value = match.winnerSide ? coinHTML("landsm", match.winnerSide) : coinHTML("spin");
+        } else if (finished) {
+          value = `<div class="v1">${GEM}${fmt(potOf(match))}</div>
+            <div class="v-win">${esc(getUsername(hostWon ? match.host : match.joiner))} won</div>`;
+        } else {
+          value = `<div class="v1">${GEM}${fmt(match.hostValue)}</div>
+            <div class="v2">${GEM}${fmt(Math.ceil(low))} - ${fmt(Math.floor(high))}</div>`;
         }
+
+        const join = match.state === "waiting"
+          ? (mine
+            ? `<button class="btn red" data-action="cancel" data-id="${esc(match.id)}">Cancel</button>`
+            : `<button class="btn" data-action="join" data-id="${esc(match.id)}">Join</button>`)
+          : "";
 
         return `
           <div class="match st-${esc(match.state)} ${finished ? "finished" : ""} ${isNew ? "enter" : ""}">
-            <div class="m-left">
-              <div class="player clickable" data-action="user" data-id="${esc(match.host?.id)}">
-                ${playerAvatar(match.host, match.hostSide, "", finished && hostWon ? "ring-orange" : "")}
-                <div class="player-name">${esc(getUsername(match.host))}${bountyBadge(match.host && match.host.id)}</div>
-              </div>
-              <div class="items">${thumbs(match.hostItems)}</div>
-            </div>
-
-            <div class="match-middle">${middle}</div>
-
-            <div class="m-right">
-              <div class="m-opp">
-                ${opponent}
-                ${match.joiner ? `<div class="items">${thumbs(match.joinerItems || match.oppItems)}</div>` : ""}
-              </div>
-              <div class="match-actions">
-                ${action}
-                <button class="btn gray sm" data-action="view" data-id="${esc(match.id)}">View</button>
-              </div>
+            <div class="m-duel">${hostAv}<span class="m-vs">Vs</span>${oppAv}</div>
+            <div class="m-items">${thumbs(items, 8)}</div>
+            <div class="m-val">${value}</div>
+            <div class="m-btns">
+              ${join}
+              <button class="btn ghost" data-action="view" data-id="${esc(match.id)}">View</button>
             </div>
           </div>`;
       }).join("");
@@ -1723,7 +1824,7 @@
           return `<div class="vw-player">
             <div class="vp-wait">?</div>
             <div class="vw-name muted">Waiting…</div>
-            <div class="vw-range">Join with ${GEM}${fmt(low)} – ${fmt(high)}</div>
+            <div class="vw-range">Join with ${GEM}${fmt(Math.ceil(low))} – ${fmt(Math.floor(high))}</div>
           </div>`;
         }
 
@@ -2167,6 +2268,7 @@
       });
     }
 
+    $("#cfSort").addEventListener("change", () => { lobbySig = ""; renderLobby(); });
     $("#chatInput").addEventListener("keydown", e => { if (e.key === "Enter") sendChat(); });
 
     /* ---------- User card (profile popup) ---------- */
@@ -2958,6 +3060,143 @@
         showPage("home");
       }
     }
+
+    /* ---------- Info pages: Updates, Terms of Service, Provably Fair, FAQ ---------- */
+    const COIN_LOGOS = [
+      ["Bitcoin", "#f7931a", '<path d="M10 7.5h3.4c1.6 0 2.6.8 2.6 2.1 0 .9-.5 1.5-1.3 1.8 1 .2 1.7 1 1.7 2.1 0 1.5-1.1 2.4-2.9 2.4H10zm1.7 1.4v2.4h1.5c.9 0 1.3-.4 1.3-1.2s-.5-1.2-1.3-1.2zm0 3.7v2.7h1.7c1 0 1.5-.5 1.5-1.4 0-.8-.5-1.3-1.5-1.3zM11.3 6h1.2v1.5h-1.2zm0 10h1.2v1.6h-1.2z" fill="#fff"/>'],
+      ["Ethereum", "#627eea", '<path d="M12 4.5 7.6 12 12 14.6l4.4-2.6zM7.6 12.9 12 19.5l4.4-6.6L12 15.5z" fill="#fff"/><path d="M12 4.5v10.1L16.4 12zM12 15.5v4l4.4-6.6z" fill="#c1ccf7"/>'],
+      ["Litecoin", "#345d9d", '<path d="M10.6 6.5h2.1l-1.2 5 1.6-.6-.3 1.2-1.6.6-.7 2.6h5.2l-.4 1.7H8.2l1-3.6-1.3.5.3-1.2 1.3-.5z" fill="#fff"/>'],
+      ["Solana", "#14151a", '<defs><linearGradient id="solg" x1="0" x2="1"><stop offset="0" stop-color="#9945ff"/><stop offset="1" stop-color="#14f195"/></linearGradient></defs><path d="M8.2 8h9l-1.4 1.6h-9zM6.8 11.2h9l1.4 1.6h-9zM8.2 14.4h9l-1.4 1.6h-9z" fill="url(#solg)"/>'],
+      ["USDT", "#26a17b", '<path d="M7 7h10v2.2h-3.8v1.4c2.4.1 4.2.6 4.2 1.2s-1.8 1.1-4.2 1.2V17h-2.4v-4c-2.4-.1-4.2-.6-4.2-1.2s1.8-1.1 4.2-1.2V9.2H7zm3.8 4.4v.8l1.2.1 1.2-.1v-.8c-.4 0-.8.1-1.2.1s-.8 0-1.2-.1z" fill="#fff"/>']
+    ];
+
+    const coinLogo = ([name, color, glyph]) =>
+      `<span class="coin-logo"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="${color}"/>${glyph}</svg>${name}</span>`;
+
+    /* public update log: only things players see and can be shared openly */
+    const PUBLIC_UPDATES = [
+      { v: "2.2", title: "New coinflip lobby", items: [
+        "Games are shown as Player vs Player with all pets in one row",
+        "Sort games by value (high to low, low to high) or newest",
+        "Terms of Service, Provably Fair and FAQ pages",
+        "This update log, open for everyone"
+      ] },
+      { v: "2.1", title: "Match window and countdown", items: [
+        "A big VS in the match window while waiting for an opponent",
+        "Smooth 3-2-1 countdown as soon as someone joins",
+        "Mega / Neon / Fly / Ride badges under every pet",
+        "Hover or tap a pet to see its full name and value",
+        'Live "Online now" status on profiles'
+      ] },
+      { v: "2.0", title: "Deposit bots and a fresh look", items: [
+        "Several deposit bots, each with an Online / Offline status",
+        "New font and a paw print background"
+      ] },
+      { v: "1.9", title: "Chat and profiles", items: [
+        "Place a bet to unlock the chat (keeps spam away)",
+        "See when a player was last online",
+        "Coinflip and jackpot pots shown in the top menu"
+      ] },
+      { v: "1.8", title: "Safer logins", items: [
+        "Captcha when logging in and entering giveaways",
+        "Up to 20 pets per coinflip"
+      ] },
+      { v: "1.x", title: "The basics", items: [
+        "Coinflip, Jackpot, Giveaways, Leaderboard and live chat",
+        "Bounties, wheel and word scramble events with prizes"
+      ] }
+    ];
+
+    function infoHTML(page) {
+      const range = Math.round(Number(STATE.config && STATE.config.range || 0.1) * 100);
+      const maxItems = Number(STATE.config && STATE.config.maxItems || 20);
+      const tax = Number(STATE.config && STATE.config.tax || 0);
+
+      if (page === "updates") {
+        return `
+          <div class="next-up">
+            <small>NEXT UPDATE</small>
+            <h3>Crypto Gambling <span class="soon">SOON</span></h3>
+            <p>Play coinflip and jackpot with crypto. Deposit and withdraw your favourite coins, just like pets.</p>
+            <div class="coins">${COIN_LOGOS.map(coinLogo).join("")}</div>
+          </div>
+          <div class="info">
+            ${PUBLIC_UPDATES.map((u, i) => `
+              <div class="upd"><b>v${esc(u.v)} · ${esc(u.title)}</b>${i === 0 ? '<span class="tag">LATEST</span>' : ""}
+                <ul>${u.items.map(x => `<li>${esc(x)}</li>`).join("")}</ul>
+              </div>`).join("")}
+          </div>`;
+      }
+
+      if (page === "tos") {
+        return `
+          <div class="info">
+            <h4>1. About Pet Duel</h4>
+            <p>Pet Duel is a fan-made site where players bet Adopt Me pets against each other. It is not made by, sponsored by or connected to Roblox Corporation or the makers of Adopt Me.</p>
+            <h4>2. Who can play</h4>
+            <p>You must follow the Roblox Terms of Use and be old enough to take part in item betting where you live. One account per person.</p>
+            <h4>3. Items</h4>
+            <ul>
+              <li>Pets are virtual items with no real money value. Values on the site are only used to match fair games.</li>
+              <li>Deposits are checked by hand and appear in your inventory once an admin confirms them.</li>
+              <li>Only trade with the official bots listed in the Deposit window. We are not responsible for trades with impostors.</li>
+              <li>Withdrawals are sent by admins and can take some time.</li>
+            </ul>
+            <h4>4. Games</h4>
+            <ul>
+              <li>Every game result is final. Lost pets are not refunded.</li>
+              <li>${tax > 0 ? `A ${tax}% tax is taken from the pot of each finished coinflip.` : "A small tax may be taken from finished coinflip pots; it is always shown before you play."}</li>
+              <li>Results are provably fair, see the Provably Fair page.</li>
+            </ul>
+            <h4>5. Not allowed</h4>
+            <ul>
+              <li>Scamming, impersonating bots or staff, using bugs or alt accounts to get an advantage.</li>
+              <li>Spam, hate speech, threats or advertising in the chat.</li>
+            </ul>
+            <p>Breaking the rules can lead to a mute, a ban and the loss of items won unfairly.</p>
+            <h4>6. Changes</h4>
+            <p>These terms can change at any time. By using the site you accept the current version.</p>
+          </div>`;
+      }
+
+      if (page === "fair") {
+        return `
+          <div class="info">
+            <p>Nobody, not even an admin, can change the result of a game after it is created. You can check every game yourself.</p>
+            <h4>How a coinflip is decided</h4>
+            <ul>
+              <li>When a game is created, the server picks a secret random <b>seed</b> and shows you its <b>hash</b>: <code>SHA-256(seed)</code>. The hash locks the result in, but does not reveal it.</li>
+              <li>The result is <code>HMAC-SHA256(seed, gameId)</code>. The first 8 hex characters are turned into a number between 0 and 1.</li>
+              <li>Below 0.5 the paw coin wins, otherwise the cat coin wins.</li>
+              <li>When the game ends the seed is revealed. Check that <code>SHA-256(seed)</code> equals the hash shown at the start, and calculate the result yourself.</li>
+            </ul>
+            <p>Every finished game has a <b>Verify result</b> button in its match window that does this check in your browser.</p>
+            <h4>How the jackpot is decided</h4>
+            <p>The jackpot works the same way: <code>HMAC-SHA256(seed, roundId)</code> gives a number between 0 and 1, multiplied by the total pot. Every player owns the range of the pot their pets cover, so a bigger share means a bigger chance.</p>
+          </div>`;
+      }
+
+      return `
+        <div class="info">
+          <details open><summary>How do I deposit pets?</summary>Log in, open your Wallet and press Deposit. Join one of the online bots and send it a trade with your pets. They appear in your inventory once an admin confirms the trade.</details>
+          <details><summary>How do I withdraw?</summary>Open your Wallet, select the pets you want and press Withdraw. An admin sends them to you in game.</details>
+          <details><summary>How does a coinflip work?</summary>Bet up to ${maxItems} pets and pick a side. Another player joins with pets worth about the same (within ${range}%). After a 3 second countdown the coin flips and the winner takes every pet in the game.</details>
+          <details><summary>What do M, N, F and R mean?</summary>M = Mega Neon, N = Neon, F = Fly, R = Ride. Hover or tap a pet to see its full name and value.</details>
+          <details><summary>Is it fair?</summary>Yes. Every result is locked in before the game starts and can be checked afterwards. See the Provably Fair page.</details>
+          <details><summary>Why can't I chat?</summary>Chat unlocks after your first bet. This keeps bots and spam out.</details>
+          <details><summary>A bot is offline, what now?</summary>Use another bot that is online, or wait until it is back. Never trade with an account that is not in the Deposit window.</details>
+          <details><summary>I have a problem with a trade</summary>Join our Discord and open a ticket. Keep screenshots of the trade.</details>
+        </div>`;
+    }
+
+    function showInfo(page) {
+      const titles = { updates: "Updates", tos: "Terms of Service", fair: "Provably Fair", faq: "FAQ" };
+      const key = titles[page] ? page : "faq";
+      gridContext = null;
+      viewMatchId = null;
+      openModal(`${modalHeader(titles[key])}<div class="info-scroll">${infoHTML(key)}</div>`);
+    }
+
 
     /* ---------- Admin (code comes from server after auth) ---------- */
     async function openAdmin() {
@@ -3825,6 +4064,7 @@
       "profile-page"(el) { showProfile(Number(el.dataset.page)); },
       admin: openAdmin,
 
+      info(el) { showInfo(el.dataset.page); },
       wallet: showWallet,
       deposit: showDeposit,
       "bot-join"(el) {

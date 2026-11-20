@@ -1361,6 +1361,13 @@ app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
 });
 
 const UPDATE_LOG = [
+  { version: '2.2', title: 'New lobby, info pages and easier pet adding', changes: [
+    'Coinflip lobby rebuilt: Player vs Player, all pets in one row with badges, value and join range on the right, Join / View buttons',
+    'Sort games by value or newest; game count and total value in the toolbar',
+    'Updates (public, with "Crypto gambling - soon"), Terms of Service, Provably Fair and FAQ next to Discord',
+    'Admin: add a pet with all 12 versions at once; known pets fill their picture automatically; elvebredd fills every value',
+    'Elvebredd parser can no longer freeze the server (this caused the 502 errors)'
+  ] },
   { version: '2.1', title: 'New match view, countdown and pet tooltips', changes: [
     'Match window: big VS in the middle while waiting, site logo on top, win chance bars and "Created ... ago"',
     'New 3-2-1 countdown with a ring that empties smoothly, in the lobby and in the match window',
@@ -2222,28 +2229,79 @@ function collectPets(root, base) {
   return out;
 }
 
-/* tries to read JSON from a response body: plain JSON, Next.js __NEXT_DATA__, or JSON blobs in <script> tags */
+/* Returns the JSON array/object that starts at text[start], using a string-aware bracket scanner.
+   Linear time and capped in length, so a huge page can never lock up the server. */
+function sliceJson(text, start, maxLen = 3 * 1024 * 1024) {
+  const open = text[start];
+  const close = open === '[' ? ']' : '}';
+  let depth = 0, inStr = false, esc = false;
+  const end = Math.min(text.length, start + maxLen);
+  for (let i = start; i < end; i++) {
+    const c = text[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === '\\') esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === '[' || c === '{') depth++;
+    else if (c === ']' || c === '}') {
+      depth--;
+      if (depth === 0) return c === close ? text.slice(start, i + 1) : null;
+    }
+  }
+  return null;
+}
+
+function scriptBodies(text, test) {
+  const out = [];
+  let pos = 0;
+  while (out.length < 50) {
+    const s = text.indexOf('<script', pos);
+    if (s < 0) break;
+    const tagEnd = text.indexOf('>', s);
+    const e = text.indexOf('</script>', tagEnd);
+    if (tagEnd < 0 || e < 0) break;
+    if (test(text.slice(s, tagEnd + 1))) out.push(text.slice(tagEnd + 1, e));
+    pos = e + 9;
+  }
+  return out;
+}
+
+/* tries to read JSON from a response body: plain JSON, Next.js data, or JSON blobs in <script> tags */
 function extractJson(text) {
   const found = [];
+  const tryParse = t => { try { found.push(JSON.parse(t)); return true; } catch { return false; } };
+
   const t = text.trim();
-  if (t.startsWith('{') || t.startsWith('[')) {
-    try { found.push(JSON.parse(t)); return found; } catch { /* not JSON */ }
+  if ((t.startsWith('{') || t.startsWith('[')) && tryParse(t)) return found;
+
+  for (const body of scriptBodies(text, tag => /__NEXT_DATA__|application\/(ld\+)?json/i.test(tag))) tryParse(body);
+
+  /* Next.js app router streams its data as self.__next_f.push([1,"..."]) chunks */
+  let joined = '';
+  let pos = 0;
+  const marker = 'self.__next_f.push(';
+  while (joined.length < 6 * 1024 * 1024) {
+    const s = text.indexOf(marker, pos);
+    if (s < 0) break;
+    const arr = sliceJson(text, s + marker.length);
+    if (!arr) { pos = s + marker.length; continue; }
+    pos = s + marker.length + arr.length;
+    try { const v = JSON.parse(arr); if (typeof v[1] === 'string') joined += v[1]; } catch { /* ignore */ }
   }
-  const next = text.match(/<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/i);
-  if (next) { try { found.push(JSON.parse(next[1])); } catch { /* ignore */ } }
 
-  const re = /<script[^>]*type="application\/(?:ld\+)?json"[^>]*>([\s\S]*?)<\/script>/gi;
-  let m;
-  while ((m = re.exec(text))) { try { found.push(JSON.parse(m[1])); } catch { /* ignore */ } }
-
-  /* Next.js app router streams data as self.__next_f.push([1,"..."]) chunks */
-  const chunks = [];
-  const fre = /self\.__next_f\.push\(\[1,"((?:[^"\\]|\\.)*)"\]\)/g;
-  while ((m = fre.exec(text))) { try { chunks.push(JSON.parse('"' + m[1] + '"')); } catch { /* ignore */ } }
-  if (chunks.length) {
-    const joined = chunks.join('');
-    const arr = /\[\s*\{[^\[\]]*?"name"\s*:[\s\S]*?\}\s*\]/g;
-    while ((m = arr.exec(joined))) { try { found.push(JSON.parse(m[0])); } catch { /* ignore */ } }
+  /* inside that data, every array of objects that mentions "name" is a candidate */
+  let tries = 0;
+  pos = 0;
+  while (joined && tries < 200) {
+    const s = joined.indexOf('[{', pos);
+    if (s < 0) break;
+    tries++;
+    const arr = sliceJson(joined, s, 1024 * 1024);
+    if (arr && arr.includes('"name"') && tryParse(arr)) pos = s + arr.length;
+    else pos = s + 2;
   }
   return found;
 }
@@ -2262,7 +2320,7 @@ async function fetchText(url, ms = 7000) {
   }
   const type = response.headers.get('content-type') || '';
   if (!/json|html|text|javascript/i.test(type)) throw new Error('not a web page');
-  return (await response.text()).slice(0, 8 * 1024 * 1024);
+  return (await response.text()).slice(0, 6 * 1024 * 1024);
 }
 
 async function loadElve(force) {
@@ -2342,9 +2400,6 @@ function pickValue(pet, age, fly, ride) {
 
 app.get('/api/admin/elve', auth, adminOnly, async (req, res) => {
   const name = String(req.query.name || '').trim().slice(0, 60);
-  const age = ['normal', 'neon', 'mega'].includes(req.query.age) ? req.query.age : 'normal';
-  const fly = req.query.fly === '1' || req.query.fly === 'true';
-  const ride = req.query.ride === '1' || req.query.ride === 'true';
   if (normName(name).length < 2) return bad(res, 'Enter a pet name');
 
   let data;
@@ -2354,7 +2409,7 @@ app.get('/api/admin/elve', auth, adminOnly, async (req, res) => {
   const q = normName(name);
   const exact = data.pets.find(p => normName(p.name) === q);
   const similar = data.pets
-    .filter(p => normName(p.name) !== q && (normName(p.name).startsWith(q) || normName(p.name).includes(q)))
+    .filter(p => normName(p.name) !== q && normName(p.name).includes(q))
     .slice(0, 8)
     .map(p => p.name);
 
@@ -2362,15 +2417,17 @@ app.get('/api/admin/elve', auth, adminOnly, async (req, res) => {
     return bad(res, similar.length ? `Pet not found. Did you mean: ${similar.join(', ')}?` : 'Pet not found on elvebredd', 404);
   }
 
-  const picked = pickValue(exact, age, fly, ride);
-  if (!picked) {
-    return bad(res, `No ${age}${fly ? ' fly' : ''}${ride ? ' ride' : ''} value for ${exact.name}. Fields found: ${Object.keys(exact.values).join(', ')}`, 404);
+  const variants = {};
+  for (const age of ['normal', 'neon', 'mega']) {
+    for (const [pot, fly, ride] of [['none', false, false], ['f', true, false], ['r', false, true], ['fr', true, true]]) {
+      const picked = pickValue(exact, age, fly, ride);
+      variants[`${age}-${pot}`] = picked ? round2(picked.value) : null;
+    }
   }
-  if (!/^https:\/\//.test(exact.image)) return bad(res, `Found ${exact.name} (${picked.value}) but no image URL. Paste the image URL by hand.`, 404);
 
   res.json({
-    ok: true, name: exact.name, image: exact.image, value: round2(picked.value),
-    age, fly, ride, field: picked.key, source: data.source, similar
+    ok: true, name: exact.name, image: /^https:\/\//.test(exact.image) ? exact.image : '',
+    variants, source: data.source, similar
   });
 });
 
@@ -2629,6 +2686,43 @@ app.post('/api/admin/catalog', auth, adminOnly, (req, res) => {
   res.json({ ok: true, item });
 });
 
+/* one pet name + picture, many versions (normal / neon / mega × fly / ride): each becomes its own catalog item */
+app.post('/api/admin/catalog/bulk', auth, adminOnly, (req, res) => {
+  const variants = Array.isArray(req.body.variants) ? req.body.variants.slice(0, 12) : [];
+  if (!variants.length) return bad(res, 'Fill the value of at least one version');
+
+  const name = String(req.body.name || '').trim();
+  let image = String(req.body.image || '').trim();
+  if (!image) {
+    const known = S.catalog.find(c => c.name.toLowerCase() === name.toLowerCase());
+    if (known) image = known.image;
+  }
+
+  const items = [];
+  for (const v of variants) {
+    const item = cleanItem({ name, image, value: v.value, age: v.age, fly: v.fly, ride: v.ride });
+    if (!item) return bad(res, 'Check the name, the image URL (must start with https://) and the values');
+    items.push(item);
+  }
+
+  let added = 0, updated = 0;
+  for (const item of items) {
+    const existing = S.catalog.find(c => c.name.toLowerCase() === item.name.toLowerCase() &&
+      c.age === item.age && Boolean(c.fly) === item.fly && Boolean(c.ride) === item.ride);
+    if (existing) {
+      existing.value = item.value;
+      existing.image = item.image;
+      updated++;
+    } else {
+      item.id = rid(8);
+      S.catalog.push(item);
+      added++;
+    }
+  }
+  markDirty();
+  res.json({ ok: true, added, updated });
+});
+
 app.post('/api/admin/catalog/update', auth, adminOnly, (req, res) => {
   const item = S.catalog.find(x => x.id === req.body.id);
   const value = round2(Number(req.body.value));
@@ -2680,37 +2774,29 @@ function adminUI() {
       <div id="adm-wd" style="margin-bottom:16px"></div>
 
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">
-        <div style="background:#f5faff;padding:14px;border-radius:12px">
-          <h4 style="margin-bottom:10px">➕ Add New Item</h4>
-          <div style="border:1px solid #343842;border-radius:8px;padding:10px;margin-bottom:10px">
-            <small style="font-weight:800">⚡ Auto from elvebredd.com</small>
-            <input id="e-name" class="in" list="e-sugg" style="width:100%;margin:6px 0" placeholder="Pet name (e.g. Shadow Dragon)" autocomplete="off">
-            <datalist id="e-sugg"></datalist>
-            <div class="row" style="margin-bottom:6px">
-              <select id="e-age"><option value="normal">Normal</option><option value="neon">Neon</option><option value="mega">Mega</option></select>
-              <label><input id="e-fly" type="checkbox"> Fly</label>
-              <label><input id="e-ride" type="checkbox"> Ride</label>
-            </div>
-            <div style="display:flex;gap:6px">
-              <button id="e-fetch" class="btn gray sm" style="flex:1">Fetch value</button>
-              <button id="e-add" class="btn sm" style="flex:1">Fetch &amp; add</button>
-            </div>
-            <div id="e-msg" class="hint" style="margin:6px 0 0"></div>
-            <details style="margin-top:6px"><summary class="hint" style="cursor:pointer">Data source</summary>
-              <input id="e-src" class="in" style="width:100%;margin:6px 0" placeholder="Optional exact data URL (empty = automatic)">
-              <button id="e-src-save" class="btn gray sm">Save source</button>
-            </details>
+        <div style="background:#f5faff;padding:14px;border-radius:12px;grid-column:1 / -1">
+          <h4 style="margin-bottom:10px">➕ Add Pet</h4>
+          <div style="display:grid;grid-template-columns:1fr 1fr 70px;gap:8px;align-items:center;margin-bottom:8px">
+            <input id="a-name" class="in" list="a-names" autocomplete="off" placeholder="Pet name (e.g. Shadow Dragon)">
+            <input id="a-img" class="in" placeholder="Image URL (https://...), filled automatically if known">
+            <img id="a-prev" alt="" style="width:64px;height:64px;object-fit:contain;justify-self:center;visibility:hidden">
           </div>
-          <input id="a-img" class="in" style="width:100%;margin-bottom:8px" placeholder="Image URL (https://...)">
-          <img id="a-prev" alt="" style="width:70px;height:70px;object-fit:contain;display:block;margin:0 auto 8px">
-          <input id="a-name" class="in" style="width:100%;margin-bottom:8px" placeholder="Item name">
-          <input id="a-val" class="in" style="width:100%;margin-bottom:8px" type="number" min="0" step="0.01" placeholder="Value">
-          <div class="row">
-            <select id="a-age"><option value="normal">Normal</option><option value="neon">Neon</option><option value="mega">Mega</option></select>
-            <label><input id="a-fly" type="checkbox"> Fly</label>
-            <label><input id="a-ride" type="checkbox"> Ride</label>
+          <datalist id="a-names"></datalist>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+            <button id="e-fetch" class="btn gray sm">⚡ Get values from elvebredd</button>
+            <button id="a-clear" class="btn gray sm">Clear</button>
+            <span id="e-msg" class="hint" style="margin:0;align-self:center"></span>
           </div>
-          <button id="a-add" class="btn" style="width:100%">Add to Catalog</button>
+          <div style="display:grid;grid-template-columns:70px repeat(4,1fr);gap:6px;margin-bottom:10px">
+            <span></span><small style="text-align:center;font-weight:800">No potion</small><small style="text-align:center;font-weight:800">Fly</small><small style="text-align:center;font-weight:800">Ride</small><small style="text-align:center;font-weight:800">Fly Ride</small>
+            <b style="align-self:center">Normal</b><input class="in" type="number" min="0" step="0.01" data-var="normal-none" placeholder="—" style="width:100%;min-width:0"><input class="in" type="number" min="0" step="0.01" data-var="normal-f" placeholder="—" style="width:100%;min-width:0"><input class="in" type="number" min="0" step="0.01" data-var="normal-r" placeholder="—" style="width:100%;min-width:0"><input class="in" type="number" min="0" step="0.01" data-var="normal-fr" placeholder="—" style="width:100%;min-width:0"><b style="align-self:center">Neon</b><input class="in" type="number" min="0" step="0.01" data-var="neon-none" placeholder="—" style="width:100%;min-width:0"><input class="in" type="number" min="0" step="0.01" data-var="neon-f" placeholder="—" style="width:100%;min-width:0"><input class="in" type="number" min="0" step="0.01" data-var="neon-r" placeholder="—" style="width:100%;min-width:0"><input class="in" type="number" min="0" step="0.01" data-var="neon-fr" placeholder="—" style="width:100%;min-width:0"><b style="align-self:center">Mega</b><input class="in" type="number" min="0" step="0.01" data-var="mega-none" placeholder="—" style="width:100%;min-width:0"><input class="in" type="number" min="0" step="0.01" data-var="mega-f" placeholder="—" style="width:100%;min-width:0"><input class="in" type="number" min="0" step="0.01" data-var="mega-r" placeholder="—" style="width:100%;min-width:0"><input class="in" type="number" min="0" step="0.01" data-var="mega-fr" placeholder="—" style="width:100%;min-width:0">
+          </div>
+          <button id="a-add" class="btn" style="width:100%">Add / update filled variants</button>
+          <p class="hint">Type the pet name once, fill the value of every version you want (leave the rest empty) and press the button: each filled box becomes its own catalog item. If the pet is already in the catalog its picture is filled in for you and existing versions only get their value updated.</p>
+          <details style="margin-top:6px"><summary class="hint" style="cursor:pointer">elvebredd data source</summary>
+            <input id="e-src" class="in" style="width:100%;margin:6px 0" placeholder="Optional exact data URL (empty = automatic)">
+            <button id="e-src-save" class="btn gray sm">Save source</button>
+          </details>
         </div>
 
         <div style="background:#f5faff;padding:14px;border-radius:12px">
@@ -2808,9 +2894,26 @@ function adminUI() {
   $('u-s').onchange = () => renderUsers();
   overlay.addEventListener('mousedown', e => { if (e.target === overlay) overlay.remove(); });
 
-  $('a-img').oninput = () => {
+  let catalogCache = [];
+  const varKey = (age, fly, ride) => `${age}-${fly && ride ? 'fr' : fly ? 'f' : ride ? 'r' : 'none'}`;
+  const setPreview = () => {
     const v = $('a-img').value.trim();
-    $('a-prev').src = /^https:\/\//.test(v) ? v : '';
+    if (/^https:\/\//.test(v)) { $('a-prev').src = v; $('a-prev').style.visibility = 'visible'; }
+    else { $('a-prev').removeAttribute('src'); $('a-prev').style.visibility = 'hidden'; }
+  };
+  $('a-img').oninput = setPreview;
+
+  /* typing a pet that is already in the catalog fills its picture and current values */
+  $('a-name').onchange = () => {
+    const n = $('a-name').value.trim().toLowerCase();
+    const same = catalogCache.filter(c => c.name.toLowerCase() === n);
+    if (!same.length) return;
+    if (!$('a-img').value.trim()) { $('a-img').value = same[0].image; setPreview(); }
+    for (const c of same) {
+      const box = overlay.querySelector(`[data-var="${varKey(c.age, c.fly, c.ride)}"]`);
+      if (box && box.value === '') box.value = c.value;
+    }
+    $('e-msg').textContent = `${same.length} version(s) already in the catalog`;
   };
 
   async function load() {
@@ -2851,6 +2954,8 @@ function adminUI() {
       ${data.catalog.map(catCard).join('') || '<p class="hint">No items yet.</p>'}
     </div>`;
 
+    catalogCache = data.catalog || [];
+    $('a-names').innerHTML = [...new Set(catalogCache.map(c => c.name))].map(n => `<option value="${esc(n)}"></option>`).join('');
     usersCache = data.users;
     renderUsers();
     $('g-users').innerHTML = data.users.map(u => `<option value="${esc(u.username)}"></option>`).join('');
@@ -2954,44 +3059,32 @@ function adminUI() {
   };
 
   async function elveFetch() {
-    const name = $('e-name').value.trim();
-    if (!name) { toast('Enter a pet name', 'err'); return null; }
-    const qs = new URLSearchParams({
-      name, age: $('e-age').value, fly: $('e-fly').checked ? '1' : '0', ride: $('e-ride').checked ? '1' : '0'
-    });
+    const name = $('a-name').value.trim();
+    if (!name) { toast('Enter a pet name', 'err'); return; }
     $('e-msg').textContent = 'Loading values from elvebredd…';
+    $('e-fetch').disabled = true;
     try {
-      const r = await api('/api/admin/elve?' + qs.toString());
-      $('a-img').value = r.image;
-      $('a-prev').src = r.image;
+      const r = await api('/api/admin/elve?name=' + encodeURIComponent(name));
       $('a-name').value = r.name;
-      $('a-val').value = r.value;
-      $('a-age').value = r.age;
-      $('a-fly').checked = r.fly;
-      $('a-ride').checked = r.ride;
-      $('e-msg').textContent = `${r.name}: ${fmt(r.value)} (field "${r.field}")`;
-      return r;
+      if (r.image) { $('a-img').value = r.image; setPreview(); }
+      let n = 0;
+      for (const [key, value] of Object.entries(r.variants || {})) {
+        const box = overlay.querySelector(`[data-var="${key}"]`);
+        if (box && value !== null) { box.value = value; n++; }
+      }
+      $('e-msg').textContent = `${r.name}: ${n} values filled${r.image ? '' : ' (no picture found, paste the image URL)'}`;
     } catch (err) {
       $('e-msg').textContent = err.message;
-      const m = /Did you mean: (.*)\?$/.exec(err.message);
-      if (m) $('e-sugg').innerHTML = m[1].split(', ').map(n => `<option value="${esc(n)}"></option>`).join('');
       toast(err.message, 'err');
-      return null;
+    } finally {
+      $('e-fetch').disabled = false;
     }
   }
 
   $('e-fetch').onclick = () => elveFetch();
-  $('e-name').onkeydown = e => { if (e.key === 'Enter') elveFetch(); };
-  $('e-add').onclick = async () => {
-    const r = await elveFetch();
-    if (!r) return;
-    try {
-      await api('/api/admin/catalog', { method: 'POST', body: { image: r.image, name: r.name, value: r.value, age: r.age, fly: r.fly, ride: r.ride } });
-      $('a-img').value = ''; $('a-name').value = ''; $('a-val').value = '';
-      $('a-prev').removeAttribute('src');
-      toast(`${r.name} added (${fmt(r.value)})`, 'ok');
-      await load();
-    } catch (err) { toast(err.message, 'err'); }
+  $('a-clear').onclick = () => {
+    $('a-name').value = ''; $('a-img').value = ''; setPreview(); $('e-msg').textContent = '';
+    overlay.querySelectorAll('[data-var]').forEach(b => { b.value = ''; });
   };
 
   $('e-src-save').onclick = async () => {
@@ -3012,17 +3105,19 @@ function adminUI() {
   };
 
   $('a-add').onclick = async () => {
-    try {
-      await api('/api/admin/catalog', {
-        method: 'POST',
-        body: {
-          image: $('a-img').value, name: $('a-name').value, value: $('a-val').value,
-          age: $('a-age').value, fly: $('a-fly').checked, ride: $('a-ride').checked
-        }
+    const variants = [...overlay.querySelectorAll('[data-var]')]
+      .filter(b => b.value.trim() !== '')
+      .map(b => {
+        const [age, pot] = b.dataset.var.split('-');
+        return { age, fly: pot === 'f' || pot === 'fr', ride: pot === 'r' || pot === 'fr', value: b.value };
       });
-      $('a-img').value = ''; $('a-name').value = ''; $('a-val').value = '';
-      $('a-prev').removeAttribute('src');
-      toast('Item added!', 'ok');
+    if (!variants.length) return toast('Fill the value of at least one version', 'err');
+    try {
+      const r = await api('/api/admin/catalog/bulk', {
+        method: 'POST', body: { name: $('a-name').value, image: $('a-img').value, variants }
+      });
+      toast(`${r.added} added, ${r.updated} updated`, 'ok');
+      $('a-clear').onclick();
       await load();
     } catch (err) { toast(err.message, 'err'); }
   };
@@ -3540,6 +3635,10 @@ app.use((err, req, res, next) => {
   const status = Number(err.status || err.statusCode);
   res.status(status >= 400 && status < 600 ? status : 400).json({ error: 'Bad request' });
 });
+
+/* one failing request must never take the whole site down */
+process.on('unhandledRejection', err => console.error('Unhandled rejection:', err && err.message ? err.message : err));
+process.on('uncaughtException', err => console.error('Uncaught exception:', err && err.stack ? err.stack : err));
 
 /* ================= START ================= */
 
