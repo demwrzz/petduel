@@ -193,13 +193,10 @@
     .banner h1 { margin: 0 0 5px; color: var(--orange); font-size: 20px; }
     .banner p { margin: 0; color: #bab4a5; font-size: 13px; }
     /* ---------- game switch (Adopt Me / MM2) ---------- */
-    .game-sw { display: flex; flex: none; gap: 4px; margin-left: 14px; padding: 4px; border: 1px solid #262a35; border-radius: 10px; background: #12141b; }
-    .game-sw button { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border: 0; border-radius: 7px; color: #8d909a; background: transparent; font: inherit; font-size: 13px; font-weight: 900; letter-spacing: .3px; transition: background .2s, color .2s, transform .15s; }
-    .game-sw button img { width: 20px; height: 20px; object-fit: contain; }
-    .game-sw button:hover { color: #fff; }
-    .game-sw button.on { color: #04120b; background: var(--green); box-shadow: 0 0 14px rgba(0, 239, 160, .35); }
-    .game-sw button:active { transform: scale(.95); }
-    @media (max-width: 900px) { .game-sw { margin-left: 8px; } .game-sw button { padding: 0 9px; } .game-sw .gs-t { display: none; } .game-sw button.on .gs-t { display: inline; } }
+    .game-dd .gd-ico, .game-dd .cf-menu img { width: 20px; height: 20px; object-fit: contain; flex: none; }
+    .game-dd .cf-menu button { display: flex; align-items: center; gap: 8px; }
+    .game-dd { z-index: 21; }
+    .jp-gbar { margin-bottom: 12px; }
     .gtag { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 5px; font-size: 10px; font-weight: 900; letter-spacing: .4px; vertical-align: middle; }
     .gtag.adoptme { color: #00efa0; background: rgba(0, 239, 160, .12); }
     .gtag.mm2 { color: #ffb547; background: rgba(255, 160, 40, .14); }
@@ -1652,10 +1649,6 @@
         <svg viewBox="0 0 100 100"><use href="#logo-mark"/></svg>
         <div>PET<span>DUEL</span></div>
       </div>
-      <div class="game-sw" id="gameSw">
-        <button data-action="game" data-game="adoptme"><img src="/assets/xmas-dog.png" alt=""><span class="gs-t">Adopt Me</span></button>
-        <button data-action="game" data-game="mm2"><img src="/assets/mm2-knife.png" alt=""><span class="gs-t">MM2</span></button>
-      </div>
 
       <nav class="nav">
         <div class="nav-item active" data-action="home" data-nav="home">
@@ -1744,6 +1737,17 @@
         </div>
 
         <div class="cf-bar">
+          <div class="cf-sort game-dd">
+            <button class="cf-sort-btn" data-action="game-toggle">
+              <img class="gd-ico" src="/assets/xmas-dog.png" alt="">
+              <span class="gd-label">Adopt Me</span>
+              <svg class="caret" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+            </button>
+            <div class="cf-menu">
+              <button data-action="game" data-game="adoptme"><img src="/assets/xmas-dog.png" alt="">Adopt Me</button>
+              <button data-action="game" data-game="mm2"><img src="/assets/mm2-knife.png" alt="">MM2</button>
+            </div>
+          </div>
           <div class="cf-sort" id="cfSortBox">
             <button class="cf-sort-btn" data-action="sort-toggle">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 4v16M3 16l4 4 4-4M14 6h7M14 11h5M14 16h3"/></svg>
@@ -1772,7 +1776,17 @@
 
       <section class="content" id="profileContent" style="display:none"><div id="profile"></div></section>
       <section class="content" id="eventContent" style="display:none"><div id="eventView"></div></section>
-      <section class="content" id="jackpotContent" style="display:none"><div id="jackpotView"></div></section>
+      <section class="content" id="jackpotContent" style="display:none"><div class="cf-bar jp-gbar"><div class="cf-sort game-dd">
+            <button class="cf-sort-btn" data-action="game-toggle">
+              <img class="gd-ico" src="/assets/xmas-dog.png" alt="">
+              <span class="gd-label">Adopt Me</span>
+              <svg class="caret" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+            </button>
+            <div class="cf-menu">
+              <button data-action="game" data-game="adoptme"><img src="/assets/xmas-dog.png" alt="">Adopt Me</button>
+              <button data-action="game" data-game="mm2"><img src="/assets/mm2-knife.png" alt="">MM2</button>
+            </div>
+          </div></div><div id="jackpotView"></div></section>
     </main>
 
     <footer class="site-footer">
@@ -2005,7 +2019,12 @@
     const gameTag = g => `<span class="gtag ${g}">${g === "mm2" ? "MM2" : "ADOPT ME"}</span>`;
     const inventory = () => ME ? asArray(ME.inventory).filter(i => gameOf(i) === GAME) : [];
     function renderGameSw() {
-      document.querySelectorAll("#gameSw [data-game]").forEach(b => b.classList.toggle("on", b.dataset.game === GAME));
+      document.querySelectorAll(".game-dd").forEach(d => {
+        d.querySelector(".gd-label").textContent = GAME_NAMES[GAME];
+        d.querySelector(".gd-ico").src = GAME === "mm2" ? "/assets/mm2-knife.png" : "/assets/xmas-dog.png";
+        d.querySelectorAll("[data-game]").forEach(b => b.classList.toggle("on", b.dataset.game === GAME));
+        d.classList.remove("open");
+      });
       document.body.dataset.game = GAME;
     }
     renderGameSw();
@@ -3034,6 +3053,7 @@
     let lobbySort = "high";
     document.addEventListener("click", e => {
       if (!e.target.closest || !e.target.closest("#cfSortBox")) $("#cfSortBox")?.classList.remove("open");
+      document.querySelectorAll(".game-dd.open").forEach(d => { if (!e.target.closest || !d.contains(e.target)) d.classList.remove("open"); });
     });
     $("#chatInput").addEventListener("keydown", e => { if (e.key === "Enter") sendChat(); });
 
@@ -5753,7 +5773,8 @@
       "profile-page"(el) { showProfile(Number(el.dataset.page)); },
       "discord-link"() { discordLink(); },
       "support-panel"() { showSupportPanel(); },
-      game(el) { setGame(el.dataset.game); },
+      game(el) { setGame(el.dataset.game); renderGameSw(); },
+      "game-toggle"(el) { el.closest(".game-dd").classList.toggle("open"); },
       "dep-game"(el) { depGame = el.dataset.game === "mm2" ? "mm2" : "adoptme"; openBotsModal(1); },
       "pf-game"(el) { pfGame = el.dataset.game === "mm2" ? "mm2" : "adoptme"; showProfile(1, true); },
       "uc-game"(el) { ucGame = el.dataset.game === "mm2" ? "mm2" : "adoptme"; ucRender(); },
