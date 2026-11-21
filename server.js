@@ -1206,7 +1206,7 @@ app.post('/api/me/nickname', auth, actionLimit, (req, res) => {
 
 app.get('/api/profile', auth, (req, res) => {
   const user = req.user;
-  const perPage = 6;
+  const perPage = 5;
   const pages = Math.max(1, Math.ceil(user.tx.length / perPage));
   const page = Math.min(pages, Math.max(1, parseInt(req.query.page, 10) || 1));
 
@@ -1219,7 +1219,9 @@ app.get('/api/profile', auth, (req, res) => {
       profit: round2(user.profit)
     },
     rows: user.tx.slice((page - 1) * perPage, page * perPage),
-    page, pages
+    page, pages,
+    /* every game result with its time, oldest first, for the profit graph (1D / 3D / 7D / 30D / All) */
+    games: user.tx.filter(t => GAME_TX.test(t.type)).map(t => ({ ts: t.ts, a: t.amount })).reverse()
   });
 });
 
@@ -1546,12 +1548,24 @@ app.post('/api/admin/match/cancel', auth, adminOnly, (req, res) => {
   }
   markDirty();
   console.log(`[ADMIN] ${req.user.username} cancelled coinflip ${match.id} of ${match.host.username}`);
-  pushChat({ id: rid(4), user: { username: 'System', avatar: null }, text: `${nick(match.host)}'s coinflip was cancelled by an admin. All pets were returned.`, ts: now() });
+  pushChat({ id: rid(4), user: { username: 'PetDuel', avatar: null }, system: true, text: `${nick(match.host)}'s coinflip was cancelled by an admin. All pets were returned.`, ts: now() });
   io.emit('match:remove', { id: match.id });
   res.json({ ok: true });
 });
 
 /* ================= CHAT ================= */
+
+/* a system message from PetDuel (shown with the site logo and a SYSTEM tag) */
+const systemChat = (text, extra = {}) => pushChat({ id: rid(4), user: { username: 'PetDuel', avatar: null }, system: true, text, ts: now(), ...extra });
+
+/* every 30 minutes: the deposit risk reminder */
+const RISK_TEXT = 'PetDuel is not responsible for any item losses due to rollbacks, bans, or trade restrictions applied by Adopt Me moderators or Roblox. Deposit and play at your own risk.';
+setInterval(() => {
+  if (maintenanceOn()) return;
+  const last = S.chat[S.chat.length - 1];
+  if (last && last.warn) return;            /* do not repeat it when nobody wrote in between */
+  systemChat(RISK_TEXT, { warn: true });
+}, 30 * 60 * 1000);
 
 function pushChat(message) {
   S.chat.push(message);
@@ -1577,7 +1591,7 @@ function endGiveaway(id) {
   if (!host) return;
 
   const system = text => pushChat({
-    id: rid(4), user: { username: 'System', avatar: null }, text, ts: now()
+    id: rid(4), user: { username: 'PetDuel', avatar: null }, system: true, text, ts: now()
   });
 
   const eligible = g.entrants.filter(uid => S.users[uid] && !S.users[uid].banned);
@@ -1690,7 +1704,7 @@ app.post('/api/admin/giveaway/delete', auth, adminOnly, (req, res) => {
   }
   markDirty();
   console.log(`[ADMIN] ${req.user.username} deleted giveaway ${g.id} of ${g.host.username} (${refund ? 'pets returned' : 'pets removed'})`);
-  pushChat({ id: rid(4), user: { username: 'System', avatar: null }, text: `${nick(g.host)}'s giveaway was cancelled by an admin.`, ts: now() });
+  pushChat({ id: rid(4), user: { username: 'PetDuel', avatar: null }, system: true, text: `${nick(g.host)}'s giveaway was cancelled by an admin.`, ts: now() });
   io.emit('giveaway:remove', { id: g.id });
   res.json({ ok: true });
 });
@@ -1821,6 +1835,12 @@ app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
 });
 
 const UPDATE_LOG = [
+  { version: '4.2', title: 'Chat replies, system messages, new profile', changes: [
+    'Chat: reply to messages; system messages come from "PetDuel" with the logo and a glowing green SYSTEM tag',
+    'Every 30 minutes a deposit-risk reminder is posted in the chat (not repeated if nobody wrote since)',
+    'When an admin marks a withdrawal as sent, the chat shows "X successfully withdrew N pets worth V"',
+    'Profile opens as a window: stats, profit graph with 1D / 3D / 7D / 30D / All, and the transaction table with pages'
+  ] },
   { version: '4.1', title: 'Values x1000, new profile card and leaderboard', changes: [
     'Every value on the site is multiplied by 1000 once (catalog, inventories, games, stats, history, giveaways, withdrawals); rank limits and elvebredd lookups use the same scale',
     'Lobby shows short values (55K, 1.2M)',
@@ -2470,7 +2490,8 @@ function emitEvent() {
 function eventChat(text, withButton = false) {
   pushChat({
     id: rid(4),
-    user: { username: 'Event', avatar: null },
+    user: { username: 'PetDuel', avatar: null },
+    system: true,
     text,
     ts: now(),
     event: withButton
@@ -3120,6 +3141,8 @@ app.post('/api/admin/withdraw/done', auth, adminOnly, (req, res) => {
   markDirty();
   const owner = S.users[w.user.id];
   if (owner) emitMe(owner);
+  const n = w.items.length;
+  systemChat(`${nick(owner || w.user)} successfully withdrew ${n} pet${n === 1 ? '' : 's'} worth ${Number(w.value).toLocaleString('en-US')}! 🎉`, { withdraw: true });
   res.json({ ok: true });
 });
 
@@ -4350,11 +4373,20 @@ io.on('connection', socket => {
       return callback({ error: 'Links are not allowed in chat' });
     }
 
+    /* reply: keep a short copy of the message it answers */
+    let reply = null;
+    const replyId = payload && typeof payload.replyTo === 'string' ? payload.replyTo.slice(0, 20) : '';
+    if (replyId) {
+      const orig = S.chat.find(m => m.id === replyId);
+      if (orig) reply = { id: orig.id, name: String(orig.user && orig.user.username || 'PetDuel').slice(0, 30), text: String(orig.text || '').slice(0, 80) };
+    }
+
     pushChat({
       id: rid(4),
       user: { ...publicUser(user), rank: rankOf(user.totalBet) },
       rank: rankOf(user.totalBet),
-      text, ts: t, admin: showTag
+      text, ts: t, admin: showTag,
+      ...(reply ? { reply } : {})
     });
     callback({ ok: true });
   });
