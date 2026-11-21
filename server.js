@@ -517,6 +517,41 @@ const emitBots = () => io.emit('bots:update', publicBots());
 const app = express();
 app.set('trust proxy', 1);
 
+/* ---------- Country block ----------
+   BLOCK_COUNTRIES=TR (comma separated country codes) blocks visitors from those countries.
+   Cloudflare tells us the visitor's country in the CF-IPCountry header.
+   Staff open https://petduel.win/?staff=STAFF_KEY once: a cookie then lets them in from anywhere. */
+const BLOCK_COUNTRIES = (E.BLOCK_COUNTRIES || '').split(',').map(x => x.trim().toUpperCase()).filter(Boolean);
+const STAFF_KEY = E.STAFF_KEY || '';
+const staffCookieValue = STAFF_KEY ? sha('staff:' + STAFF_KEY) : '';
+
+const hasStaffCookie = cookieHeader => Boolean(staffCookieValue) &&
+  String(cookieHeader || '').split(';').some(c => c.trim() === 'pd_staff=' + staffCookieValue);
+const blockedCountry = headers => {
+  const c = String(headers['cf-ipcountry'] || '').toUpperCase();
+  return Boolean(c) && BLOCK_COUNTRIES.includes(c);
+};
+
+const BLOCKED_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pet Duel</title><style>html,body{margin:0;height:100%}body{display:grid;place-items:center;padding:24px;box-sizing:border-box;
+background:radial-gradient(circle at 50% 40%,#10291f,#0b0d12 70%);color:#fff;font-family:system-ui,Arial,sans-serif;text-align:center}
+h1{margin:0;font-size:clamp(56px,14vw,140px);font-weight:900;letter-spacing:-.04em}h1 span{color:#00efa0}
+p{margin:16px 0 0;font-size:clamp(17px,3vw,24px);font-weight:700}small{display:block;margin-top:10px;color:#8d909a;font-size:15px}</style></head>
+<body><div><h1>PET<span>DUEL</span></h1><p>Pet Duel is not available in your country.</p><small>Sorry! This site cannot be used from your location.</small></div></body></html>`;
+
+app.use((req, res, next) => {
+  if (STAFF_KEY && req.query.staff === STAFF_KEY) {
+    res.setHeader('Set-Cookie', `pd_staff=${staffCookieValue}; Path=/; Max-Age=31536000; HttpOnly; Secure; SameSite=Lax`);
+    return res.redirect('/');
+  }
+  if (!BLOCK_COUNTRIES.length || req.path === '/health') return next();
+  if (blockedCountry(req.headers) && !hasStaffCookie(req.headers.cookie)) {
+    if (req.path.startsWith('/api/')) return res.status(451).json({ error: 'Pet Duel is not available in your country' });
+    return res.status(451).type('html').send(BLOCKED_PAGE);
+  }
+  next();
+});
+
 /* ---------- abuse / DDoS protection ----------
    Layers: per-IP rate limits (page, API, bursts, login), automatic 15 minute block for IPs that keep
    hitting the limits, request size and timeout limits, socket connection and event limits,
@@ -621,6 +656,9 @@ const socketIp = socket => {
 };
 
 io.use((socket, next) => {
+  if (BLOCK_COUNTRIES.length && blockedCountry(socket.handshake.headers) && !hasStaffCookie(socket.handshake.headers.cookie)) {
+    return next(new Error('Not available in your country'));
+  }
   const ip = socketIp(socket);
   const count = socketsByIp.get(ip) || 0;
 
@@ -1636,6 +1674,10 @@ app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
 });
 
 const UPDATE_LOG = [
+  { version: '3.2', title: 'Country block', changes: [
+    'BLOCK_COUNTRIES (e.g. TR) shows visitors from those countries a "not available in your country" page (uses Cloudflare CF-IPCountry); API and live connection are blocked too',
+    'STAFF_KEY: open /?staff=KEY once and a cookie lets staff in from a blocked country'
+  ] },
   { version: '3.1', title: 'Safer deposit flow, giveaway delete', changes: [
     'Deposit is 3 steps: 1) "Deposit at your own risk" with an I acknowledge checkbox, 2) trade rules incl. at least 6 food items per trade, 3) the bot (masked name, shown big) and the Join private server button',
     'Admins see a delete button on every giveaway card; pets go back to the host unless unticked'
