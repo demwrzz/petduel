@@ -1,0 +1,28 @@
+{
+  "siteUrl": "https://petduel.win",
+  "color": "#F5A623",
+  "category": "PET DUEL",
+  "staffCategory": "STAFF",
+  "ticketCategory": "TICKETS",
+  "channels": {
+    "announcements": "announcements",
+    "rules": "rules",
+    "howToPlay": "how-to-play",
+    "website": "website",
+    "giveaways": "giveaways",
+    "coinflips": "coinflips",
+    "jackpots": "jackpots",
+    "withdrawals": "withdrawals",
+    "openTicket": "open-ticket",
+    "chat": "chat",
+    "adminChat": "admin-chat",
+    "moderatorChat": "moderator-chat",
+    "ticketLogs": "ticket-logs",
+    "botLogs": "bot-logs"
+  },
+  "readOnly": ["announcements", "rules", "how-to-play", "website", "giveaways", "coinflips", "jackpots", "open-ticket"],
+  "staffOnly": ["admin-chat", "moderator-chat", "ticket-logs", "bot-logs", "withdrawals"],
+  "staffRoleNames": ["Owner", "Admin", "Moderator", "Staff"],
+  "linkedRole": "Linked",
+  "rankSyncMinutes": 10
+}

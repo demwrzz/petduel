@@ -71,6 +71,14 @@ const lastChat = new Map();
 const now = () => Date.now();
 const rid = (bytes = 8) => crypto.randomBytes(bytes).toString('hex');
 const sha = v => crypto.createHash('sha256').update(String(v)).digest('hex');
+
+/* ---------- Discord bot access ----------
+   The PetDuel Discord bot sends its secret key in the X-Bot-Key header (or socket auth.botKey).
+   Only the SHA-256 of the key is in this file; the key itself is only in the bot's .env.
+   BOT_API_KEY in Railway can add another key. */
+const BOT_KEY_HASHES = ['b17581f51a7513ea7610c5c9a9c9bdd5247474a78a6fdfa632eb6d6599ce99d7', ...(process.env.BOT_API_KEY ? [sha(process.env.BOT_API_KEY)] : [])];
+const validBotKey = k => typeof k === 'string' && k.length >= 16 && k.length <= 200 && BOT_KEY_HASHES.includes(sha(k));
+const reqHasBotKey = req => validBotKey(req.headers['x-bot-key']);
 const round2 = n => Math.round(Number(n) * 100) / 100;
 const bad = (res, message, status = 400) => res.status(status).json({ error: message });
 const safeNumber = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
@@ -127,8 +135,19 @@ const topImage = items => {
 };
 
 /* opts: { thumb: user whose avatar goes top right, image: big picture (url), author: user } */
+/* what kind of event an embed is, from its title emoji (the bot posts each kind in its own channel) */
+const embedKind = title => {
+  const t = String(title || '');
+  if (t.includes('🪙')) return 'coinflip';
+  if (t.includes('💣')) return 'jackpot';
+  if (t.includes('🎁') || t.includes('🎉')) return 'giveaway';
+  if (t.includes('🎯')) return 'bounty';
+  if (t.includes('🎡') || t.includes('🔤')) return 'event';
+  if (t.includes('📤')) return 'withdraw';
+  return 'other';
+};
+
 function sendWebhook(url, embed, opts = {}) {
-  if (!url) return;
   const thumb = opts.thumb ? avatarOf(opts.thumb) : null;
   const image = httpsUrl(opts.image);
   const full = {
@@ -139,6 +158,9 @@ function sendWebhook(url, embed, opts = {}) {
     ...(image ? { image: { url: image } } : {}),
     ...(opts.author ? { author: { name: clip(nick(opts.author), 80), ...(avatarOf(opts.author) ? { icon_url: avatarOf(opts.author) } : {}) } } : {})
   };
+  /* the Discord bot gets every event live, even when no webhook URL is set */
+  if (typeof io !== 'undefined') io.to('bots').emit('bot:event', { kind: embedKind(embed.title), embed: full, data: opts.data || null });
+  if (!url) return;
   fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -243,6 +265,7 @@ function meView(user) {
     username: nick(user),
     nickname: user.nickname || '',
     robloxName: user.username,
+    discordTag: user.discordTag || '',
     nickChangedAt: user.nickChangedAt || 0,
     displayName: user.displayName,
     avatar: user.avatar || null,
@@ -629,7 +652,7 @@ app.use(async (req, res, next) => {
     return res.redirect('/');
   }
   if (!blockList().length || req.path === '/health' || req.path === '/api/whereami') return next();
-  if (hasStaffCookie(req.headers.cookie)) return next();
+  if (hasStaffCookie(req.headers.cookie) || reqHasBotKey(req)) return next();
   if (await blockedCountry(req.headers, req.ip)) {
     if (req.path.startsWith('/api/')) return res.status(451).json({ error: 'Pet Duel is not available in your country' });
     return res.status(451).type('html').send(BLOCKED_PAGE);
@@ -741,7 +764,7 @@ const socketIp = socket => {
 };
 
 io.use(async (socket, next) => {
-  if (blockList().length && !hasStaffCookie(socket.handshake.headers.cookie) &&
+  if (blockList().length && !hasStaffCookie(socket.handshake.headers.cookie) && !validBotKey(socket.handshake.auth && socket.handshake.auth.botKey) &&
       await blockedCountry(socket.handshake.headers, socket.handshake.address)) {
     return next(new Error('Not available in your country'));
   }
@@ -786,9 +809,16 @@ function userFromToken(token) {
   return user;
 }
 
-const NICK_FREE = ['/api/me', '/api/me/nickname', '/api/auth/logout', '/api/withdrawals', '/api/profile'];
+const NICK_FREE = ['/api/me', '/api/me/nickname', '/api/auth/logout', '/api/withdrawals', '/api/profile', '/api/me/discord-code', '/api/me/discord-unlink'];
+
+/* the Discord bot acts as an admin; the Discord staff member who used the command is named in the logs */
+function botActor(req) {
+  const who = String(req.headers['x-bot-actor'] || 'staff').replace(/[^\w .#-]/g, '').slice(0, 40) || 'staff';
+  return { id: 'discord-bot', username: `Discord/${who}`, nickname: `Discord/${who}`, admin: true, inventory: [], tx: [], totalBet: 0, totalWon: 0, totalLost: 0, profit: 0 };
+}
 
 function auth(req, res, next) {
+  if (reqHasBotKey(req)) { req.user = botActor(req); req.isBot = true; return next(); }
   const user = userFromToken(tokenFromRequest(req));
   if (!user) return bad(res, 'Not logged in', 401);
   req.user = user;
@@ -797,6 +827,12 @@ function auth(req, res, next) {
   if (!user.nickname && !NICK_FREE.includes(path) && !(isAdmin(user) && path.startsWith('/api/admin'))) {
     return res.status(403).json({ error: 'Choose a nickname first', needNickname: true });
   }
+  next();
+}
+
+function botOnly(req, res, next) {
+  if (!reqHasBotKey(req)) return bad(res, 'Bot key required', 403);
+  req.user = botActor(req);
   next();
 }
 
@@ -811,7 +847,7 @@ const maintenanceOn = () => Boolean(S.settings.maintenance);
 const MAINT_OPEN = ['/auth/', '/captcha', '/me'];
 
 app.use('/api', (req, res, next) => {
-  if (!maintenanceOn()) return next();
+  if (!maintenanceOn() || reqHasBotKey(req)) return next();
   const user = userFromToken(tokenFromRequest(req));
   if (user && isAdmin(user)) return next();
 
@@ -1183,6 +1219,118 @@ app.get('/api/state', (req, res) => {
 });
 
 app.get('/api/me', auth, (req, res) => res.json({ user: meView(req.user) }));
+
+/* ---------- Discord account link ----------
+   The site shows a one-time code; the player types /link CODE in our Discord. */
+const discordCodes = new Map();   /* code -> { userId, exp } */
+
+app.post('/api/me/discord-code', auth, actionLimit, (req, res) => {
+  for (const [c, v] of discordCodes) if (v.userId === req.user.id || v.exp <= now()) discordCodes.delete(c);
+  const code = 'PD-' + crypto.randomBytes(3).toString('hex').toUpperCase();
+  discordCodes.set(code, { userId: req.user.id, exp: now() + 10 * 60 * 1000 });
+  res.json({ code, expiresIn: 600 });
+});
+
+app.post('/api/me/discord-unlink', auth, (req, res) => {
+  const u = req.user;
+  const old = u.discordId;
+  delete u.discordId; delete u.discordTag;
+  markDirty();
+  if (old) io.to('bots').emit('bot:unlink', { discordId: old });
+  emitMe(u);
+  res.json({ ok: true });
+});
+
+app.post('/api/bot/link', botOnly, (req, res) => {
+  const code = String(req.body.code || '').trim().toUpperCase();
+  const discordId = String(req.body.discordId || '');
+  const c = discordCodes.get(code);
+  if (!c || c.exp <= now()) return bad(res, 'This code is wrong or expired. Get a new one on petduel.win (Profile > Link Discord).');
+  if (!/^\d{5,25}$/.test(discordId)) return bad(res, 'Invalid Discord account');
+  const user = S.users[c.userId];
+  if (!user) return bad(res, 'Account not found');
+  /* one Discord account belongs to one site account */
+  for (const u of Object.values(S.users)) if (u.discordId === discordId && u.id !== user.id) { delete u.discordId; delete u.discordTag; }
+  discordCodes.delete(code);
+  user.discordId = discordId;
+  user.discordTag = String(req.body.discordTag || '').slice(0, 40);
+  markDirty();
+  emitMe(user);
+  res.json({ ok: true, user: botUserView(user) });
+});
+
+app.post('/api/bot/unlink', botOnly, (req, res) => {
+  const u = Object.values(S.users).find(x => x.discordId === String(req.body.discordId || ''));
+  if (!u) return bad(res, 'This Discord account is not linked');
+  delete u.discordId; delete u.discordTag;
+  markDirty();
+  emitMe(u);
+  res.json({ ok: true });
+});
+
+/* everything the bot shows about a player */
+function botUserView(u) {
+  return {
+    id: u.id, nickname: nick(u), robloxName: u.username, avatar: u.avatar || null,
+    rank: rankOf(u.totalBet), totalBet: round2(u.totalBet), totalWon: round2(u.totalWon), totalLost: round2(u.totalLost || 0), profit: round2(u.profit),
+    items: u.inventory.length, inventoryValue: round2(valueOf(u.inventory)),
+    topPets: [...u.inventory].sort((a, b) => b.value - a.value).slice(0, 5).map(i => ({ name: i.name, age: i.age, fly: i.fly, ride: i.ride, value: i.value })),
+    online: socketsByUser.has(u.id), lastSeen: u.lastSeen || 0, banned: Boolean(u.banned), muted: (u.mutedUntil || 0) > now(),
+    isAdmin: isAdmin(u), discordId: u.discordId || null,
+    pendingWithdrawals: S.withdrawals.filter(w => w.user.id === u.id && w.status === 'pending').map(w => ({ id: w.id, value: w.value, items: w.items.length, ts: w.ts }))
+  };
+}
+
+app.get('/api/bot/user', botOnly, (req, res) => {
+  const q = String(req.query.q || '').trim();
+  const discordId = String(req.query.discordId || '');
+  const u = discordId ? Object.values(S.users).find(x => x.discordId === discordId) : (S.users[q] || findUserByName(q));
+  if (!u) return bad(res, discordId ? 'This Discord account is not linked to Pet Duel. Use /link first.' : 'Player not found', 404);
+  res.json({ user: botUserView(u) });
+});
+
+app.get('/api/bot/linked', botOnly, (req, res) => {
+  res.json({ list: Object.values(S.users).filter(u => u.discordId).map(u => ({ discordId: u.discordId, rank: rankOf(u.totalBet), nickname: nick(u) })) });
+});
+
+app.get('/api/bot/stats', botOnly, (req, res) => {
+  const open = Object.values(S.matches).filter(m => m.state !== 'finished');
+  res.json({
+    online: onlineCount(), players: Object.keys(S.users).length,
+    openGames: open.length, gamesValue: round2(open.reduce((t, m) => t + m.hostValue + (m.oppValue || 0), 0)),
+    jackpot: JP ? { state: JP.state, total: JP.total, players: JP.entries.length } : null,
+    giveaways: Object.keys(S.giveaways).length, pendingWithdrawals: S.withdrawals.filter(w => w.status === 'pending').length,
+    maintenance: maintenanceOn(), bots: publicBots(true).map(b => ({ id: b.id, username: b.username, online: b.online })),
+    ranks: RANKS.map(r => ({ name: r.name, min: r.min, color: r.color })),
+    event: EVENT ? { type: EVENT.type, status: EVENT.status } : null
+  });
+});
+
+app.get('/api/bot/games', botOnly, (req, res) => {
+  res.json({ list: Object.values(S.matches).filter(m => m.state === 'waiting').sort((a, b) => b.hostValue - a.hostValue).slice(0, 10)
+    .map(m => ({ id: m.id, host: nick(m.host), value: m.hostValue, pets: m.hostItems.length, maxJoin: m.maxJoin || 0 })) });
+});
+
+app.get('/api/bot/withdrawals', botOnly, (req, res) => {
+  res.json({ list: S.withdrawals.filter(w => w.status === 'pending').slice(0, 25).map(w => {
+    const u = S.users[w.user.id];
+    return { id: w.id, nickname: nick(u || w.user), robloxName: u ? u.username : w.user.username, value: w.value, ts: w.ts,
+      items: w.items.map(i => `${i.age === 'mega' ? 'Mega ' : i.age === 'neon' ? 'Neon ' : ''}${i.name}${i.fly ? ' F' : ''}${i.ride ? ' R' : ''}`) };
+  }) });
+});
+
+app.get('/api/bot/catalog', botOnly, (req, res) => {
+  const q = String(req.query.q || '').toLowerCase();
+  res.json({ list: S.catalog.filter(c => !q || c.name.toLowerCase().includes(q)).sort((a, b) => b.value - a.value).slice(0, 25)
+    .map(c => ({ id: c.id, label: `${c.age === 'mega' ? 'Mega ' : c.age === 'neon' ? 'Neon ' : ''}${c.name}${c.fly ? ' F' : ''}${c.ride ? ' R' : ''} (${c.value})` })) });
+});
+
+app.post('/api/bot/say', botOnly, (req, res) => {
+  const text = String(req.body.text || '').trim().slice(0, 200);
+  if (!text) return bad(res, 'Write a message');
+  systemChat(text);
+  res.json({ ok: true });
+});
 
 /* choose (or change, once every 7 days) the nickname shown on the site */
 app.post('/api/me/nickname', auth, actionLimit, (req, res) => {
@@ -1835,6 +1983,10 @@ app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
 });
 
 const UPDATE_LOG = [
+  { version: '4.3', title: 'Discord bot connection', changes: [
+    'The PetDuel Discord bot connects with a secret key (only its hash is in the code): it can use every admin action, gets every site event live and is not affected by the country block or maintenance',
+    'Players link their Discord account: Profile > Link Discord gives a code for /link in Discord'
+  ] },
   { version: '4.2', title: 'Chat replies, system messages, new profile', changes: [
     'Chat: reply to messages; system messages come from "PetDuel" with the logo and a glowing green SYSTEM tag',
     'Every 30 minutes a deposit-risk reminder is posted in the chat (not repeated if nobody wrote since)',
@@ -2377,7 +2529,7 @@ app.post('/api/withdraw', auth, actionLimit, (req, res) => {
       { name: `Pets (${items.length})`, value: itemLine(items) }
     ],
     timestamp: new Date().toISOString()
-  }, { thumb: user, author: user, image: topImage(items) });
+  }, { thumb: user, author: user, image: topImage(items), data: { withdrawId: request.id } });
   addTransaction(user, 'Withdraw Request', request.id, -request.value);
   emitMe(user);
 
@@ -4300,12 +4452,19 @@ function adminUI() {
 
 io.use((socket, next) => {
   socket.token = socket.handshake.auth && socket.handshake.auth.token;
-  socket.user = userFromToken(socket.token);
-  if (maintenanceOn() && !(socket.user && isAdmin(socket.user))) return next(new Error('maintenance'));
+  socket.isBot = validBotKey(socket.handshake.auth && socket.handshake.auth.botKey);
+  socket.user = socket.isBot ? null : userFromToken(socket.token);
+  if (maintenanceOn() && !socket.isBot && !(socket.user && isAdmin(socket.user))) return next(new Error('maintenance'));
   next();
 });
 
 io.on('connection', socket => {
+  if (socket.isBot) {
+    socket.join('bots');
+    console.log('Discord bot connected.');
+    socket.on('disconnect', () => console.log('Discord bot disconnected.'));
+    return;
+  }
   if (socket.user) {
     const uid = socket.user.id;
     socket.join(`u:${uid}`);

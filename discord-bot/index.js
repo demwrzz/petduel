@@ -1,0 +1,889 @@
+'use strict';
+
+/* =====================================================================
+   PetDuel Discord bot
+   - everything the old bot did: tickets, giveaways, coinflip, announce,
+     moderation and logs
+   - connected to petduel.win: account linking, rank roles, live site
+     events, withdraw approvals and every admin panel action
+   ===================================================================== */
+
+require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+const { io: ioClient } = require('socket.io-client');
+const {
+  Client, GatewayIntentBits, Partials, REST, Routes, SlashCommandBuilder, PermissionFlagsBits,
+  ChannelType, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder, Events
+} = require('discord.js');
+
+const CONFIG = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
+const TOKEN = (process.env.DISCORD_TOKEN || '').trim();
+const BOT_KEY = (process.env.BOT_KEY || '').trim();
+const ONLY_GUILD = (process.env.GUILD_ID || '').trim();
+const SITE = String(CONFIG.siteUrl || 'https://petduel.win').replace(/\/+$/, '');
+const COLOR = parseInt(String(CONFIG.color || '#F5A623').replace('#', ''), 16);
+const CH = CONFIG.channels;
+const EPHEMERAL = 64;
+
+if (!TOKEN) {
+  console.error('DISCORD_TOKEN is missing in the .env file.');
+  process.exit(1);
+}
+if (!BOT_KEY) console.warn('BOT_KEY is missing in the .env file: site features (link, ranks, withdrawals, /site ...) will not work.');
+
+/* ---------------- small helpers ---------------- */
+
+const DATA_DIR = path.join(__dirname, 'data');
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+const loadJson = (file, fallback) => { try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, file), 'utf8')); } catch { return fallback; } };
+const saveJson = (file, data) => fs.writeFileSync(path.join(DATA_DIR, file), JSON.stringify(data, null, 2));
+
+const fmt = n => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
+const short = n => {
+  n = Number(n || 0);
+  const a = Math.abs(n), s = n < 0 ? '-' : '';
+  if (a >= 1e9) return s + +(a / 1e9).toFixed(2) + 'B';
+  if (a >= 1e6) return s + +(a / 1e6).toFixed(2) + 'M';
+  if (a >= 1e3) return s + +(a / 1e3).toFixed(1) + 'K';
+  return fmt(n);
+};
+const gem = '💎';
+const ago = ts => {
+  if (!ts) return 'never';
+  const m = Math.floor((Date.now() - ts) / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m} min ago`;
+  if (m < 1440) return `${Math.floor(m / 60)} h ago`;
+  return `${Math.floor(m / 1440)} d ago`;
+};
+const petLabel = p => `${p.age === 'mega' ? 'Mega ' : p.age === 'neon' ? 'Neon ' : ''}${p.name}${p.fly ? ' F' : ''}${p.ride ? ' R' : ''}`;
+const embed = (title, description) => {
+  const e = new EmbedBuilder().setColor(COLOR).setFooter({ text: 'PetDuel · petduel.win' }).setTimestamp();
+  if (title) e.setTitle(title);
+  if (description) e.setDescription(description);
+  return e;
+};
+const actorOf = interaction => `${interaction.user.username}`;
+
+/* ---------------- petduel.win API ---------------- */
+
+async function site(method, apiPath, body, actor) {
+  if (!BOT_KEY) throw new Error('The bot has no BOT_KEY, so it cannot reach the site.');
+  const res = await fetch(SITE + apiPath, {
+    method,
+    headers: { 'Content-Type': 'application/json', 'X-Bot-Key': BOT_KEY, 'X-Bot-Actor': actor || 'bot' },
+    body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(15000)
+  });
+  const text = await res.text();
+  let data = {};
+  try { data = text ? JSON.parse(text) : {}; } catch { data = { error: `Site error (HTTP ${res.status})` }; }
+  if (!res.ok) throw new Error(data.error || `Site error (HTTP ${res.status})`);
+  return data;
+}
+
+/* ---------------- Discord client ---------------- */
+
+const BASE_INTENTS = [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildModeration];
+const PRIVILEGED = [GatewayIntentBits.GuildMembers, GatewayIntentBits.MessageContent];
+let client = null;
+let privileged = true;
+
+function makeClient(withPrivileged) {
+  const c = new Client({
+    intents: withPrivileged ? [...BASE_INTENTS, ...PRIVILEGED] : BASE_INTENTS,
+    partials: [Partials.Message, Partials.Channel, Partials.GuildMember]
+  });
+  attachHandlers(c);
+  return c;
+}
+
+async function start() {
+  client = makeClient(true);
+  try {
+    await client.login(TOKEN);
+  } catch (error) {
+    if (/disallowed intents/i.test(String(error && error.message))) {
+      console.warn('\n  Server Members Intent / Message Content Intent are off in the Developer Portal.');
+      console.warn('  The bot works without them, but join/leave logs and deleted message text are disabled.');
+      console.warn('  Turn them on: discord.com/developers > your app > Bot > Privileged Gateway Intents.\n');
+      privileged = false;
+      try { client.destroy(); } catch { /* ignore */ }
+      client = makeClient(false);
+      await client.login(TOKEN);
+    } else {
+      console.error('Login failed:', error.message);
+      if (/token/i.test(error.message)) console.error('Check DISCORD_TOKEN in the .env file.');
+      process.exit(1);
+    }
+  }
+}
+
+/* ---------------- server setup: channels, roles, panels ---------------- */
+
+const staffRoles = guild => guild.roles.cache.filter(r =>
+  !r.managed && r.id !== guild.id && (CONFIG.staffRoleNames.includes(r.name) || r.permissions.has(PermissionFlagsBits.ManageMessages)));
+
+const findChannel = (guild, name) => guild.channels.cache.find(c => c.type === ChannelType.GuildText && c.name === name);
+
+async function ensureCategory(guild, name) {
+  return guild.channels.cache.find(c => c.type === ChannelType.GuildCategory && c.name.toLowerCase() === name.toLowerCase()) ||
+    guild.channels.create({ name, type: ChannelType.GuildCategory, reason: 'PetDuel setup' });
+}
+
+async function ensureChannel(guild, name, parent) {
+  const existing = findChannel(guild, name);
+  if (existing) return existing;
+  const everyone = guild.id;
+  const overwrites = [];
+  if (CONFIG.staffOnly.includes(name)) {
+    overwrites.push({ id: everyone, deny: [PermissionFlagsBits.ViewChannel] });
+    for (const r of staffRoles(guild).values()) overwrites.push({ id: r.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] });
+  } else if (CONFIG.readOnly.includes(name)) {
+    overwrites.push({ id: everyone, deny: [PermissionFlagsBits.SendMessages], allow: [PermissionFlagsBits.ViewChannel] });
+  }
+  overwrites.push({ id: guild.members.me.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks, PermissionFlagsBits.ManageMessages] });
+  return guild.channels.create({ name, type: ChannelType.GuildText, parent: parent ? parent.id : undefined, permissionOverwrites: overwrites, reason: 'PetDuel setup' });
+}
+
+let siteRanks = [];
+
+async function ensureRoles(guild) {
+  const want = [...siteRanks.map(r => ({ name: r.name, color: r.color })), { name: CONFIG.linkedRole, color: '#00EFA0' }];
+  for (const r of want) {
+    if (guild.roles.cache.find(x => x.name === r.name)) continue;
+    try { await guild.roles.create({ name: r.name, color: r.color, reason: 'PetDuel rank role' }); }
+    catch (error) { console.warn(`Could not create role ${r.name}: ${error.message}`); }
+  }
+}
+
+/* posts a message only once: when the channel has nothing from the bot yet */
+async function postOnce(channel, payload) {
+  if (!channel) return;
+  try {
+    const recent = await channel.messages.fetch({ limit: 20 });
+    if (recent.some(m => m.author.id === channel.client.user.id)) return;
+    await channel.send(payload);
+  } catch (error) { console.warn(`Could not post in #${channel.name}: ${error.message}`); }
+}
+
+const ticketPanel = () => ({
+  embeds: [embed('🎫 Support Tickets', 'Need help with a deposit, a withdrawal or anything else?\nPress the button below and a private channel opens with our staff.\n\n**Tip:** link your account with `/link` first so staff can see your Pet Duel info.')],
+  components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('ticket_open').setLabel('Open a ticket').setEmoji('🎫').setStyle(ButtonStyle.Primary))]
+});
+
+async function setupGuild(guild) {
+  if (ONLY_GUILD && guild.id !== ONLY_GUILD) return;
+  try {
+    await guild.members.fetchMe();
+    await guild.roles.fetch();
+    await guild.channels.fetch();
+    const main = await ensureCategory(guild, CONFIG.category);
+    const staff = await ensureCategory(guild, CONFIG.staffCategory);
+    for (const key of ['announcements', 'rules', 'howToPlay', 'website', 'giveaways', 'coinflips', 'jackpots', 'openTicket', 'chat']) await ensureChannel(guild, CH[key], main);
+    for (const key of ['withdrawals', 'adminChat', 'moderatorChat', 'ticketLogs', 'botLogs']) await ensureChannel(guild, CH[key], staff);
+    await ensureRoles(guild);
+
+    await postOnce(findChannel(guild, CH.openTicket), ticketPanel());
+    await postOnce(findChannel(guild, CH.website), {
+      embeds: [embed('🌐 petduel.win', `**Adopt Me PvP duels**: coinflip, jackpot, giveaways and events.\n\n👉 **${SITE}**\n\nLink your account with \`/link\` (get the code on the site: Profile > Link Discord) to get your rank role!`)],
+      components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setLabel('Open Pet Duel').setStyle(ButtonStyle.Link).setURL(SITE))]
+    });
+    await postOnce(findChannel(guild, CH.rules), { embeds: [embed('📜 Server Rules', [
+      '1. Be respectful. No hate speech, threats or harassment.',
+      '2. No scamming, impersonating staff or bots, or asking for pets in DMs.',
+      '3. No spam, advertising or links to other sites.',
+      '4. Only trade with the deposit bot shown on petduel.win.',
+      '5. You must be 18+ and allowed to use Pet Duel where you live.',
+      '6. Staff will **never** DM you asking for pets or your password.',
+      '',
+      '⚠️ Pet Duel is not responsible for item losses due to rollbacks, bans or trade restrictions by Adopt Me moderators or Roblox. **Deposit and play at your own risk.**',
+      '🎮 Pet Duel is for entertainment only. Gems and values have no monetary value.'
+    ].join('\n'))] });
+    await postOnce(findChannel(guild, CH.howToPlay), { embeds: [embed('🎮 How to play', [
+      `**1. Log in** on ${SITE} with your Roblox account and choose a nickname.`,
+      '**2. Deposit:** Wallet > Deposit. Join the bot\'s private server and trade your pets (add at least 6 food items). An admin confirms it.',
+      '**3. Play:** create or join a **Coinflip** (pick paw or cat), or join the **Jackpot**: the bigger your share, the bigger your chance.',
+      '**4. Withdraw:** Wallet > select pets > Withdraw. An admin sends them to you in game.',
+      '**5. Link Discord:** Profile > Link Discord on the site, then `/link CODE` here for your rank role.',
+      '',
+      'Every result is provably fair. Questions? Open a ticket.'
+    ].join('\n'))] });
+
+    await registerCommands(guild);
+    console.log(`Ready in "${guild.name}".`);
+  } catch (error) {
+    console.error(`Setup failed in "${guild.name}": ${error.message}`);
+    if (/Missing Permissions|Missing Access/i.test(error.message)) console.error('  Give the bot the Administrator permission (or Manage Channels + Manage Roles).');
+  }
+}
+
+/* ---------------- slash commands ---------------- */
+
+const STAFF = PermissionFlagsBits.ManageMessages;
+const ADMIN = PermissionFlagsBits.ManageGuild;
+
+function commandList() {
+  const pet = o => o.setName('pet').setDescription('Pet from the site catalog').setRequired(true).setAutocomplete(true);
+  return [
+    new SlashCommandBuilder().setName('help').setDescription('Show all commands'),
+    new SlashCommandBuilder().setName('website').setDescription('Link to petduel.win'),
+    new SlashCommandBuilder().setName('link').setDescription('Link your Pet Duel account (get the code on the site: Profile > Link Discord)')
+      .addStringOption(o => o.setName('code').setDescription('Code from the site, like PD-1A2B3C').setRequired(true)),
+    new SlashCommandBuilder().setName('unlink').setDescription('Unlink your Pet Duel account'),
+    new SlashCommandBuilder().setName('profile').setDescription('Pet Duel stats of a player')
+      .addUserOption(o => o.setName('user').setDescription('Discord member (must be linked)'))
+      .addStringOption(o => o.setName('nickname').setDescription('Nickname on the site')),
+    new SlashCommandBuilder().setName('rank').setDescription('Show your rank and update your rank role'),
+    new SlashCommandBuilder().setName('leaderboard').setDescription('Top players on Pet Duel')
+      .addStringOption(o => o.setName('type').setDescription('Which list').addChoices(
+        { name: 'Top Profit', value: 'profit' }, { name: 'Top Wager', value: 'totalBet' }, { name: 'Least Profit', value: 'least' })),
+    new SlashCommandBuilder().setName('stats').setDescription('Live Pet Duel stats'),
+    new SlashCommandBuilder().setName('games').setDescription('Open coinflips you can join right now'),
+    new SlashCommandBuilder().setName('coinflip').setDescription('Flip a coin for fun')
+      .addStringOption(o => o.setName('side').setDescription('Your side').addChoices({ name: 'Heads', value: 'heads' }, { name: 'Tails', value: 'tails' })),
+
+    new SlashCommandBuilder().setName('announce').setDescription('Post an announcement').setDefaultMemberPermissions(ADMIN)
+      .addStringOption(o => o.setName('title').setDescription('Title').setRequired(true))
+      .addStringOption(o => o.setName('message').setDescription('Text (use \\n for new lines)').setRequired(true))
+      .addBooleanOption(o => o.setName('everyone').setDescription('Ping @everyone'))
+      .addBooleanOption(o => o.setName('site').setDescription('Also show it in the banner on petduel.win')),
+    new SlashCommandBuilder().setName('ticketpanel').setDescription('Post the ticket button here').setDefaultMemberPermissions(ADMIN),
+    new SlashCommandBuilder().setName('giveaway').setDescription('Discord giveaways').setDefaultMemberPermissions(ADMIN)
+      .addSubcommand(s => s.setName('start').setDescription('Start a giveaway in #giveaways')
+        .addStringOption(o => o.setName('prize').setDescription('Prize').setRequired(true))
+        .addIntegerOption(o => o.setName('minutes').setDescription('Duration in minutes').setRequired(true).setMinValue(1).setMaxValue(60 * 24 * 30))
+        .addIntegerOption(o => o.setName('winners').setDescription('Number of winners').setMinValue(1).setMaxValue(20))
+        .addBooleanOption(o => o.setName('linked_only').setDescription('Only members with a linked Pet Duel account can join')))
+      .addSubcommand(s => s.setName('end').setDescription('End a giveaway now').addStringOption(o => o.setName('message_id').setDescription('Giveaway message ID').setRequired(true)))
+      .addSubcommand(s => s.setName('reroll').setDescription('Pick new winners').addStringOption(o => o.setName('message_id').setDescription('Giveaway message ID').setRequired(true))),
+    new SlashCommandBuilder().setName('clear').setDescription('Delete messages').setDefaultMemberPermissions(STAFF)
+      .addIntegerOption(o => o.setName('amount').setDescription('1-100').setRequired(true).setMinValue(1).setMaxValue(100)),
+    new SlashCommandBuilder().setName('timeout').setDescription('Timeout a member').setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+      .addUserOption(o => o.setName('user').setDescription('Member').setRequired(true))
+      .addIntegerOption(o => o.setName('minutes').setDescription('Minutes').setRequired(true).setMinValue(1).setMaxValue(40320))
+      .addStringOption(o => o.setName('reason').setDescription('Reason')),
+    new SlashCommandBuilder().setName('kick').setDescription('Kick a member').setDefaultMemberPermissions(PermissionFlagsBits.KickMembers)
+      .addUserOption(o => o.setName('user').setDescription('Member').setRequired(true)).addStringOption(o => o.setName('reason').setDescription('Reason')),
+    new SlashCommandBuilder().setName('ban').setDescription('Ban a member').setDefaultMemberPermissions(PermissionFlagsBits.BanMembers)
+      .addUserOption(o => o.setName('user').setDescription('Member').setRequired(true)).addStringOption(o => o.setName('reason').setDescription('Reason')),
+
+    new SlashCommandBuilder().setName('withdrawals').setDescription('Pending withdrawals on the site').setDefaultMemberPermissions(STAFF),
+    new SlashCommandBuilder().setName('site').setDescription('Manage petduel.win').setDefaultMemberPermissions(ADMIN)
+      .addSubcommand(s => s.setName('maintenance').setDescription('Close or open the site')
+        .addBooleanOption(o => o.setName('on').setDescription('true = close the site, false = open it').setRequired(true))
+        .addStringOption(o => o.setName('message').setDescription('Message on the closed screen')))
+      .addSubcommand(s => s.setName('say').setDescription('Send a PetDuel system message in the site chat')
+        .addStringOption(o => o.setName('text').setDescription('Message').setRequired(true)))
+      .addSubcommand(s => s.setName('bot').setDescription('Set a deposit bot online or offline')
+        .addStringOption(o => o.setName('name').setDescription('Deposit bot').setRequired(true).setAutocomplete(true))
+        .addBooleanOption(o => o.setName('online').setDescription('Online?').setRequired(true)))
+      .addSubcommand(s => s.setName('block').setDescription('Block countries (two-letter codes, empty = nobody)')
+        .addStringOption(o => o.setName('countries').setDescription('For example: TR or TR,DE (write none to unblock)').setRequired(true))),
+    new SlashCommandBuilder().setName('player').setDescription('Manage a Pet Duel player').setDefaultMemberPermissions(ADMIN)
+      .addSubcommand(s => s.setName('info').setDescription('Full player info').addStringOption(o => o.setName('nickname').setDescription('Nickname or Roblox name').setRequired(true)))
+      .addSubcommand(s => s.setName('mute').setDescription('Mute in the site chat')
+        .addStringOption(o => o.setName('nickname').setDescription('Nickname or Roblox name').setRequired(true))
+        .addIntegerOption(o => o.setName('minutes').setDescription('Minutes (-1 = forever, 0 = unmute)').setRequired(true)))
+      .addSubcommand(s => s.setName('ban').setDescription('Ban or unban on the site')
+        .addStringOption(o => o.setName('nickname').setDescription('Nickname or Roblox name').setRequired(true))
+        .addBooleanOption(o => o.setName('ban').setDescription('true = ban, false = unban').setRequired(true)))
+      .addSubcommand(s => s.setName('give').setDescription('Give pets (for confirmed deposits)')
+        .addStringOption(o => o.setName('nickname').setDescription('Nickname or Roblox name').setRequired(true))
+        .addStringOption(pet)
+        .addIntegerOption(o => o.setName('qty').setDescription('How many').setMinValue(1).setMaxValue(50)))
+      .addSubcommand(s => s.setName('clearpets').setDescription('Delete ALL pets of a player')
+        .addStringOption(o => o.setName('nickname').setDescription('Nickname or Roblox name').setRequired(true))),
+    new SlashCommandBuilder().setName('match').setDescription('Coinflip tools').setDefaultMemberPermissions(ADMIN)
+      .addSubcommand(s => s.setName('cancel').setDescription('Cancel a coinflip (pets go back)').addStringOption(o => o.setName('id').setDescription('Match ID').setRequired(true))),
+    new SlashCommandBuilder().setName('event').setDescription('Start a site event').setDefaultMemberPermissions(ADMIN)
+      .addSubcommand(s => s.setName('wheel').setDescription('Wheel event').addStringOption(pet)
+        .addIntegerOption(o => o.setName('seconds').setDescription('Join time 15-600').setMinValue(15).setMaxValue(600)))
+      .addSubcommand(s => s.setName('scramble').setDescription('Word scramble').addStringOption(pet)
+        .addIntegerOption(o => o.setName('seconds').setDescription('Time 30-600').setMinValue(30).setMaxValue(600))
+        .addStringOption(o => o.setName('word').setDescription('Word (empty = random)')))
+      .addSubcommand(s => s.setName('cancel').setDescription('Cancel the running event'))
+  ].map(c => c.toJSON());
+}
+
+async function registerCommands(guild) {
+  const rest = new REST({ version: '10' }).setToken(TOKEN);
+  await rest.put(Routes.applicationGuildCommands(guild.client.user.id, guild.id), { body: commandList() });
+}
+
+/* ---------------- logs ---------------- */
+
+async function log(guild, title, description, color) {
+  const ch = guild && findChannel(guild, CH.botLogs);
+  if (!ch) return;
+  const e = embed(title, String(description || '').slice(0, 4000));
+  if (color) e.setColor(color);
+  ch.send({ embeds: [e] }).catch(() => {});
+}
+
+/* ---------------- rank roles ---------------- */
+
+async function syncMemberRank(guild, discordId, rank) {
+  const member = await guild.members.fetch(discordId).catch(() => null);
+  if (!member) return;
+  const rankNames = siteRanks.map(r => r.name);
+  const target = guild.roles.cache.find(r => r.name === rank);
+  const linked = guild.roles.cache.find(r => r.name === CONFIG.linkedRole);
+  const remove = member.roles.cache.filter(r => rankNames.includes(r.name) && r.name !== rank);
+  try {
+    if (remove.size) await member.roles.remove([...remove.keys()], 'PetDuel rank changed');
+    if (target && !member.roles.cache.has(target.id)) await member.roles.add(target, 'PetDuel rank');
+    if (linked && !member.roles.cache.has(linked.id)) await member.roles.add(linked, 'PetDuel account linked');
+  } catch (error) {
+    console.warn(`Could not set roles for ${member.user.username}: ${error.message} (move the bot role above the rank roles)`);
+  }
+}
+
+async function removeSiteRoles(guild, discordId) {
+  const member = await guild.members.fetch(discordId).catch(() => null);
+  if (!member) return;
+  const names = [...siteRanks.map(r => r.name), CONFIG.linkedRole];
+  const remove = member.roles.cache.filter(r => names.includes(r.name));
+  if (remove.size) await member.roles.remove([...remove.keys()], 'PetDuel account unlinked').catch(() => {});
+}
+
+async function syncAllRanks() {
+  if (!BOT_KEY || !client || !client.isReady()) return;
+  try {
+    const { list } = await site('GET', '/api/bot/linked');
+    for (const guild of client.guilds.cache.values()) {
+      if (ONLY_GUILD && guild.id !== ONLY_GUILD) continue;
+      for (const u of list) await syncMemberRank(guild, u.discordId, u.rank);
+    }
+  } catch (error) { console.warn('Rank sync failed:', error.message); }
+}
+
+/* ---------------- live site events ---------------- */
+
+let socket = null;
+
+function connectSite() {
+  if (!BOT_KEY) return;
+  socket = ioClient(SITE, { auth: { botKey: BOT_KEY }, transports: ['websocket', 'polling'], reconnectionDelayMax: 15000 });
+  socket.on('connect', () => console.log('Connected to petduel.win (live events).'));
+  socket.on('connect_error', err => console.warn('petduel.win connection failed:', err.message, '(retrying)'));
+  socket.on('disconnect', reason => console.warn('petduel.win disconnected:', reason));
+
+  socket.on('bot:event', ev => {
+    const target = {
+      coinflip: CH.coinflips, bounty: CH.coinflips, jackpot: CH.jackpots,
+      giveaway: CH.giveaways, event: CH.giveaways, withdraw: CH.withdrawals
+    }[ev.kind];
+    if (!target || !ev.embed) return;
+    for (const guild of client.guilds.cache.values()) {
+      if (ONLY_GUILD && guild.id !== ONLY_GUILD) continue;
+      const ch = findChannel(guild, target);
+      if (!ch) continue;
+      const e = { ...ev.embed, color: ev.embed.color || COLOR };
+      const payload = { embeds: [e] };
+      if (ev.kind === 'withdraw' && ev.data && ev.data.withdrawId) payload.components = [withdrawButtons(ev.data.withdrawId)];
+      ch.send(payload).catch(error => console.warn(`Could not post in #${target}: ${error.message}`));
+    }
+  });
+
+  socket.on('bot:unlink', ({ discordId }) => {
+    for (const guild of client.guilds.cache.values()) removeSiteRoles(guild, discordId).catch(() => {});
+  });
+}
+
+const withdrawButtons = id => new ActionRowBuilder().addComponents(
+  new ButtonBuilder().setCustomId(`wd_done:${id}`).setLabel('Mark sent').setEmoji('✅').setStyle(ButtonStyle.Success),
+  new ButtonBuilder().setCustomId(`wd_refund:${id}`).setLabel('Refund').setEmoji('↩️').setStyle(ButtonStyle.Danger)
+);
+
+/* ---------------- Discord giveaways ---------------- */
+
+let giveaways = loadJson('giveaways.json', {});
+const saveGiveaways = () => saveJson('giveaways.json', giveaways);
+
+const giveawayEmbed = g => {
+  const ended = g.ended;
+  const e = embed(`🎉 ${g.prize}`, ended
+    ? (g.winners && g.winners.length ? `**Winner${g.winners.length > 1 ? 's' : ''}:** ${g.winners.map(id => `<@${id}>`).join(', ')}` : 'No valid entries, no winner.')
+    : `Press **Join** to enter!\nEnds <t:${Math.floor(g.endsAt / 1000)}:R>\n**Winners:** ${g.count}${g.linkedOnly ? '\n🔗 Only members with a linked Pet Duel account' : ''}`);
+  e.addFields({ name: 'Entries', value: String(g.entries.length), inline: true }, { name: 'Hosted by', value: `<@${g.host}>`, inline: true });
+  return e;
+};
+const giveawayRow = (id, ended) => new ActionRowBuilder().addComponents(
+  new ButtonBuilder().setCustomId(`gw_join:${id}`).setLabel(ended ? 'Ended' : 'Join').setEmoji('🎉').setStyle(ButtonStyle.Success).setDisabled(Boolean(ended)));
+
+function pickWinners(entries, count) {
+  const pool = [...entries];
+  const out = [];
+  while (pool.length && out.length < count) out.push(pool.splice(crypto.randomInt(pool.length), 1)[0]);
+  return out;
+}
+
+async function endGiveaway(id, reroll = false) {
+  const g = giveaways[id];
+  if (!g) throw new Error('Giveaway not found');
+  if (g.ended && !reroll) throw new Error('This giveaway already ended');
+  g.ended = true;
+  g.winners = pickWinners(g.entries, g.count);
+  saveGiveaways();
+  const ch = await client.channels.fetch(g.channelId).catch(() => null);
+  if (!ch) return g;
+  const msg = await ch.messages.fetch(id).catch(() => null);
+  if (msg) await msg.edit({ embeds: [giveawayEmbed(g)], components: [giveawayRow(id, true)] }).catch(() => {});
+  await ch.send(g.winners.length
+    ? `🎉 Congratulations ${g.winners.map(w => `<@${w}>`).join(', ')}! You won **${g.prize}**! Open a ticket to claim it.`
+    : `No valid entries for **${g.prize}**.`).catch(() => {});
+  return g;
+}
+
+setInterval(() => {
+  for (const [id, g] of Object.entries(giveaways)) if (!g.ended && g.endsAt <= Date.now()) endGiveaway(id).catch(() => {});
+}, 15000);
+
+/* ---------------- tickets ---------------- */
+
+async function openTicket(interaction) {
+  const guild = interaction.guild;
+  const existing = guild.channels.cache.find(c => c.topic === `ticket:${interaction.user.id}`);
+  if (existing) return interaction.reply({ content: `You already have a ticket: ${existing}`, flags: EPHEMERAL });
+
+  const category = await ensureCategory(guild, CONFIG.ticketCategory);
+  const overwrites = [
+    { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+    { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles, PermissionFlagsBits.ReadMessageHistory] },
+    { id: guild.members.me.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ReadMessageHistory] },
+    ...[...staffRoles(guild).values()].map(r => ({ id: r.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }))
+  ];
+  const ch = await guild.channels.create({
+    name: `ticket-${interaction.user.username}`.toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 90) || 'ticket',
+    type: ChannelType.GuildText, parent: category.id, topic: `ticket:${interaction.user.id}`, permissionOverwrites: overwrites
+  });
+
+  await ch.send({
+    content: `${interaction.user} welcome! Describe your problem and a staff member will help you soon.`,
+    embeds: [embed('🎫 Ticket', 'For deposits and withdrawals: write your **site nickname**, the **pets** and add **screenshots** of the trade.')],
+    components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('ticket_close').setLabel('Close ticket').setEmoji('🔒').setStyle(ButtonStyle.Danger))]
+  });
+
+  /* staff instantly see the player's Pet Duel account when it is linked */
+  if (BOT_KEY) {
+    site('GET', `/api/bot/user?discordId=${interaction.user.id}`).then(({ user }) => ch.send({ embeds: [playerEmbed(user, true)] })).catch(() => {
+      ch.send({ content: 'ℹ️ This member has not linked a Pet Duel account (`/link`).' }).catch(() => {});
+    });
+  }
+
+  await interaction.reply({ content: `Your ticket is open: ${ch}`, flags: EPHEMERAL });
+  log(guild, '🎫 Ticket opened', `${interaction.user} opened ${ch}`);
+}
+
+async function closeTicket(interaction) {
+  const ch = interaction.channel;
+  if (!ch.topic || !ch.topic.startsWith('ticket:')) return interaction.reply({ content: 'This is not a ticket.', flags: EPHEMERAL });
+  await interaction.reply({ content: '🔒 Closing this ticket in 5 seconds…' });
+
+  /* transcript (up to 1000 messages) for #ticket-logs */
+  const all = [];
+  let before;
+  for (let i = 0; i < 10; i++) {
+    const batch = await ch.messages.fetch({ limit: 100, before }).catch(() => null);
+    if (!batch || !batch.size) break;
+    all.push(...batch.values());
+    before = batch.last().id;
+  }
+  all.reverse();
+  const text = all.map(m => `[${new Date(m.createdTimestamp).toISOString()}] ${m.author.username}: ${m.content}${m.attachments.size ? ' ' + [...m.attachments.values()].map(a => a.url).join(' ') : ''}${m.embeds.length ? ' [embed]' : ''}`).join('\n');
+  const logs = findChannel(interaction.guild, CH.ticketLogs);
+  if (logs) {
+    const owner = ch.topic.split(':')[1];
+    await logs.send({
+      embeds: [embed('🎫 Ticket closed', `**Ticket:** #${ch.name}\n**Owner:** <@${owner}>\n**Closed by:** ${interaction.user}\n**Messages:** ${all.length}`)],
+      files: [new AttachmentBuilder(Buffer.from(text || '(empty)', 'utf8'), { name: `${ch.name}.txt` })]
+    }).catch(() => {});
+  }
+  setTimeout(() => ch.delete('Ticket closed').catch(() => {}), 5000);
+}
+
+/* ---------------- embeds for site data ---------------- */
+
+function playerEmbed(u, staffView) {
+  const e = embed(`${u.nickname}`, `${u.online ? '🟢 Online now' : `⚫ Last seen ${ago(u.lastSeen)}`}${u.banned ? '\n⛔ **Banned**' : ''}${u.muted ? '\n🔇 Muted' : ''}`);
+  if (u.avatar) e.setThumbnail(u.avatar);
+  e.addFields(
+    { name: 'Rank', value: u.rank, inline: true },
+    { name: 'Total bet', value: `${gem} ${fmt(u.totalBet)}`, inline: true },
+    { name: 'Profit', value: `${gem} ${u.profit > 0 ? '+' : ''}${fmt(u.profit)}`, inline: true },
+    { name: 'Total won', value: `${gem} ${fmt(u.totalWon)}`, inline: true },
+    { name: 'Total lost', value: `${gem} ${fmt(u.totalLost)}`, inline: true },
+    { name: 'Inventory', value: `${u.items} pets · ${gem} ${fmt(u.inventoryValue)}`, inline: true }
+  );
+  if (staffView) {
+    e.addFields({ name: 'Roblox name', value: u.robloxName || '-', inline: true }, { name: 'Site ID', value: u.id, inline: true });
+    if (u.topPets && u.topPets.length) e.addFields({ name: 'Top pets', value: u.topPets.map(p => `${petLabel(p)} · ${gem} ${fmt(p.value)}`).join('\n') });
+    if (u.pendingWithdrawals && u.pendingWithdrawals.length) {
+      e.addFields({ name: 'Pending withdrawals', value: u.pendingWithdrawals.map(w => `\`${w.id}\` · ${w.items} pets · ${gem} ${fmt(w.value)} · ${ago(w.ts)}`).join('\n') });
+    }
+  }
+  return e;
+}
+
+async function catalogChoices(focused) {
+  const { list } = await site('GET', `/api/bot/catalog?q=${encodeURIComponent(focused)}`);
+  return list.map(c => ({ name: c.label.slice(0, 100), value: c.id }));
+}
+
+/* ---------------- command handlers ---------------- */
+
+const reply = (i, content, eph = true) => i.deferred || i.replied
+  ? i.editReply(typeof content === 'string' ? { content } : content)
+  : i.reply({ ...(typeof content === 'string' ? { content } : content), flags: eph ? EPHEMERAL : undefined });
+
+async function handleCommand(i) {
+  const name = i.commandName;
+  const sub = i.options.getSubcommand(false);
+
+  if (name === 'help') {
+    return reply(i, { embeds: [embed('📖 PetDuel bot', [
+      '**Everyone**',
+      '`/link` `/unlink` `/profile` `/rank` `/leaderboard` `/stats` `/games` `/website` `/coinflip`',
+      '',
+      '**Staff**',
+      '`/withdrawals` `/clear` `/timeout` `/kick` `/ban`',
+      '',
+      '**Admins**',
+      '`/site maintenance|say|bot|block` `/player info|mute|ban|give|clearpets` `/match cancel` `/event wheel|scramble|cancel` `/announce` `/giveaway start|end|reroll` `/ticketpanel`'
+    ].join('\n'))] });
+  }
+
+  if (name === 'website') {
+    return reply(i, { embeds: [embed('🌐 petduel.win', `Play Adopt Me PvP duels: **${SITE}**`)], components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setLabel('Open Pet Duel').setStyle(ButtonStyle.Link).setURL(SITE))] }, false);
+  }
+
+  if (name === 'coinflip') {
+    const side = crypto.randomInt(2) ? 'heads' : 'tails';
+    const pick = i.options.getString('side');
+    return reply(i, `🪙 The coin landed on **${side}**!${pick ? (pick === side ? ' You win! 🎉' : ' You lose 😢') : ''}`, false);
+  }
+
+  if (name === 'link') {
+    await i.deferReply({ flags: EPHEMERAL });
+    const { user } = await site('POST', '/api/bot/link', { code: i.options.getString('code'), discordId: i.user.id, discordTag: i.user.username }, actorOf(i));
+    if (i.guild) await syncMemberRank(i.guild, i.user.id, user.rank);
+    log(i.guild, '🔗 Account linked', `${i.user} linked **${user.nickname}** (Roblox: ${user.robloxName})`);
+    return reply(i, `✅ Linked to **${user.nickname}**! You got the **${user.rank}** rank role.`);
+  }
+
+  if (name === 'unlink') {
+    await i.deferReply({ flags: EPHEMERAL });
+    await site('POST', '/api/bot/unlink', { discordId: i.user.id }, actorOf(i));
+    if (i.guild) await removeSiteRoles(i.guild, i.user.id);
+    return reply(i, '✅ Your Pet Duel account was unlinked.');
+  }
+
+  if (name === 'profile' || name === 'rank') {
+    await i.deferReply({ flags: name === 'rank' ? EPHEMERAL : undefined });
+    const member = i.options.getUser('user');
+    const nickname = i.options.getString('nickname');
+    const q = nickname ? `q=${encodeURIComponent(nickname)}` : `discordId=${(member || i.user).id}`;
+    const { user } = await site('GET', `/api/bot/user?${q}`);
+    if (name === 'rank') {
+      if (i.guild && !nickname && !member) await syncMemberRank(i.guild, i.user.id, user.rank);
+      const next = siteRanks.find(r => r.min > user.totalBet);
+      return reply(i, `🏅 Your rank: **${user.rank}**${next ? `\nNext: **${next.name}** at ${gem} ${fmt(next.min)} total bet (${gem} ${fmt(next.min - user.totalBet)} to go)` : '\nYou have the highest rank!'}`);
+    }
+    return reply(i, { embeds: [playerEmbed(user, false)] });
+  }
+
+  if (name === 'leaderboard') {
+    await i.deferReply();
+    const by = i.options.getString('type') || 'profit';
+    const res = await fetch(`${SITE}/api/leaderboard?by=${by}`, { headers: { 'X-Bot-Key': BOT_KEY } });
+    const { list } = await res.json();
+    const medals = ['🥇', '🥈', '🥉'];
+    const title = { profit: '🏆 Top Profit', totalBet: '💸 Top Wager', least: '📉 Least Profit' }[by];
+    const lines = (list || []).slice(0, 15).map((u, k) => `${medals[k] || `**#${k + 1}**`} ${u.username} · ${gem} ${by !== 'totalBet' && u.value > 0 ? '+' : ''}${fmt(u.value)}`);
+    return reply(i, { embeds: [embed(title, lines.join('\n') || 'No players yet.')] });
+  }
+
+  if (name === 'stats') {
+    await i.deferReply();
+    const s = await site('GET', '/api/bot/stats');
+    const e = embed('📊 Pet Duel live', s.maintenance ? '🔒 The site is in maintenance mode.' : `👉 ${SITE}`);
+    e.addFields(
+      { name: 'Online', value: String(s.online), inline: true },
+      { name: 'Players', value: String(s.players), inline: true },
+      { name: 'Open coinflips', value: `${s.openGames} · ${gem} ${short(s.gamesValue)}`, inline: true },
+      { name: 'Jackpot', value: s.jackpot ? `${gem} ${short(s.jackpot.total)} · ${s.jackpot.players} players` : '-', inline: true },
+      { name: 'Giveaways', value: String(s.giveaways), inline: true },
+      { name: 'Deposit bots', value: s.bots.map(b => `${b.online ? '🟢' : '🔴'} ${b.username.slice(0, 4)}***`).join('\n') || '-', inline: true }
+    );
+    return reply(i, { embeds: [e] });
+  }
+
+  if (name === 'games') {
+    await i.deferReply();
+    const { list } = await site('GET', '/api/bot/games');
+    return reply(i, { embeds: [embed('🪙 Open coinflips', list.length
+      ? list.map(m => `**${m.host}** · ${gem} ${short(m.value)} · ${m.pets} pet${m.pets === 1 ? '' : 's'}${m.maxJoin ? ` · max ${m.maxJoin} to join` : ''}`).join('\n') + `\n\nJoin on ${SITE}`
+      : 'No open games right now. Create one on the site!')] });
+  }
+
+  if (name === 'announce') {
+    const title = i.options.getString('title');
+    const message = i.options.getString('message').replace(/\\n/g, '\n');
+    const ch = findChannel(i.guild, CH.announcements);
+    if (!ch) return reply(i, `#${CH.announcements} not found.`);
+    await ch.send({ content: i.options.getBoolean('everyone') ? '@everyone' : undefined, embeds: [embed(`📢 ${title}`, message)], allowedMentions: { parse: i.options.getBoolean('everyone') ? ['everyone'] : [] } });
+    if (i.options.getBoolean('site')) await site('POST', '/api/admin/announce', { title, text: message.slice(0, 300), chat: true }, actorOf(i)).catch(() => {});
+    log(i.guild, '📢 Announcement', `${i.user} posted **${title}**`);
+    return reply(i, '✅ Announcement posted.');
+  }
+
+  if (name === 'ticketpanel') {
+    await i.channel.send(ticketPanel());
+    return reply(i, '✅ Ticket panel posted.');
+  }
+
+  if (name === 'giveaway') {
+    if (sub === 'start') {
+      const ch = findChannel(i.guild, CH.giveaways) || i.channel;
+      const g = {
+        prize: i.options.getString('prize'), count: i.options.getInteger('winners') || 1, host: i.user.id,
+        endsAt: Date.now() + i.options.getInteger('minutes') * 60000, entries: [], ended: false, channelId: ch.id,
+        linkedOnly: Boolean(i.options.getBoolean('linked_only'))
+      };
+      const msg = await ch.send({ embeds: [giveawayEmbed(g)], components: [giveawayRow('pending', false)] });
+      giveaways[msg.id] = g;
+      saveGiveaways();
+      await msg.edit({ components: [giveawayRow(msg.id, false)] });
+      log(i.guild, '🎉 Giveaway started', `${i.user} started **${g.prize}** in ${ch} (message ${msg.id})`);
+      return reply(i, `✅ Giveaway started in ${ch}. Message ID: \`${msg.id}\``);
+    }
+    const g = await endGiveaway(i.options.getString('message_id'), sub === 'reroll');
+    return reply(i, `✅ ${sub === 'reroll' ? 'Rerolled' : 'Ended'}: ${g.winners.length ? g.winners.map(w => `<@${w}>`).join(', ') : 'no winner'}`);
+  }
+
+  if (name === 'clear') {
+    const deleted = await i.channel.bulkDelete(i.options.getInteger('amount'), true);
+    log(i.guild, '🧹 Messages cleared', `${i.user} deleted ${deleted.size} messages in ${i.channel}`);
+    return reply(i, `🧹 Deleted ${deleted.size} messages.`);
+  }
+
+  if (name === 'timeout' || name === 'kick' || name === 'ban') {
+    const target = i.options.getUser('user');
+    const reason = i.options.getString('reason') || 'No reason';
+    const member = await i.guild.members.fetch(target.id).catch(() => null);
+    if (name === 'timeout') {
+      if (!member) return reply(i, 'Member not found.');
+      await member.timeout(i.options.getInteger('minutes') * 60000, `${reason} (by ${i.user.username})`);
+    } else if (name === 'kick') {
+      if (!member) return reply(i, 'Member not found.');
+      await member.kick(`${reason} (by ${i.user.username})`);
+    } else {
+      await i.guild.members.ban(target.id, { reason: `${reason} (by ${i.user.username})` });
+    }
+    log(i.guild, `🔨 ${name[0].toUpperCase() + name.slice(1)}`, `${i.user} → ${target} (${target.username})${name === 'timeout' ? ` for ${i.options.getInteger('minutes')} min` : ''}\n**Reason:** ${reason}`, 0xff5968);
+    return reply(i, `✅ ${target.username}: ${name} done.`);
+  }
+
+  if (name === 'withdrawals') {
+    await i.deferReply({ flags: EPHEMERAL });
+    const { list } = await site('GET', '/api/bot/withdrawals');
+    if (!list.length) return reply(i, '✅ No pending withdrawals.');
+    for (const w of list.slice(0, 10)) {
+      await i.followUp({
+        flags: EPHEMERAL,
+        embeds: [embed(`📤 ${w.nickname}`, `**Roblox:** ${w.robloxName}\n**Value:** ${gem} ${fmt(w.value)}\n**Requested:** ${ago(w.ts)}\n**Pets:** ${w.items.join(', ').slice(0, 900)}`).setFooter({ text: `Withdraw ID ${w.id}` })],
+        components: [withdrawButtons(w.id)]
+      });
+    }
+    return reply(i, `📤 ${list.length} pending withdrawal${list.length === 1 ? '' : 's'}:`);
+  }
+
+  if (name === 'site') {
+    await i.deferReply({ flags: EPHEMERAL });
+    if (sub === 'maintenance') {
+      const on = i.options.getBoolean('on');
+      await site('POST', '/api/admin/maintenance', { on, text: i.options.getString('message') || '' }, actorOf(i));
+      log(i.guild, '🔒 Maintenance', `${i.user} turned maintenance **${on ? 'ON' : 'OFF'}**`);
+      return reply(i, on ? '🔒 The site is now closed for players.' : '✅ The site is open again.');
+    }
+    if (sub === 'say') {
+      await site('POST', '/api/bot/say', { text: i.options.getString('text') }, actorOf(i));
+      return reply(i, '✅ Sent to the site chat.');
+    }
+    if (sub === 'bot') {
+      const { bots } = await site('GET', '/api/bot/stats');
+      const want = i.options.getString('name');
+      const b = bots.find(x => x.id === want || x.username.toLowerCase() === want.toLowerCase());
+      if (!b) return reply(i, 'Bot not found.');
+      const online = i.options.getBoolean('online');
+      await site('POST', '/api/admin/bots/update', { id: b.id, online }, actorOf(i));
+      log(i.guild, '🤖 Deposit bot', `${i.user} set **${b.username}** ${online ? 'online' : 'offline'}`);
+      return reply(i, `${online ? '🟢' : '🔴'} **${b.username}** is now ${online ? 'online' : 'offline'}.`);
+    }
+    if (sub === 'block') {
+      const raw = i.options.getString('countries');
+      const countries = /^none$/i.test(raw.trim()) ? '' : raw;
+      const r = await site('POST', '/api/admin/block', { countries }, actorOf(i));
+      log(i.guild, '🌍 Country block', `${i.user} set: ${r.countries.join(', ') || 'nobody blocked'}`);
+      return reply(i, r.countries.length ? `🌍 Blocked: ${r.countries.join(', ')}` : '🌍 Nobody is blocked now.');
+    }
+  }
+
+  if (name === 'player') {
+    await i.deferReply({ flags: EPHEMERAL });
+    const { user } = await site('GET', `/api/bot/user?q=${encodeURIComponent(i.options.getString('nickname'))}`);
+    if (sub === 'info') return reply(i, { embeds: [playerEmbed(user, true)] });
+    if (sub === 'mute') {
+      const minutes = i.options.getInteger('minutes');
+      await site('POST', '/api/admin/mute', { id: user.id, minutes }, actorOf(i));
+      log(i.guild, '🔇 Site mute', `${i.user} → **${user.nickname}**: ${minutes === 0 ? 'unmuted' : minutes < 0 ? 'forever' : `${minutes} min`}`);
+      return reply(i, `✅ ${user.nickname}: ${minutes === 0 ? 'unmuted' : 'muted'}.`);
+    }
+    if (sub === 'ban') {
+      const ban = i.options.getBoolean('ban');
+      await site('POST', '/api/admin/ban', { id: user.id, ban }, actorOf(i));
+      log(i.guild, '⛔ Site ban', `${i.user} ${ban ? 'banned' : 'unbanned'} **${user.nickname}**`, 0xff5968);
+      return reply(i, `✅ ${user.nickname} ${ban ? 'banned' : 'unbanned'} on the site.`);
+    }
+    if (sub === 'give') {
+      const qty = i.options.getInteger('qty') || 1;
+      await site('POST', '/api/admin/grant', { username: user.nickname, catalogId: i.options.getString('pet'), qty }, actorOf(i));
+      log(i.guild, '🎁 Pets given', `${i.user} gave ${qty}x pet \`${i.options.getString('pet')}\` to **${user.nickname}**`, 0x00efa0);
+      return reply(i, `✅ Gave ${qty} pet${qty === 1 ? '' : 's'} to ${user.nickname}.`);
+    }
+    if (sub === 'clearpets') {
+      const r = await site('POST', '/api/admin/inventory/clear', { id: user.id }, actorOf(i));
+      log(i.guild, '🗑 Pets deleted', `${i.user} deleted all ${r.count} pets (${gem} ${fmt(r.value)}) of **${user.nickname}**`, 0xff5968);
+      return reply(i, `🗑 Deleted ${r.count} pets of ${user.nickname}.`);
+    }
+  }
+
+  if (name === 'match' && sub === 'cancel') {
+    await i.deferReply({ flags: EPHEMERAL });
+    await site('POST', '/api/admin/match/cancel', { id: i.options.getString('id') }, actorOf(i));
+    log(i.guild, '🪙 Coinflip cancelled', `${i.user} cancelled match \`${i.options.getString('id')}\``);
+    return reply(i, '✅ Match cancelled, pets returned.');
+  }
+
+  if (name === 'event') {
+    await i.deferReply({ flags: EPHEMERAL });
+    if (sub === 'cancel') {
+      await site('POST', '/api/admin/event/cancel', {}, actorOf(i));
+      return reply(i, '✅ Event cancelled.');
+    }
+    const body = sub === 'wheel'
+      ? { itemId: i.options.getString('pet'), seconds: i.options.getInteger('seconds') || 60 }
+      : { itemId: i.options.getString('pet'), seconds: i.options.getInteger('seconds') || 120, word: i.options.getString('word') || '' };
+    await site('POST', `/api/admin/event/${sub}`, body, actorOf(i));
+    log(i.guild, '🎉 Site event', `${i.user} started a **${sub}** event`);
+    return reply(i, `✅ ${sub === 'wheel' ? 'Wheel' : 'Word scramble'} event started on the site!`);
+  }
+
+  return reply(i, 'Unknown command.');
+}
+
+/* ---------------- buttons ---------------- */
+
+const isStaff = member => member && (member.permissions.has(PermissionFlagsBits.ManageMessages) || member.roles.cache.some(r => CONFIG.staffRoleNames.includes(r.name)));
+
+async function handleButton(i) {
+  const [kind, id] = i.customId.split(':');
+
+  if (kind === 'ticket_open') return openTicket(i);
+  if (kind === 'ticket_close') return closeTicket(i);
+
+  if (kind === 'gw_join') {
+    const g = giveaways[id];
+    if (!g || g.ended) return reply(i, 'This giveaway has ended.');
+    if (g.entries.includes(i.user.id)) {
+      g.entries = g.entries.filter(x => x !== i.user.id);
+      saveGiveaways();
+      await i.message.edit({ embeds: [giveawayEmbed(g)] }).catch(() => {});
+      return reply(i, 'You left the giveaway.');
+    }
+    if (g.linkedOnly) {
+      try { await site('GET', `/api/bot/user?discordId=${i.user.id}`); }
+      catch { return reply(i, '🔗 Link your Pet Duel account first: get a code on petduel.win (Profile > Link Discord), then `/link CODE`.'); }
+    }
+    g.entries.push(i.user.id);
+    saveGiveaways();
+    await i.message.edit({ embeds: [giveawayEmbed(g)] }).catch(() => {});
+    return reply(i, '🎉 You joined! Press again to leave.');
+  }
+
+  if (kind === 'wd_done' || kind === 'wd_refund') {
+    if (!isStaff(i.member)) return reply(i, 'Only staff can do this.');
+    await i.deferReply({ flags: EPHEMERAL });
+    await site('POST', `/api/admin/withdraw/${kind === 'wd_done' ? 'done' : 'refund'}`, { id }, actorOf(i));
+    const done = kind === 'wd_done';
+    const old = i.message.embeds[0];
+    const e = old ? EmbedBuilder.from(old) : embed('📤 Withdrawal');
+    e.setColor(done ? 0x00efa0 : 0xff5968).addFields({ name: done ? '✅ Sent' : '↩️ Refunded', value: `by ${i.user} · <t:${Math.floor(Date.now() / 1000)}:R>` });
+    await i.message.edit({ embeds: [e], components: [] }).catch(() => {});
+    log(i.guild, done ? '✅ Withdrawal sent' : '↩️ Withdrawal refunded', `${i.user} → \`${id}\``, done ? 0x00efa0 : 0xff5968);
+    return reply(i, done ? '✅ Marked as sent. The player sees it on the site.' : '↩️ Refunded: the pets are back in the player\'s inventory.');
+  }
+}
+
+/* ---------------- event wiring ---------------- */
+
+function attachHandlers(c) {
+  c.once(Events.ClientReady, async () => {
+    console.log(`\n  Logged in as ${c.user.tag}\n`);
+    if (BOT_KEY) {
+      try { siteRanks = (await site('GET', '/api/bot/stats')).ranks || []; }
+      catch (error) { console.warn('Could not reach petduel.win:', error.message); }
+    }
+    for (const guild of c.guilds.cache.values()) await setupGuild(guild);
+    connectSite();
+    syncAllRanks();
+    setInterval(syncAllRanks, (CONFIG.rankSyncMinutes || 10) * 60000);
+
+    const presence = async () => {
+      try {
+        const s = BOT_KEY ? await site('GET', '/api/bot/stats') : null;
+        c.user.setPresence({ activities: [{ name: s ? `petduel.win · ${s.online} online` : 'petduel.win', type: 3 }], status: 'online' });
+      } catch { c.user.setPresence({ activities: [{ name: 'petduel.win', type: 3 }] }); }
+    };
+    presence();
+    setInterval(presence, 60000);
+  });
+
+  c.on(Events.GuildCreate, guild => setupGuild(guild));
+
+  c.on(Events.InteractionCreate, async i => {
+    try {
+      if (i.isAutocomplete()) {
+        const focused = i.options.getFocused(true);
+        if (focused.name === 'pet') return i.respond(await catalogChoices(focused.value)).catch(() => {});
+        if (focused.name === 'name') {
+          const { bots } = await site('GET', '/api/bot/stats');
+          return i.respond(bots.map(b => ({ name: `${b.online ? '🟢' : '🔴'} ${b.username}`, value: b.id })).slice(0, 25)).catch(() => {});
+        }
+        return i.respond([]).catch(() => {});
+      }
+      if (i.isChatInputCommand()) return await handleCommand(i);
+      if (i.isButton()) return await handleButton(i);
+    } catch (error) {
+      console.warn(`Command error (${i.commandName || i.customId}):`, error.message);
+      if (i.isRepliable()) reply(i, `❌ ${error.message}`).catch(() => {});
+    }
+  });
+
+  c.on(Events.GuildMemberAdd, m => log(m.guild, '📥 Member joined', `${m} (${m.user.username})\nAccount created <t:${Math.floor(m.user.createdTimestamp / 1000)}:R>`, 0x00efa0));
+  c.on(Events.GuildMemberRemove, m => log(m.guild, '📤 Member left', `${m.user ? m.user.username : 'unknown'} (${m.id})`, 0x8d909a));
+  c.on(Events.MessageDelete, msg => {
+    if (!msg.guild || (msg.author && msg.author.bot)) return;
+    log(msg.guild, '🗑 Message deleted', `**Author:** ${msg.author || 'unknown'}\n**Channel:** ${msg.channel}\n${msg.content ? `**Text:** ${msg.content}` : '(text not available)'}`, 0xff5968);
+  });
+  c.on(Events.MessageUpdate, (oldMsg, newMsg) => {
+    if (!newMsg.guild || (newMsg.author && newMsg.author.bot) || oldMsg.content === newMsg.content) return;
+    log(newMsg.guild, '✏️ Message edited', `**Author:** ${newMsg.author}\n**Channel:** ${newMsg.channel}\n**Before:** ${oldMsg.content || '(unknown)'}\n**After:** ${newMsg.content || ''}`, 0xffb52e);
+  });
+}
+
+process.on('unhandledRejection', err => console.warn('Unhandled:', err && err.message ? err.message : err));
+start();
