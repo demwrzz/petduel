@@ -1731,6 +1731,9 @@ app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
 });
 
 const UPDATE_LOG = [
+  { version: '3.5', title: 'No withdrawals while bots are offline', changes: [
+    'Withdraw requests are refused while every deposit bot is offline; the wallet shows a notice and disables the button'
+  ] },
   { version: '3.4', title: 'Country block in the admin panel', changes: [
     'Admin panel: Country block box (Block Turkey / any codes / Unblock all), saved in the database; BLOCK_COUNTRIES in Railway still works too'
   ] },
@@ -2165,6 +2168,11 @@ app.post('/api/tip', auth, actionLimit, (req, res) => {
 app.post('/api/withdraw', auth, actionLimit, (req, res) => {
   const user = req.user;
   const uids = selectionToUids(req.body);
+
+  /* pets can only be sent while at least one deposit bot is online */
+  if (!S.bots.some(b => b.online !== false)) {
+    return bad(res, 'Withdrawals are paused while our bots are offline. Please try again when a bot is back online.');
+  }
 
   const open = S.withdrawals.filter(w => w.user.id === user.id && w.status === 'pending');
   if (open.length >= 5) return bad(res, 'You already have 5 pending withdrawals');

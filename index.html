@@ -2661,6 +2661,11 @@
         STATE.bot = STATE.bots[0] || STATE.bot;
         const box = $("#depositBots");
         if (box) box.innerHTML = botsListHTML();
+        const off = $("#botsOffBox");
+        if (off) {
+          off.innerHTML = botsOffline() ? '<div class="warn"><i>!</i><span>Withdrawals are paused while our bots are offline. Please try again when a bot is back online.</span></div>' : "";
+          gridContext && gridContext.info && gridContext.info();
+        }
       });
 
       socket.on("bounty:update", list => {
@@ -3223,12 +3228,16 @@
         info() {
           const items = selectedItems();
           const btn = $("#withdrawButton");
-          if (btn) btn.textContent = "Withdraw " + fmt(totalValue(items));
+          if (btn) {
+            btn.textContent = botsOffline() ? "Withdrawals paused" : "Withdraw " + fmt(totalValue(items));
+            btn.disabled = botsOffline();
+          }
         }
       };
 
       openModal(`
         ${modalHeader("Inventory")}
+        <div id="botsOffBox">${botsOffline() ? '<div class="warn"><i>!</i><span>Withdrawals are paused while our bots are offline. Please try again when a bot is back online.</span></div>' : ""}</div>
         <div id="wdBox"></div>
         <div class="hint" style="margin:0 0 7px">Select Item</div>
 
@@ -3281,6 +3290,7 @@
       if (!requireLogin()) return;
 
       const uids = selectedUids();
+      if (botsOffline()) return toast("Withdrawals are paused while our bots are offline", "err");
       if (!uids.length) return toast("Select items first", "err");
 
       const btn = $("#withdrawButton");
@@ -3315,6 +3325,9 @@
       if (!requireLogin()) return;
       openBotsModal();
     }
+
+    /* true when no deposit bot is online: withdrawals are paused */
+    const botsOffline = () => !depositBots().some(b => b.online !== false);
 
     const depositBots = () => {
       const list = asArray(STATE.bots);
