@@ -265,7 +265,7 @@ function commandList() {
     new SlashCommandBuilder().setName('ban').setDescription('Ban a member').setDefaultMemberPermissions(PermissionFlagsBits.BanMembers)
       .addUserOption(o => o.setName('user').setDescription('Member').setRequired(true)).addStringOption(o => o.setName('reason').setDescription('Reason')),
 
-    new SlashCommandBuilder().setName('withdrawals').setDescription('Pending withdrawals on the site (staff and Support)'),
+    new SlashCommandBuilder().setName('withdrawals').setDescription('Pending withdrawals on the site (admins)'),
     new SlashCommandBuilder().setName('site').setDescription('Manage petduel.win').setDefaultMemberPermissions(ADMIN)
       .addSubcommand(s => s.setName('maintenance').setDescription('Close or open the site')
         .addBooleanOption(o => o.setName('on').setDescription('true = close the site, false = open it').setRequired(true))
@@ -547,7 +547,7 @@ async function handleCommand(i) {
       '`/link` `/unlink` `/profile` `/rank` `/leaderboard` `/stats` `/games` `/website` `/coinflip`',
       '',
       '**Staff / Support**',
-      '`/withdrawals` (Support: Mark sent) `/clear` `/timeout` `/kick` `/ban`',
+      '`/clear` `/timeout` `/kick` `/ban`',
       '',
       '**Admins**',
       '`/site maintenance|say|bot|block` `/player info|mute|ban|give|clearpets` `/match cancel` `/event wheel|scramble|cancel` `/announce` `/giveaway start|end|reroll` `/ticketpanel`'
@@ -686,7 +686,7 @@ async function handleCommand(i) {
   }
 
   if (name === 'withdrawals') {
-    if (!isStaff(i.member)) return reply(i, 'Only staff and Support can use this.');
+    if (!i.member.permissions.has(PermissionFlagsBits.ManageGuild)) return reply(i, 'Only admins can use this.');
     await i.deferReply({ flags: EPHEMERAL });
     const { list } = await site('GET', '/api/bot/withdrawals');
     if (!list.length) return reply(i, '✅ No pending withdrawals.');
@@ -814,8 +814,7 @@ async function handleButton(i) {
   }
 
   if (kind === 'wd_done' || kind === 'wd_refund') {
-    if (!isStaff(i.member)) return reply(i, 'Only staff and Support can do this.');
-    if (kind === 'wd_refund' && !i.member.permissions.has(PermissionFlagsBits.ManageGuild)) return reply(i, 'Only admins can refund. Support can mark withdrawals as sent.');
+    if (!i.member.permissions.has(PermissionFlagsBits.ManageGuild)) return reply(i, 'Only admins can handle withdrawals.');
     await i.deferReply({ flags: EPHEMERAL });
     await site('POST', `/api/admin/withdraw/${kind === 'wd_done' ? 'done' : 'refund'}`, { id }, actorOf(i));
     const done = kind === 'wd_done';

@@ -29,7 +29,7 @@ Admin: `/site maintenance|say|bot|block` `/player info|mute|ban|give|clearpets` 
 
 ## Siteyle bağlantı
 - Yeni coinflipler ve sonuçları → #coinflips, jackpot → #jackpots, giveaway ve event'ler → #giveaways
-- Çekim istekleri → #withdrawals, **Mark sent / Refund** butonlarıyla
+- Çekim istekleri → #withdrawals, **Mark sent / Refund** butonlarıyla (sadece admin, Support sadece mute/timeout)
 - Oyuncular sitede Profile → **Link Discord** ile kod alır, Discord'da `/link KOD` yazar → rank rolü otomatik verilir
   (her 10 dakikada bir güncellenir)
 

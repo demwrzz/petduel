@@ -578,19 +578,15 @@
     }
     .tag-support::after { content: ""; position: absolute; top: 0; bottom: 0; left: -60%; width: 40%; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent); transform: skewX(-20deg); animation: owner-shine 2.4s ease-in-out infinite; }
     .tag-support svg { width: 10px; height: 10px; }
-    .sp-mute { margin-bottom: 14px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: #1a1d26; }
-    .sp-mute-row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    .sp-mute { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: #1a1d26; }
+    .sp-mute-row { display: flex; gap: 8px; flex-wrap: wrap; }
     .sp-mute-row input { flex: 1; min-width: 140px; }
-    .sp-h { margin: 0 0 8px; color: var(--muted); font-size: 12px; letter-spacing: .6px; text-transform: uppercase; }
-    .sp-wd { margin-bottom: 10px; padding: 12px; border: 1px solid #5c4a22; border-radius: 12px; background: #1f1d18; }
-    .sp-wd-top { display: flex; align-items: center; gap: 10px; }
-    .sp-wd-who { flex: 1; min-width: 0; }
-    .sp-wd-who b { display: block; color: #fff; }
-    .sp-wd-who small { color: var(--muted); }
-    .sp-wd-val { display: flex; align-items: center; color: var(--orange); }
-    .sp-wd-pets { display: flex; flex-wrap: wrap; gap: 4px; margin: 10px 0; }
-    .sp-wd-pets span { padding: 3px 8px; border-radius: 6px; background: #2a2620; color: #e8d9b0; font-size: 12px; font-weight: 700; }
-    .sp-done { width: 100%; }
+    .sp-del { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; transition: border-color .2s, background .2s; }
+    .sp-del:has(input:checked) { border-color: #ff5968; background: rgba(255, 89, 104, .08); }
+    .sp-del input { grid-row: span 2; width: 18px; height: 18px; accent-color: #ff5968; cursor: pointer; }
+    .sp-del span { color: #fff; font-weight: 800; }
+    .sp-del small { color: var(--muted); font-size: 12px; }
+    .sp-apply { width: 100%; }
     @keyframes owner-chroma { to { background-position: 300% 0; } }
     @keyframes owner-glow { 50% { box-shadow: 0 0 16px rgba(192, 132, 252, .95), 0 0 2px rgba(217, 70, 239, .9) inset; } }
     @keyframes owner-shine { 0%, 40% { left: -60%; } 80%, 100% { left: 130%; } }
@@ -2212,7 +2208,7 @@
             ${asArray(NOTIFS.list).length
               ? asArray(NOTIFS.list).map(n => `
                 <div class="bell-item ${n.ts > NOTIFS.seen ? "fresh" : ""}">
-                  <span>${n.type === "withdraw" ? "📤" : n.type === "tax" ? "💰" : n.type === "security" ? "🛡️" : "👋"}</span>
+                  <span>${n.type === "withdraw" ? "📤" : n.type === "tax" ? "💰" : n.type === "security" ? "🛡️" : n.type === "mute" ? "🔇" : "👋"}</span>
                   <div>${esc(n.text)}<small>${timeAgo(n.ts)}</small></div>
                 </div>`).join("")
               : '<div class="empty" style="padding:24px">No notifications</div>'}
@@ -4086,7 +4082,7 @@
 
     const DISCORD_ICO = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.2a18.4 18.4 0 0 0-5.5 0L8.7 3a19.7 19.7 0 0 0-4.9 1.5C.5 9 -.3 13.6.1 18.1a19.9 19.9 0 0 0 6 3l1.2-2a13 13 0 0 1-1.9-.9l.4-.3a14.2 14.2 0 0 0 12.1 0l.4.3c-.6.4-1.2.7-1.9.9l1.2 2a19.8 19.8 0 0 0 6-3c.5-5.2-.8-9.7-3.5-13.7zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4z"/></svg>';
 
-    /* ---------- Support Panel: pending withdrawals + chat mute ---------- */
+    /* ---------- Support Panel: chat mute only ---------- */
     async function showSupportPanel() {
       if (!ME || !ME.isSupport) return;
       gridContext = null;
@@ -4100,30 +4096,12 @@
             <select id="spMin" class="in">
               <option value="10">10 min</option><option value="60">1 hour</option><option value="360">6 hours</option><option value="1440">24 hours</option><option value="0">Unmute</option>
             </select>
-            <button class="btn red" data-action="sp-mute">Apply</button>
           </div>
-        </div>
-        <h4 class="sp-h">Pending withdrawals</h4>
-        <div id="spList"><div class="empty">Loading…</div></div>`, "small");
-      loadSupportList();
-    }
-
-    async function loadSupportList() {
-      try {
-        const { list } = await api("/api/support/withdrawals");
-        const box = $("#spList");
-        if (!box) return;
-        box.innerHTML = list.length ? list.map(w => `
-          <div class="sp-wd">
-            <div class="sp-wd-top">
-              ${avatar({ username: w.nickname, avatar: w.avatar }, "md")}
-              <div class="sp-wd-who"><b>${esc(w.nickname)}</b><small>Roblox: ${esc(w.robloxName)} · ${esc(ago(w.ts))}</small></div>
-              <b class="sp-wd-val">${GEM}${fmt(w.value)}</b>
-            </div>
-            <div class="sp-wd-pets">${w.items.map(i => `<span>${esc(itemLabel(i))}</span>`).join("")}</div>
-            <button class="btn sp-done" data-action="sp-done" data-id="${esc(w.id)}">✅ Mark as sent</button>
-          </div>`).join("") : '<div class="empty">No pending withdrawals 🎉</div>';
-      } catch (error) { fail(error); }
+          <input id="spReason" class="in" placeholder="Reason (optional)" maxlength="120" autocomplete="off">
+          <label class="sp-del"><input type="checkbox" id="spDel"><span>Delete messages</span><small>Also remove this player's messages from chat</small></label>
+          <button class="btn red sp-apply" data-action="sp-mute">Apply</button>
+          <p class="hint" style="margin:0">Admins get a notification for every mute.</p>
+        </div>`, "small");
     }
 
     /* Discord link: the site gives a code, the player types /link CODE in our Discord */
@@ -5618,18 +5596,14 @@
       "profile-page"(el) { showProfile(Number(el.dataset.page)); },
       "discord-link"() { discordLink(); },
       "support-panel"() { showSupportPanel(); },
-      async "sp-done"(el) {
-        if (!(await confirmBox({ title: "Mark as sent", text: "Did you send these pets to the player in game?", ok: "Yes, sent" }))) return;
-        try { await api("/api/support/withdraw/done", { body: { id: el.dataset.id } }); toast("Marked as sent", "ok"); loadSupportList(); }
-        catch (error) { fail(error); }
-      },
       async "sp-mute"() {
         const name = $("#spName")?.value.trim();
         if (!name) return toast("Write a nickname", "err");
         try {
-          const r = await api("/api/support/mute", { body: { name, minutes: Number($("#spMin").value) } });
-          toast(Number($("#spMin").value) ? `${r.nickname} muted` : `${r.nickname} unmuted`, "ok");
-          $("#spName").value = "";
+          const minutes = Number($("#spMin").value);
+          const r = await api("/api/support/mute", { body: { name, minutes, deleteMessages: $("#spDel").checked, reason: $("#spReason").value.trim() } });
+          toast(minutes ? `${r.nickname} muted${r.removed ? `, ${r.removed} message${r.removed === 1 ? "" : "s"} deleted` : ""}` : `${r.nickname} unmuted`, "ok");
+          $("#spName").value = ""; $("#spReason").value = ""; $("#spDel").checked = false;
         } catch (error) { fail(error); }
       },
       "discord-unlink"() { discordUnlink(); },

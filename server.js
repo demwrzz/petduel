@@ -1967,6 +1967,12 @@ app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
 });
 
 const UPDATE_LOG = [
+  { version: '4.6', title: 'Support: mute only', changes: [
+    'Support members can only mute (up to 24 h); withdrawals are handled by admins only (site and Discord)',
+    'Every Support mute / unmute shows up in the admin notification bell with who, whom, how long and the reason',
+    'Optional "Delete messages" box when muting: off keeps the player\'s chat messages, on removes them',
+    'Pet values: exact pet names only, amvgg fields read directly, import corrects the values of pets already in the catalog'
+  ] },
   { version: '4.5', title: 'Support team and amvgg values', changes: [
     'Support role: admins give / remove it in the admin panel. Support members get a blue SUPPORT tag and a Support Panel (mark withdrawals as sent, mute up to 24 h)',
     'Pet values from amvgg.com (default) or elvebredd.com: type a pet name to fill all 12 versions, or import every pet at once (x1000, versions already in the catalog are skipped)'
@@ -3449,37 +3455,32 @@ app.post('/api/admin/support', auth, adminOnly, (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/support/withdrawals', auth, supportOnly, (req, res) => {
-  res.json({ list: S.withdrawals.filter(w => w.status === 'pending').slice(0, 50).map(w => {
-    const u = S.users[w.user.id];
-    return { id: w.id, nickname: nick(u || w.user), robloxName: u ? u.username : w.user.username, avatar: u ? u.avatar : null, value: w.value, ts: w.ts, items: w.items.map(publicItem) };
-  }) });
-});
-
-app.post('/api/support/withdraw/done', auth, supportOnly, (req, res) => {
-  const w = S.withdrawals.find(x => x.id === req.body.id);
-  if (!w || w.status !== 'pending') return bad(res, 'Request not found');
-  markWithdrawSent(w, req.user.username);
-  console.log(`[SUPPORT] ${req.user.username} marked withdrawal ${w.id} as sent`);
-  res.json({ ok: true });
-});
-
-/* support can mute for up to 24 hours (admins and other support members cannot be muted) */
+/* Support can only mute (up to 24 hours; staff cannot be muted). Every mute / unmute goes to the admin bell.
+   "Delete messages" is optional: when on, the player's chat messages are removed too. */
 app.post('/api/support/mute', auth, supportOnly, (req, res) => {
   const user = findUserByName(req.body.name) || S.users[String(req.body.id || '')];
   if (!user) return bad(res, 'Player not found', 404);
   if (isSupport(user)) return bad(res, 'You cannot mute staff');
   const minutes = Math.floor(Number(req.body.minutes));
   if (!(minutes === 0 || (minutes >= 1 && minutes <= 1440))) return bad(res, 'Mute time must be 1-1440 minutes (0 = unmute)');
+  const deleteMessages = req.body.deleteMessages === true;
   user.mutedUntil = minutes ? now() + minutes * 60000 : 0;
-  if (minutes) {
+  let removed = 0;
+  if (minutes && deleteMessages) {
+    const before = S.chat.length;
     S.chat = S.chat.filter(m => !(m.user && m.user.id === user.id));
+    removed = before - S.chat.length;
     io.emit('chat:purge', { userId: user.id });
   }
   markDirty();
   emitMe(user);
-  console.log(`[SUPPORT] ${req.user.username} ${minutes ? `muted ${user.username} for ${minutes} min` : `unmuted ${user.username}`}`);
-  res.json({ ok: true, nickname: nick(user) });
+  const time = minutes >= 60 && minutes % 60 === 0 ? `${minutes / 60} hour${minutes === 60 ? '' : 's'}` : `${minutes} min`;
+  const reason = String(req.body.reason || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+  notifyAdmins('mute', minutes
+    ? `🔇 Support ${nick(req.user)} muted ${nick(user)} (Roblox: ${user.username}) for ${time}${deleteMessages ? `, ${removed} message${removed === 1 ? '' : 's'} deleted` : ''}${reason ? ` · Reason: ${reason}` : ''}`
+    : `🔊 Support ${nick(req.user)} unmuted ${nick(user)} (Roblox: ${user.username})`);
+  console.log(`[SUPPORT] ${req.user.username} ${minutes ? `muted ${user.username} for ${minutes} min${deleteMessages ? ' (messages deleted)' : ''}` : `unmuted ${user.username}`}`);
+  res.json({ ok: true, nickname: nick(user), removed });
 });
 
 app.post('/api/admin/withdraw/refund', auth, adminOnly, (req, res) => {
