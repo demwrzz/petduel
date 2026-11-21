@@ -370,7 +370,7 @@ function snapshot() {
     jackpot: JP && JP.state !== 'finished' ? { ...JP, winner: null } : null,
     jpHistory: S.jpHistory.slice(0, 100),
     chat: S.chat.slice(-60),
-    bots: S.bots.map(b => ({ id: b.id, username: b.username, link: b.link, online: b.online !== false })),
+    bots: S.bots.map(b => ({ id: b.id, username: b.username, link: b.link, online: b.online !== false, role: botRole(b) })),
     eventEscrow: S.eventEscrow || null
   };
 }
@@ -535,6 +535,27 @@ function ensureDefaultBot() {
   markDirty();
 }
 
+/* every bot is either a deposit bot (players trade pets to it) or a withdraw bot (it sends pets out) */
+const botRole = b => (b.role === 'withdraw' ? 'withdraw' : 'deposit');
+/* the bots that send withdrawals; while no withdraw bot is set up, the deposit bots do it */
+function withdrawBotPool() {
+  const w = S.bots.filter(b => botRole(b) === 'withdraw');
+  return w.length ? w : S.bots.filter(b => botRole(b) === 'deposit');
+}
+let wdBotTurn = 0;
+function pickWithdrawBot() {
+  const online = withdrawBotPool().filter(b => b.online !== false);
+  if (!online.length) return null;
+  return online[wdBotTurn++ % online.length];
+}
+function publicWdBot(ref, full = false) {
+  if (!ref) return null;
+  const b = S.bots.find(x => x.id === ref.id);
+  const p = botProfiles.get(String(ref.username).toLowerCase()) || {};
+  const name = p.username || ref.username;
+  return { username: full ? name : maskName(name), avatar: p.avatar || null, link: b ? b.link : '', online: b ? b.online !== false : false };
+}
+
 /* players only see the start and the last letter of a bot's name (ltcspace -> ltcs***e) */
 const maskName = n => (n.length <= 5 ? n.slice(0, 2) + '***' + n.slice(-1) : n.slice(0, 4) + '***' + n.slice(-1));
 const publicBots = (full = false) => S.bots.map(b => {
@@ -542,12 +563,12 @@ const publicBots = (full = false) => S.bots.map(b => {
   const name = p.username || b.username;
   return {
     id: b.id, username: full ? name : maskName(name), ...(full ? { robloxId: p.robloxId || null } : {}),
-    avatar: p.avatar || null, link: b.link, joinLink: b.link, online: b.online !== false
+    avatar: p.avatar || null, link: b.link, joinLink: b.link, online: b.online !== false, role: botRole(b)
   };
 });
 
 /* kept for older clients: the first bot */
-const firstBot = () => publicBots()[0] || null;
+const firstBot = () => publicBots().find(b => b.role === 'deposit') || null;
 
 async function loadBotProfile(username) {
   try {
@@ -1292,7 +1313,7 @@ app.get('/api/bot/stats', botOnly, (req, res) => {
     openGames: open.length, gamesValue: round2(open.reduce((t, m) => t + m.hostValue + (m.oppValue || 0), 0)),
     jackpot: JP ? { state: JP.state, total: JP.total, players: JP.entries.length } : null,
     giveaways: Object.keys(S.giveaways).length, pendingWithdrawals: S.withdrawals.filter(w => w.status === 'pending').length,
-    maintenance: maintenanceOn(), bots: publicBots(true).map(b => ({ id: b.id, username: b.username, online: b.online })),
+    maintenance: maintenanceOn(), bots: publicBots(true).map(b => ({ id: b.id, username: b.username, online: b.online, role: b.role })),
     ranks: RANKS.map(r => ({ name: r.name, min: r.min, color: r.color })),
     event: EVENT ? { type: EVENT.type, status: EVENT.status } : null
   });
@@ -1982,7 +2003,8 @@ const UPDATE_LOG = [
     'Optional "Delete messages" box when muting: off keeps the player\'s chat messages, on removes them',
     'Pet values: exact pet names only, amvgg fields read directly, import corrects the values of pets already in the catalog',
     'Events: pick the prize from your own inventory (it comes back to you if nobody wins, the event is cancelled or the server restarts) or from the catalog',
-    'A Christmas dog walks to the end of the typing text at the top of the site'
+    'A Christmas dog walks to the end of the typing text at the top of the site',
+    'Separate withdraw bots: the admin panel has Deposit bots and Withdraw bots; each withdraw request gets an online withdraw bot that players see in their wallet'
   ] },
   { version: '4.5', title: 'Support team and amvgg values', changes: [
     'Support role: admins give / remove it in the admin panel. Support members get a blue SUPPORT tag and a Support Panel (mark withdrawals as sent, mute up to 24 h)',
@@ -2506,9 +2528,10 @@ app.post('/api/withdraw', auth, actionLimit, (req, res) => {
   const user = req.user;
   const uids = selectionToUids(req.body);
 
-  /* pets can only be sent while at least one deposit bot is online */
-  if (!S.bots.some(b => b.online !== false)) {
-    return bad(res, 'Withdrawals are paused while our bots are offline. Please try again when a bot is back online.');
+  /* pets can only be sent while at least one withdraw bot is online */
+  const wdBot = pickWithdrawBot();
+  if (!wdBot) {
+    return bad(res, 'Withdrawals are paused while our withdraw bots are offline. Please try again when a bot is back online.');
   }
 
   const open = S.withdrawals.filter(w => w.user.id === user.id && w.status === 'pending');
@@ -2523,6 +2546,7 @@ app.post('/api/withdraw', auth, actionLimit, (req, res) => {
     items,
     value: valueOf(items),
     status: 'pending',
+    bot: { id: wdBot.id, username: wdBot.username },
     ts: now()
   };
 
@@ -2544,7 +2568,7 @@ app.post('/api/withdraw', auth, actionLimit, (req, res) => {
   res.json({
     ok: true,
     message: 'Withdraw successful! An admin will send your items to you shortly.',
-    request: { id: request.id, value: request.value, status: request.status }
+    request: { id: request.id, value: request.value, status: request.status, bot: publicWdBot(request.bot) }
   });
 });
 
@@ -2555,6 +2579,7 @@ app.get('/api/withdrawals', auth, (req, res) => {
   res.json({
     list: mine.map(w => ({
       id: w.id, status: w.status, value: w.value, ts: w.ts, doneAt: w.doneAt || 0,
+      bot: w.status === 'pending' ? publicWdBot(w.bot) : null,
       items: w.items.map(publicItem)
     }))
   });
@@ -2994,7 +3019,7 @@ app.post('/api/admin/bots/add', auth, adminOnly, async (req, res) => {
   if (S.bots.length >= 20) return bad(res, 'You can add at most 20 bots');
   if (S.bots.some(b => b.username.toLowerCase() === username.toLowerCase())) return bad(res, 'This bot is already in the list');
 
-  const b = { id: rid(6), username, link, online: req.body.online !== false };
+  const b = { id: rid(6), username, link, online: req.body.online !== false, role: req.body.role === 'withdraw' ? 'withdraw' : 'deposit' };
   S.bots.push(b);
   markDirty();
   await loadBotProfile(username);
@@ -3006,6 +3031,7 @@ app.post('/api/admin/bots/update', auth, adminOnly, (req, res) => {
   const b = S.bots.find(x => x.id === req.body.id);
   if (!b) return bad(res, 'Bot not found', 404);
   if (req.body.online !== undefined) b.online = Boolean(req.body.online);
+  if (req.body.role === 'deposit' || req.body.role === 'withdraw') b.role = req.body.role;
   if (req.body.link !== undefined) {
     const link = String(req.body.link || '').trim();
     if (!validBotLink(link)) return bad(res, 'The join link must be a https://www.roblox.com/... link');
@@ -3454,7 +3480,7 @@ app.get('/api/admin/data', auth, adminOnly, (req, res) => {
       adminTag: isAdmin(u) && u.adminTag !== false,
       muted: (u.mutedUntil || 0) > now()
     })),
-    withdrawals: S.withdrawals.filter(w => w.status === 'pending'),
+    withdrawals: S.withdrawals.filter(w => w.status === 'pending').map(w => ({ ...w, botName: w.bot ? (publicWdBot(w.bot, true) || {}).username : '' })),
     bounties: publicBounties(),
     settings: S.settings,
     admins: Object.values(S.users).filter(u => isAdmin(u)).map(u => ({ id: u.id, username: u.username })),
@@ -3910,15 +3936,26 @@ function adminUI() {
         </div>
       </div>
 
-      <h4 style="margin:16px 0 8px">🤖 Deposit bots</h4>
+      <h4 style="margin:16px 0 8px">📥 Deposit bots</h4>
       <div style="background:#f5faff;padding:14px;border-radius:12px">
-        <div id="bot-list" style="margin-bottom:10px"></div>
+        <div id="bot-list" data-role="deposit" style="margin-bottom:10px"></div>
         <div style="display:grid;grid-template-columns:1fr 2fr auto;gap:8px">
-          <input id="bot-name" class="in" maxlength="20" placeholder="Bot Roblox username">
+          <input id="bot-name" class="in" maxlength="20" placeholder="Deposit bot Roblox username">
           <input id="bot-link" class="in" placeholder="Join link (https://www.roblox.com/share?...)">
-          <button id="bot-add" class="btn">Add bot</button>
+          <button id="bot-add" class="btn">Add deposit bot</button>
         </div>
-        <p class="hint">Every bot is shown in the Deposit window with its status. Players cannot join an offline bot.</p>
+        <p class="hint">Players trade their pets to these bots. They are shown in the Deposit window with their status. Players cannot join an offline bot.</p>
+      </div>
+
+      <h4 style="margin:16px 0 8px">📤 Withdraw bots</h4>
+      <div style="background:#f5faff;padding:14px;border-radius:12px">
+        <div id="wbot-list" data-role="withdraw" style="margin-bottom:10px"></div>
+        <div style="display:grid;grid-template-columns:1fr 2fr auto;gap:8px">
+          <input id="wbot-name" class="in" maxlength="20" placeholder="Withdraw bot Roblox username">
+          <input id="wbot-link" class="in" placeholder="Join link (https://www.roblox.com/share?...)">
+          <button id="wbot-add" class="btn">Add withdraw bot</button>
+        </div>
+        <p class="hint">These bots send the pets out. Every withdraw request gets one online withdraw bot (in turns); the player sees its name and private server in the wallet. Withdrawals are paused while every withdraw bot is offline. While no withdraw bot is added, the deposit bots handle withdrawals.</p>
       </div>
 
       <h4 style="margin:16px 0 8px">💰 Coinflip tax</h4>
@@ -4084,6 +4121,7 @@ function adminUI() {
         <div style="border:1px solid #343842;border-radius:8px;padding:10px;margin-bottom:8px">
           <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
             <b>${esc(w.user.username)}</b>
+            ${w.botName ? `<span style="color:#4da3ff;font-weight:800">🤖 ${esc(w.botName)}</span>` : ''}
             <span>${fmt(w.value)} · ${new Date(w.ts).toLocaleString()}</span>
             <span>
               <button class="btn mint sm" data-wd="done" data-id="${esc(w.id)}">Mark sent</button>
@@ -4232,8 +4270,10 @@ function adminUI() {
     } catch (err) { toast(err.message, 'err'); }
   };
 
-  function renderBots(bots) {
-    $('bot-list').innerHTML = bots.length
+  function renderBots(all) {
+    for (const [id, role] of [['bot-list', 'deposit'], ['wbot-list', 'withdraw']]) {
+      const bots = all.filter(b => (b.role || 'deposit') === role);
+      $(id).innerHTML = bots.length
       ? bots.map(b => `
         <div style="display:flex;align-items:center;gap:10px;padding:8px;border-bottom:1px solid #e0edfb;flex-wrap:wrap">
           ${b.avatar ? `<img src="${esc(b.avatar)}" alt="" style="width:32px;height:32px;border-radius:50%">` : ''}
@@ -4243,19 +4283,22 @@ function adminUI() {
           <button class="btn sm ${b.online ? 'gray' : 'mint'}" data-bot-toggle="${esc(b.id)}" data-on="${b.online ? '0' : '1'}">${b.online ? 'Set offline' : 'Set online'}</button>
           <button class="btn red sm" data-bot-del="${esc(b.id)}">🗑</button>
         </div>`).join('')
-      : '<p class="hint">No bots yet. Deposits are not possible until you add one.</p>';
+      : `<p class="hint">${role === 'deposit' ? 'No deposit bots yet. Deposits are not possible until you add one.' : 'No withdraw bots yet: the deposit bots handle withdrawals.'}</p>`;
+    }
   }
 
-  $('bot-add').onclick = async () => {
+  const addBot = async (role, pre) => {
     try {
-      const r = await api('/api/admin/bots/add', { method: 'POST', body: { username: $('bot-name').value, link: $('bot-link').value } });
-      $('bot-name').value = ''; $('bot-link').value = '';
+      const r = await api('/api/admin/bots/add', { method: 'POST', body: { username: $(pre + '-name').value, link: $(pre + '-link').value, role } });
+      $(pre + '-name').value = ''; $(pre + '-link').value = '';
       renderBots(r.bots);
-      toast('Bot added', 'ok');
+      toast(role === 'withdraw' ? 'Withdraw bot added' : 'Deposit bot added', 'ok');
     } catch (err) { toast(err.message, 'err'); }
   };
+  $('bot-add').onclick = () => addBot('deposit', 'bot');
+  $('wbot-add').onclick = () => addBot('withdraw', 'wbot');
 
-  $('bot-list').onclick = async e => {
+  const botListClick = async e => {
     const t = e.target.closest('[data-bot-toggle]');
     const d = e.target.closest('[data-bot-del]');
     try {
@@ -4264,7 +4307,7 @@ function adminUI() {
         renderBots(r.bots);
       }
       if (d) {
-        if (!(await confirmBox({ title: 'Remove bot', text: 'Remove this bot from the deposit list?', ok: 'Remove', danger: true }))) return;
+        if (!(await confirmBox({ title: 'Remove bot', text: 'Remove this bot from the list?', ok: 'Remove', danger: true }))) return;
         const r = await api('/api/admin/bots/delete', { method: 'POST', body: { id: d.dataset.botDel } });
         renderBots(r.bots);
         toast('Bot removed', 'ok');
@@ -4272,7 +4315,8 @@ function adminUI() {
     } catch (err) { toast(err.message, 'err'); }
   };
 
-  $('bot-list').onchange = async e => {
+  $('bot-list').onclick = $('wbot-list').onclick = botListClick;
+  $('bot-list').onchange = $('wbot-list').onchange = async e => {
     const input = e.target.closest('[data-bot-link]');
     if (!input) return;
     try {

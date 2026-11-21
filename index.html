@@ -1053,7 +1053,12 @@
     .wd-body > div { min-height: 0; overflow: hidden; padding: 0 14px; }
     .wd-panel.open .wd-body { grid-template-rows: 1fr; }
     .wd-panel.open .wd-body > div { padding-bottom: 12px; }
-    .wd-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid #332d20; }
+    .wd-bot { display: flex; flex-basis: 100%; align-items: center; gap: 8px; margin-top: 6px; padding: 7px 10px; border: 1px solid #2e3a4f; border-radius: 9px; background: #171c26; }
+    .wd-bot-name { display: flex; flex: 1; flex-direction: column; min-width: 0; line-height: 1.15; }
+    .wd-bot small { color: var(--muted); font-size: 11px; }
+    .wd-bot b { overflow: hidden; color: #fff; font-size: 15px; letter-spacing: .5px; text-overflow: ellipsis; white-space: nowrap; }
+    .wd-bot .btn { flex: none; }
+    .wd-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid #332d20; }
     .wd-row .items { flex: 1; padding-bottom: 6px; }
     .wd-row .item-thumb { width: 40px; height: 40px; }
     .wd-st { min-width: 76px; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 800; text-align: center; text-transform: uppercase; letter-spacing: .4px; }
@@ -3140,7 +3145,7 @@
         if (box) box.innerHTML = botsListHTML();
         const off = $("#botsOffBox");
         if (off) {
-          off.innerHTML = botsOffline() ? '<div class="warn"><i>!</i><span>Withdrawals are paused while our bots are offline. Please try again when a bot is back online.</span></div>' : "";
+          off.innerHTML = botsOffline() ? '<div class="warn"><i>!</i><span>Withdrawals are paused while our withdraw bots are offline. Please try again when a bot is back online.</span></div>' : "";
           gridContext && gridContext.info && gridContext.info();
         }
       });
@@ -3780,7 +3785,7 @@
 
       openModal(`
         ${modalHeader("Inventory")}
-        <div id="botsOffBox">${botsOffline() ? '<div class="warn"><i>!</i><span>Withdrawals are paused while our bots are offline. Please try again when a bot is back online.</span></div>' : ""}</div>
+        <div id="botsOffBox">${botsOffline() ? '<div class="warn"><i>!</i><span>Withdrawals are paused while our withdraw bots are offline. Please try again when a bot is back online.</span></div>' : ""}</div>
         <div id="wdBox"></div>
         <div class="hint" style="margin:0 0 7px">Select Item</div>
 
@@ -3822,8 +3827,9 @@
                   <span class="wd-st ${esc(w.status)}">${label[w.status] || esc(w.status)}</span>
                   <div class="items">${thumbs(w.items, 6)}</div>
                   <div class="wd-meta"><b>${GEM}${fmt(w.value)}</b><small>${esc(ago(w.ts))}</small></div>
+                  ${wdBotHTML(w.bot)}
                 </div>`).join("")}
-              <p class="hint" style="margin:6px 0 0">An admin will send these pets to you in game soon. If something goes wrong they come back to your inventory.</p>
+              <p class="hint" style="margin:6px 0 0">Join the bot's private server: it sends these pets to you in game soon. Only accept trades from the bot shown here. If something goes wrong the pets come back to your inventory.</p>
             </div></div>
           </div>`;
       } catch { box.innerHTML = ""; }
@@ -3853,9 +3859,10 @@
             <h2>Withdraw successful!</h2>
             <p>
               Your request${req.value ? ` for <b>${GEM}${fmt(req.value)}</b>` : ""} has been received.<br>
-              An admin will send your items to you in Adopt Me shortly.
+              ${req.bot ? "Join the bot's private server, it will send your pets in Adopt Me shortly." : "An admin will send your items to you in Adopt Me shortly."}
               ${req.id ? `<br><span class="muted">Request ID: ${esc(req.id)}</span>` : ""}
             </p>
+            ${req.bot ? `<div style="margin:0 0 14px;text-align:left">${wdBotHTML(req.bot)}</div>` : ""}
             <button class="btn" style="width:100%" data-action="close2">Done</button>
           </div>`);
       } catch (error) {
@@ -3869,14 +3876,28 @@
       openBotsModal();
     }
 
-    /* true when no deposit bot is online: withdrawals are paused */
-    const botsOffline = () => !depositBots().some(b => b.online !== false);
+    /* true when no withdraw bot is online: withdrawals are paused (without withdraw bots the deposit bots send) */
+    const withdrawBots = () => {
+      const w = asArray(STATE.bots).filter(b => b.role === "withdraw");
+      return w.length ? w : depositBots();
+    };
+    const botsOffline = () => !withdrawBots().some(b => b.online !== false);
 
     const depositBots = () => {
-      const list = asArray(STATE.bots);
-      if (list.length) return list;
+      const list = asArray(STATE.bots).filter(b => b.role !== "withdraw");
+      if (list.length || asArray(STATE.bots).length) return list;
       return STATE.bot ? [STATE.bot] : [];
     };
+
+    /* the withdraw bot that sends a request: masked name, avatar and its private server */
+    const wdBotHTML = bot => !bot ? "" : `
+      <div class="wd-bot">
+        ${avatar({ username: bot.username, avatar: bot.avatar }, "sm")}
+        <span class="wd-bot-name"><small>Sent by</small><b>${esc(bot.username)}</b></span>
+        ${bot.online && bot.link
+          ? `<button class="btn sm" data-action="bot-join" data-link="${esc(bot.link)}">Join server</button>`
+          : '<span class="bot-status off"><span class="dot off"></span>Offline</span>'}
+      </div>`;
 
     /* the bot's name is shown masked and big (ltcs***e) so players can match it in game */
     function botsListHTML() {
