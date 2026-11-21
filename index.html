@@ -996,6 +996,24 @@
     .jp-sub { color: #b6b8c0; font-size: 20px; font-weight: 700; text-align: center; }
     .jp-sub b { color: #fff; }
     .jp-join { width: 100%; min-height: 48px; font-size: 15px; letter-spacing: .5px; }
+    .jp-actions { display: flex; gap: 8px; }
+    .jp-actions .jp-join { flex: 1; width: auto; }
+    .jp-hist-btn { min-height: 48px; }
+    .jph { margin-bottom: 8px; border: 1px solid var(--border); border-radius: 10px; background: #191c25; }
+    .jph summary { display: flex; align-items: center; gap: 12px; padding: 10px 12px; cursor: pointer; list-style: none; }
+    .jph summary::-webkit-details-marker { display: none; }
+    .jph[open] { border-color: #6b5420; }
+    .jph-av { position: relative; }
+    .jph-av span { position: absolute; top: -10px; right: -6px; font-size: 16px; }
+    .jph-main { flex: 1; min-width: 0; }
+    .jph-main b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .jph-main small { color: var(--muted); font-size: 12px; }
+    .jph-pot { display: flex; align-items: center; color: var(--green); font-size: 17px; font-weight: 800; white-space: nowrap; }
+    .jph-body { padding: 0 12px 12px; }
+    .jph-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px; }
+    .jph-row.win { background: #15332a; }
+    .jph-row .n { flex: 1; min-width: 0; overflow: hidden; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+    .jph-row small { width: 56px; color: var(--muted); text-align: right; }
     .jp-leave { width: 100%; margin-top: 8px; }
     .jp-list { display: flex; flex-direction: column; gap: 8px; min-height: 280px; max-height: 480px; overflow-y: auto; margin-top: 14px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: #14171f; }
     .jp-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid #2c303b; border-radius: 8px; background: #191c25; transition: opacity .4s, border-color .4s; }
@@ -1044,27 +1062,78 @@
     .ev-winner { margin-top: 14px; padding: 18px; border: 1px solid var(--green); border-radius: 10px; background: #15332a; text-align: center; font-size: 18px; font-weight: 800; animation: enter .4s both; }
     .ev-winner .ev-prize { margin-top: 12px; text-align: left; }
 
-    .wheel-box { position: relative; width: min(340px, 86vw); aspect-ratio: 1; margin: 6px auto; }
-    .wheel-rot { width: 100%; height: 100%; }
+    .wheel-box { position: relative; width: min(400px, 88vw); aspect-ratio: 1; margin: 14px auto 6px; }
+    .wheel-box.shake { animation: wbox-shake .45s; }
+    @keyframes wbox-shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+    .wheel-glow { position: absolute; inset: -8%; border-radius: 50%; background: radial-gradient(circle, rgba(255, 181, 46, .28), transparent 62%); animation: cl-breathe 3s ease-in-out infinite; pointer-events: none; }
+    .wheel-rot { position: relative; width: 100%; height: 100%; will-change: transform; filter: drop-shadow(0 14px 30px rgba(0, 0, 0, .55)); }
     .wheel-rot svg { width: 100%; height: 100%; display: block; }
-    .wheel-rot.idle { animation: wspin 40s linear infinite; }
-    .wheel-rot.fast { animation: wspin .9s linear infinite; }
     @keyframes wspin { to { transform: rotate(360deg); } }
+    .wheel-rot .bulb { fill: #ffd35a; animation: bulb 1s steps(1) infinite; }
+    .wheel-rot .bulb.b2 { animation-delay: .5s; }
+    @keyframes bulb { 50% { fill: #5a4a20; } }
+    .wheel-rot .wseg { transition: filter .3s; }
+    .wheel-rot .wseg.hit { animation: seg-hit .5s ease-in-out 4; }
+    @keyframes seg-hit { 50% { fill: #ff2d43; filter: brightness(1.6); } }
     .wheel-pointer {
-      position: absolute; top: -10px; left: 50%; z-index: 2; width: 0; height: 0; transform: translateX(-50%);
-      border-left: 14px solid transparent; border-right: 14px solid transparent; border-top: 28px solid #fff;
-      filter: drop-shadow(0 3px 5px rgba(0, 0, 0, .7));
+      position: absolute; top: -14px; left: 50%; z-index: 3; width: 34px; height: 44px; transform: translateX(-50%); transform-origin: 50% 20%;
+      background: linear-gradient(180deg, #fff, #ffd35a); clip-path: polygon(50% 100%, 0 25%, 15% 0, 85% 0, 100% 25%);
+      filter: drop-shadow(0 4px 6px rgba(0, 0, 0, .7));
     }
+    .wheel-pointer.tick { animation: ptr-tick .14s ease-out; }
+    @keyframes ptr-tick { 40% { transform: translateX(-50%) rotate(-14deg); } }
+    .ev-progress { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; max-width: 360px; margin: 10px auto 0; }
+    .ev-progress i { width: 12px; height: 6px; border-radius: 3px; background: var(--green); box-shadow: 0 0 6px rgba(0, 239, 160, .6); transition: background .4s; }
+    .ev-progress i.gone { background: #3a2a2e; box-shadow: none; }
+    .ev-out { display: inline-block; color: #ff8a96; animation: pop .4s both; }
+    .ev-skull { margin-left: auto; }
+    .ev-row.flash { animation: row-flash .6s ease-in-out 3; }
+    @keyframes row-flash { 50% { background: #4a1a22; border-color: #ff5968; } }
+    .ev-join { min-width: 220px; min-height: 48px; font-size: 16px; animation: soon-pulse 1.8s ease-in-out infinite; }
+    .ev-champ { position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; padding: 26px 16px 20px; border: 1px solid #6b5420; border-radius: 16px; background: radial-gradient(circle at 50% 30%, rgba(255, 181, 46, .25), transparent 60%), #1b1a17; text-align: center; animation: pop .5s both; }
+    .ev-champ.small { margin-top: 16px; }
+    .ev-champ-confetti { position: absolute; inset: 0; pointer-events: none; }
+    .ev-champ-confetti .confetti { width: 7px; height: 10px; }
+    .ev-crown { position: relative; font-size: 46px; line-height: 1; animation: crown-bob 1.6s ease-in-out infinite; filter: drop-shadow(0 4px 10px rgba(255, 181, 46, .6)); }
+    @keyframes crown-bob { 50% { transform: translateY(-6px) rotate(-6deg); } }
+    .ev-champ-av { position: relative; border-radius: 50%; box-shadow: 0 0 0 4px var(--orange), 0 0 34px rgba(255, 181, 46, .6); }
+    .ev-champ small { position: relative; margin-top: 8px; color: var(--orange); font-size: 12px; font-weight: 800; letter-spacing: 2px; }
+    .ev-champ > b { position: relative; color: #fff; font-size: 26px; }
+    .ev-champ .ev-prize { position: relative; margin-top: 8px; }
     .wheel-empty { display: grid; place-items: center; width: 100%; height: 100%; border: 3px dashed #3a3f4c; border-radius: 50%; color: var(--muted); font-weight: 800; text-align: center; padding: 20px; }
 
-    .tiles { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: 24px 0; }
+    .tiles { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: 22px 0 14px; perspective: 600px; }
     .tile {
-      display: grid; place-items: center; width: 56px; height: 64px; border: 2px solid #4a3d22; border-radius: 10px;
-      background: linear-gradient(180deg, #2b2418, #1b1d24); color: var(--orange); font-size: 30px; font-weight: 800;
-      box-shadow: 0 6px 18px -8px rgba(255, 181, 46, .5);
+      display: grid; place-items: center; width: 56px; height: 64px; border: 2px solid #6b5420; border-radius: 12px;
+      background: linear-gradient(180deg, #3a2f1a, #1d1e25); color: var(--orange); font-size: 30px; font-weight: 900;
+      box-shadow: 0 6px 0 #14120d, 0 10px 22px -8px rgba(255, 181, 46, .55); cursor: pointer;
+      animation: tile-in .55s cubic-bezier(.2, .9, .3, 1.3) both; transition: transform .15s, opacity .2s, filter .2s;
     }
+    button.tile:hover:not(.used) { transform: translateY(-4px); }
+    button.tile:active:not(.used) { transform: translateY(2px); box-shadow: 0 2px 0 #14120d; }
+    .tile.used { opacity: .25; filter: grayscale(1); cursor: default; transform: scale(.9); }
+    .tile.reflip { animation: tile-in .45s cubic-bezier(.2, .9, .3, 1.3) both; }
+    @keyframes tile-in { from { opacity: 0; transform: rotateX(-90deg) translateY(-14px); } }
+    .tiles.solved .tile { color: #04120b; background: linear-gradient(180deg, #5dffc9, #00c886); border-color: #00efa0; box-shadow: 0 6px 0 #075c40, 0 0 24px rgba(0, 239, 160, .5); }
+    .scr-timer { height: 8px; overflow: hidden; border-radius: 8px; background: #2a2620; }
+    .scr-timer i { display: block; width: 100%; height: 100%; background: linear-gradient(90deg, #ff5968, var(--orange), #ffd35a); transition: width .3s linear; }
+    .scr-top { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; color: #cfd2db; font-size: 14px; font-weight: 700; }
+    .scr-top b { color: var(--orange); }
+    .scr-hint { margin: 0 auto 16px; width: max-content; max-width: 100%; padding: 8px 14px; border: 1px dashed #3a3f4c; border-radius: 10px; color: var(--muted); font-weight: 700; letter-spacing: 1px; }
+    .scr-hint.on { border-style: solid; border-color: #ffd35a; color: #ffd35a; background: #2a2412; }
+    .scr-hint.new { animation: pop .5s both; }
+    .slots { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 0 0 14px; }
+    .slot { display: grid; place-items: center; width: 44px; height: 52px; border: 2px dashed #3a3f4c; border-radius: 10px; color: #fff; font-size: 24px; font-weight: 900; cursor: pointer; transition: border-color .2s, background .2s; }
+    .slot.filled { border-style: solid; border-color: var(--orange); background: #241f15; }
+    .slot.pop { animation: slot-pop .25s ease-out; }
+    @keyframes slot-pop { 50% { transform: scale(1.15); } }
+    .slots.wrong { animation: wbox-shake .45s; }
+    .slots.wrong .slot.filled { border-color: var(--red); background: #3a1a1f; }
+    .slots.right .slot { border-color: var(--green); background: #12352a; color: var(--green); }
     .guess-row { display: flex; gap: 8px; max-width: 460px; margin: 0 auto; }
-    .guess-row input { flex: 1; text-transform: lowercase; }
+    .guess-row input { flex: 1; text-transform: uppercase; letter-spacing: 2px; }
+    .scr-tools { display: flex; justify-content: center; gap: 8px; margin-top: 10px; }
+    @media (max-width: 560px) { .tile { width: 46px; height: 54px; font-size: 24px; } .slot { width: 36px; height: 46px; font-size: 20px; } }
 
     @media (max-width: 1050px) { .ev-grid { grid-template-columns: 1fr; } }
 
@@ -3682,6 +3751,11 @@
     /* public update log: only things players see and can be shared openly */
     /* newest first; "note" is the short text shown in the banner in the middle of the home page */
     const PUBLIC_UPDATES = [
+      { v: "3.0", title: "Better events and jackpot history", note: "The wheel and word scramble events got a big upgrade, and you can now see every past jackpot round in the jackpot history!", items: [
+        "Jackpot history: every finished round with the winner, the pot, the chances and the seed to verify it",
+        "Wheel event: smooth spin that slows down onto the eliminated player, lights and a winner celebration",
+        "Word scramble: tap the letters to spell, shuffle, hints over time and a live guess counter"
+      ] },
       { v: "2.9", title: "Bigger giveaways", note: "Giveaways can now run for days, and you can see every pet's name and value right on the giveaway card!", items: [
         "Giveaways can run for minutes, hours or days",
         "See each pet's picture, name and value on the giveaway card",
@@ -4101,37 +4175,109 @@
 
     const WHEEL_COLORS = ["#00a870", "#f08a00", "#3b82f6", "#a855f7", "#ef4444", "#14b8a6", "#eab308", "#ec4899", "#6366f1", "#84cc16"];
 
-    function wheelSVG(players) {
-      const n = players.length;
-      const cx = 160, cy = 160, R = 150;
-      const point = (angle, r) => [cx + r * Math.cos(angle), cy + r * Math.sin(angle)];
+    /* ================= Wheel event (smooth, continuous animation) ================= */
+    let wheelAngle = 0, wheelSpeed = 0, wheelRaf = 0, wheelMode = "idle", wheelLand = null, wheelLastSeg = -1;
 
-      let body = "";
+    function wheelSVG(players, victimId) {
+      const n = players.length;
+      const cx = 160, cy = 160, R = 146;
+      const point = (angle, r) => [cx + r * Math.cos(angle), cy + r * Math.sin(angle)];
+      const showAv = n <= 14;
+      let defs = "", body = "";
+
+      players.forEach((p, i) => {
+        const color = WHEEL_COLORS[i % WHEEL_COLORS.length];
+        defs += `<radialGradient id="wg${i}" cx="160" cy="160" r="150" gradientUnits="userSpaceOnUse"><stop offset="0.15" stop-color="${color}" stop-opacity=".55"/><stop offset="1" stop-color="${color}"/></radialGradient>`;
+      });
 
       if (n === 1) {
-        body = `<circle cx="${cx}" cy="${cy}" r="${R}" fill="${WHEEL_COLORS[0]}"/>
-          <text x="${cx}" y="${cy - 60}" text-anchor="middle" fill="#fff" font-weight="800" font-size="14">${esc(players[0].username.slice(0, 14))}</text>`;
+        body = `<circle cx="${cx}" cy="${cy}" r="${R}" fill="url(#wg0)"/>`;
       } else {
         body = players.map((p, i) => {
           const a0 = (i / n) * Math.PI * 2 - Math.PI / 2;
           const a1 = ((i + 1) / n) * Math.PI * 2 - Math.PI / 2;
           const [x0, y0] = point(a0, R);
           const [x1, y1] = point(a1, R);
-          const mid = (a0 + a1) / 2;
-          const [tx, ty] = point(mid, R * 0.64);
-          const size = n > 20 ? 8 : n > 12 ? 10 : 13;
-
-          return `<path d="M${cx} ${cy} L${x0} ${y0} A${R} ${R} 0 ${n === 2 ? 1 : 0} 1 ${x1} ${y1} Z" fill="${WHEEL_COLORS[i % WHEEL_COLORS.length]}" stroke="#14171f" stroke-width="2"/>
-            <text transform="translate(${tx} ${ty}) rotate(${(mid * 180) / Math.PI})" text-anchor="middle" dominant-baseline="middle"
-              fill="#fff" font-weight="800" font-size="${size}">${esc(p.username.slice(0, 11))}</text>`;
+          return `<path class="wseg ${victimId && p.id === victimId ? "victim" : ""}" d="M${cx} ${cy} L${x0} ${y0} A${R} ${R} 0 ${n === 2 ? 1 : 0} 1 ${x1} ${y1} Z" fill="url(#wg${i})" stroke="rgba(255,255,255,.85)" stroke-width="1.5"/>`;
         }).join("");
       }
 
-      return `<svg viewBox="0 0 320 320">${body}<circle cx="${cx}" cy="${cy}" r="16" fill="#14171f" stroke="#fff" stroke-width="3"/></svg>`;
+      const labels = players.map((p, i) => {
+        const mid = n === 1 ? -Math.PI / 2 : ((i + 0.5) / n) * Math.PI * 2 - Math.PI / 2;
+        const deg = (mid * 180) / Math.PI;      /* names read from the center outwards, like a prize wheel */
+        const size = n > 20 ? 8 : n > 12 ? 10 : 12;
+        const [tx, ty] = point(mid, R * (showAv ? 0.5 : 0.62));
+        let av = "";
+        if (showAv) {
+          const [ax, ay] = point(mid, R * 0.8);
+          const r = n > 8 ? 11 : 15;
+          av = p.avatar
+            ? `<clipPath id="wc${i}"><circle cx="${ax}" cy="${ay}" r="${r}"/></clipPath><circle cx="${ax}" cy="${ay}" r="${r + 2}" fill="#fff"/><image href="${esc(p.avatar)}" x="${ax - r}" y="${ay - r}" width="${r * 2}" height="${r * 2}" clip-path="url(#wc${i})"/>`
+            : `<circle cx="${ax}" cy="${ay}" r="${r + 2}" fill="#fff"/><circle cx="${ax}" cy="${ay}" r="${r}" fill="#2a2f3b"/><text x="${ax}" y="${ay + 1}" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-weight="800" font-size="${r}">${esc((getUsername(p) || "?")[0].toUpperCase())}</text>`;
+        }
+        return `${av}<text transform="translate(${tx} ${ty}) rotate(${deg})" text-anchor="middle" dominant-baseline="middle" fill="#fff" font-weight="800" font-size="${size}" style="paint-order:stroke" stroke="rgba(0,0,0,.35)" stroke-width="3">${esc(getUsername(p).slice(0, 11))}</text>`;
+      }).join("");
+
+      const bulbs = Array.from({ length: 24 }, (_, i) => {
+        const a = (i / 24) * Math.PI * 2;
+        const [bx, by] = point(a, 154);
+        return `<circle class="bulb ${i % 2 ? "b2" : ""}" cx="${bx}" cy="${by}" r="3.2"/>`;
+      }).join("");
+
+      return `<svg viewBox="0 0 320 320"><defs>${defs}</defs>
+        <circle cx="${cx}" cy="${cy}" r="158" fill="#1b1f2a" stroke="#ffb52e" stroke-width="3"/>
+        ${body}${labels}${bulbs}
+        <circle cx="${cx}" cy="${cy}" r="22" fill="#14171f" stroke="#ffb52e" stroke-width="3"/>
+        <use href="#logo-mark" x="${cx - 17}" y="${cy - 17}" width="34" height="34"/>
+      </svg>`;
+    }
+
+    /* one animation loop for the whole event: idle drift, fast spin, slow landing */
+    function wheelLoop(t0) {
+      cancelAnimationFrame(wheelRaf);
+      let last = t0 || performance.now();
+      const step = t => {
+        const dt = Math.min(64, t - last);
+        last = t;
+        if (wheelMode === "land" && wheelLand) {
+          const p = Math.min(1, (t - wheelLand.start) / wheelLand.dur);
+          const e = 1 - Math.pow(1 - p, 4);
+          wheelAngle = wheelLand.from + (wheelLand.to - wheelLand.from) * e;
+          if (p >= 1) { wheelMode = "stop"; wheelLand.done && wheelLand.done(); wheelLand = null; }
+        } else if (wheelMode === "spin") {
+          wheelSpeed = Math.min(0.9, wheelSpeed + dt * 0.0012);          /* deg per ms, speeds up */
+          wheelAngle += wheelSpeed * dt;
+        } else if (wheelMode === "idle") {
+          wheelSpeed = 0.012;
+          wheelAngle += wheelSpeed * dt;
+        }
+        const rot = document.getElementById("wheelRot");
+        if (rot) {
+          rot.style.transform = `rotate(${wheelAngle}deg)`;
+          /* tick the pointer every time a slice passes it */
+          const n = Number(rot.dataset.n || 0);
+          if (n > 1) {
+            const seg = Math.floor((((-wheelAngle) % 360) + 360) % 360 / (360 / n));
+            if (seg !== wheelLastSeg) {
+              wheelLastSeg = seg;
+              const ptr = document.getElementById("wheelPtr");
+              if (ptr && wheelMode !== "idle") { ptr.classList.remove("tick"); void ptr.offsetWidth; ptr.classList.add("tick"); }
+            }
+          }
+        }
+        if (wheelMode !== "stop" && currentPage === "event") wheelRaf = requestAnimationFrame(step);
+      };
+      wheelRaf = requestAnimationFrame(step);
     }
 
     function evRow(p, out, winnerId) {
-      return `<div class="ev-row ${out ? "out" : ""} ${winnerId && winnerId === p.id ? "win" : ""}" data-pid="${esc(p.id)}">${avatar(p, "sm")}<span>${esc(p.username)}</span></div>`;
+      return `<div class="ev-row ${out ? "out" : ""} ${winnerId && winnerId === p.id ? "win" : ""}" data-pid="${esc(p.id)}">${avatar(p, "sm")}<span>${esc(getUsername(p))}</span>${out ? '<span class="ev-skull">💀</span>' : ""}</div>`;
+    }
+
+    function confettiHTML(count = 60) {
+      const colors = ["#00efa0", "#ffb52e", "#ff5968", "#4da3ff", "#c084fc", "#fff"];
+      return Array.from({ length: count }, (_, i) =>
+        `<span class="confetti" style="left:${Math.random() * 100}%;background:${colors[i % colors.length]};--d:${2.5 + Math.random() * 2.5}s;animation-delay:${Math.random() * 1.5}s"></span>`).join("");
     }
 
     function wheelPageHTML(ev) {
@@ -4140,36 +4286,47 @@
       const shown = joining ? asArray(ev.participants) : asArray(ev.players);
       const joined = ME && asArray(ev.participants).some(p => p.id === ME.id);
       const isHost = ME && ev.host.id === ME.id;
-
-      let rotClass = "";
-      if (joining) rotClass = "idle";
-      else if (ev.status === "running" && ev.phase === "spin") rotClass = "fast";
+      const total = asArray(ev.players).length + asArray(ev.eliminated).length;
 
       let status = "";
-
       if (joining) {
         status = `<div class="ev-status">Joining ends in <b class="ticker-giveaway" data-end="${Number(ev.joinEndsAt)}"></b></div>` +
           (isHost ? '<p class="hint" style="text-align:center">You are the host.</p>'
             : joined ? '<button class="btn gray" disabled>✔ You joined</button>'
-              : '<button class="btn sun" data-action="event-join">Join the wheel</button>');
+              : '<button class="btn sun ev-join" data-action="event-join">🎡 Join the wheel</button>');
       } else if (finished) {
-        status = ev.winner
-          ? `<div class="ev-winner">${ICO.trophy} ${esc(ev.winner.username)} won!${prizeHTML(ev.prize)}</div>`
-          : `<div class="ev-status">${esc(ev.note || "The event has ended.")}</div>`;
+        status = ev.winner ? "" : `<div class="ev-status">${esc(ev.note || "The event has ended.")}</div>`;
       } else if (ev.phase === "reveal") {
-        status = '<div class="ev-status" id="wheelMsg"></div>';
+        status = '<div class="ev-status" id="wheelMsg">Slowing down…</div>';
       } else {
-        status = `<div class="ev-status">Round ${Number(ev.round)} · spinning…</div>`;
+        status = `<div class="ev-status">Round ${Number(ev.round)} · <span class="ev-spin-txt">spinning…</span></div>`;
       }
 
-      const wheel = shown.length
-        ? `<div class="wheel-box"><div class="wheel-pointer"></div><div class="wheel-rot ${rotClass}" id="wheelRot">${wheelSVG(shown)}</div></div>`
-        : `<div class="wheel-box"><div class="wheel-empty">Waiting for players to join…</div></div>`;
+      const progress = !joining && total > 1
+        ? `<div class="ev-progress">${Array.from({ length: total }, (_, i) => `<i class="${i < asArray(ev.eliminated).length ? "gone" : ""}"></i>`).join("")}</div>
+           <div class="hint" style="text-align:center;margin:4px 0 0">${asArray(ev.players).length} of ${total} players left</div>` : "";
+
+      const wheel = finished && ev.winner
+        ? `<div class="ev-champ">
+             <div class="ev-champ-confetti">${confettiHTML(70)}</div>
+             <div class="ev-crown">👑</div>
+             <div class="ev-champ-av">${avatar(ev.winner, "xl")}</div>
+             <small>WINNER</small>
+             <b>${esc(getUsername(ev.winner))}</b>
+             ${prizeHTML(ev.prize)}
+           </div>`
+        : shown.length
+          ? `<div class="wheel-box">
+               <div class="wheel-glow"></div>
+               <div class="wheel-pointer" id="wheelPtr"></div>
+               <div class="wheel-rot" id="wheelRot" data-n="${shown.length}" style="transform:rotate(${wheelAngle}deg)">${wheelSVG(shown, ev.phase === "reveal" ? ev.victimId : null)}</div>
+             </div>`
+          : `<div class="wheel-box"><div class="wheel-empty">Waiting for players to join…</div></div>`;
 
       const winnerId = ev.winner && ev.winner.id;
 
       return `
-        <div class="card profile-card enter">
+        <div class="card profile-card enter ev-card">
           <div class="ev-head">
             <h2>🎡 Wheel Event</h2>
             ${prizeHTML(ev.prize)}
@@ -4177,80 +4334,147 @@
           </div>
 
           <div class="ev-grid">
-            <div class="ev-center">${wheel}${status}</div>
+            <div class="ev-center">${wheel}${progress}${status}</div>
 
             <div class="ev-list">
               <h4>${joining ? "Joined" : "Still in"} (${shown.length})</h4>
               ${shown.map(p => evRow(p, false, winnerId)).join("") || '<div class="empty" style="padding:20px">Nobody yet</div>'}
-              ${asArray(ev.eliminated).length ? `<h4>Eliminated</h4>${asArray(ev.eliminated).map(p => evRow(p, true, "")).join("")}` : ""}
+              ${asArray(ev.eliminated).length ? `<h4>Eliminated</h4>${asArray(ev.eliminated).slice().reverse().map(p => evRow(p, true, "")).join("")}` : ""}
             </div>
           </div>
         </div>`;
     }
 
+    /* start / continue the wheel animation after the page was drawn */
+    function driveWheel(ev) {
+      if (ev.type !== "wheel") return;
+      if (ev.status === "joining") { wheelMode = "idle"; wheelLoop(); return; }
+      if (ev.status === "finished") { wheelMode = "stop"; cancelAnimationFrame(wheelRaf); return; }
+      if (ev.phase === "spin") { if (wheelMode !== "spin") { wheelMode = "spin"; wheelSpeed = Math.max(wheelSpeed, 0.05); } wheelLoop(); return; }
+
+      if (ev.phase === "reveal") {
+        const players = asArray(ev.players);
+        const index = players.findIndex(p => p.id === ev.victimId);
+        if (index < 0) return;
+        const seg = 360 / players.length;
+        const center = (index + 0.5) * seg;
+        /* the pointer is at the top: the victim's slice center must end up there */
+        const base = wheelAngle + 360 * 2;
+        let to = base + ((((-center - base) % 360) + 360) % 360);
+        to += (Math.random() - 0.5) * seg * 0.5;          /* not always dead center */
+        const victim = players[index];
+        wheelMode = "land";
+        wheelLand = {
+          from: wheelAngle, to, start: performance.now(), dur: 2900,
+          done: () => {
+            document.querySelector(".wseg.victim")?.classList.add("hit");
+            const row = document.querySelector(`.ev-list [data-pid="${CSS.escape(String(victim.id))}"]`);
+            if (row) row.classList.add("out", "flash");
+            const msg = $("#wheelMsg");
+            if (msg) msg.innerHTML = `<span class="ev-out">💀 <b>${esc(getUsername(victim))}</b> is eliminated!</span>`;
+            const box = document.querySelector(".wheel-box");
+            if (box) { box.classList.remove("shake"); void box.offsetWidth; box.classList.add("shake"); }
+          }
+        };
+        wheelLoop();
+      }
+    }
+
+    /* ================= Word scramble ================= */
+    function scrambleTiles(ev) {
+      return String(ev.scrambled || "").split("").map((c, i) =>
+        `<button class="tile" data-action="scr-tile" data-i="${i}" data-c="${esc(c)}" style="animation-delay:${i * 70}ms">${esc(c)}</button>`).join("");
+    }
+
     function scramblePageHTML(ev) {
       const running = ev.status === "running";
       const isHost = ME && ev.host.id === ME.id;
-      const tiles = String(ev.scrambled || "").split("").map(c => `<span class="tile">${esc(c)}</span>`).join("");
+      const len = Number(ev.length) || 0;
+      const dur = Math.max(1, (Number(ev.endsAt) - Number(ev.startedAt || ev.createdAt || 0)) / 1000);
 
-      let bottom;
+      let main, bottom;
 
       if (running) {
-        bottom = `<div class="ev-status">Time left <b class="ticker-giveaway" data-end="${Number(ev.endsAt)}"></b></div>` +
-          (isHost
-            ? '<p class="hint" style="text-align:center">You are the host and cannot play.</p>'
-            : `<div class="guess-row">
-                 <input id="guessInput" class="in" maxlength="30" placeholder="Type the word…" autocomplete="off">
-                 <button class="btn sun" data-action="event-guess">Submit</button>
-               </div>`);
+        main = `
+          <div class="scr-timer"><i class="ticker-bar" data-end="${Number(ev.endsAt)}" data-dur="${dur}"></i></div>
+          <div class="scr-top">
+            <span>⏱ <b class="ticker-giveaway" data-end="${Number(ev.endsAt)}"></b></span>
+            <span id="scrStats">${scrStatsText(ev)}</span>
+          </div>
+          <div class="tiles" id="scrTiles">${scrambleTiles(ev)}</div>
+          <div class="scr-hint ${ev.hint ? "on" : ""}" id="scrHint">${ev.hint ? `💡 Hint: ${esc(ev.hint.split("").join(" "))}` : "💡 A hint unlocks at half time"}</div>`;
+        bottom = isHost
+          ? '<p class="hint" style="text-align:center">You are the host and cannot play.</p>'
+          : `<div class="slots" id="scrSlots">${Array.from({ length: len }, (_, i) => `<span class="slot" data-action="scr-slot" data-i="${i}"></span>`).join("")}</div>
+             <div class="guess-row">
+               <input id="guessInput" class="in" maxlength="30" placeholder="Tap the letters or type…" autocomplete="off" autocapitalize="off" spellcheck="false">
+               <button class="btn sun" data-action="event-guess">Submit</button>
+             </div>
+             <div class="scr-tools">
+               <button class="btn gray sm" data-action="scr-shuffle">🔀 Shuffle</button>
+               <button class="btn gray sm" data-action="scr-back">⌫ Delete</button>
+               <button class="btn gray sm" data-action="scr-clear">✖ Clear</button>
+             </div>`;
       } else {
-        bottom = (ev.winner
-          ? `<div class="ev-winner">${ICO.trophy} ${esc(ev.winner.username)} solved it!${prizeHTML(ev.prize)}</div>`
-          : `<div class="ev-status">${esc(ev.note || "The event has ended.")}</div>`) +
-          (ev.word ? `<p class="hint" style="text-align:center;font-size:14px">The word was <b>${esc(ev.word)}</b></p>` : "");
+        const word = String(ev.word || "").toUpperCase();
+        main = word
+          ? `<div class="tiles solved">${word.split("").map((c, i) => `<span class="tile" style="animation-delay:${i * 90}ms">${esc(c)}</span>`).join("")}</div>`
+          : `<div class="tiles">${String(ev.scrambled || "").split("").map(c => `<span class="tile">${esc(c)}</span>`).join("")}</div>`;
+        bottom = ev.winner
+          ? `<div class="ev-champ small">
+               <div class="ev-champ-confetti">${confettiHTML(60)}</div>
+               <div class="ev-crown">🏆</div>
+               <div class="ev-champ-av">${avatar(ev.winner, "lg")}</div>
+               <small>SOLVED${ev.solvedIn != null ? ` IN ${Number(ev.solvedIn)}s` : ""}</small>
+               <b>${esc(getUsername(ev.winner))}</b>
+               ${prizeHTML(ev.prize)}
+             </div>`
+          : `<div class="ev-status">${esc(ev.note || "The event has ended.")}</div>`;
       }
 
       return `
-        <div class="card profile-card enter">
+        <div class="card profile-card enter ev-card">
           <div class="ev-head">
             <h2>🔤 Word Scramble</h2>
             ${prizeHTML(ev.prize)}
             <button class="btn gray" data-action="home">← Back</button>
           </div>
-
-          <p class="hint" style="text-align:center;font-size:14px">Unscramble the letters (${Number(ev.length)} letters). The first correct answer wins the prize!</p>
-          <div class="tiles">${tiles}</div>
+          <p class="hint" style="text-align:center;font-size:14px">Unscramble the ${len} letters. The first correct answer wins the prize!</p>
+          ${main}
           ${bottom}
         </div>`;
     }
 
-    /* land the wheel on the eliminated player (result is only known at the reveal phase) */
-    function landWheel(ev) {
-      const rot = $("#wheelRot");
-      if (!rot) return;
+    const scrStatsText = ev => {
+      const g = Number(ev.guesses || 0), p = Number(ev.players || 0);
+      return `🔥 ${g} guess${g === 1 ? "" : "es"} · ${p} player${p === 1 ? "" : "s"}`;
+    };
 
-      const index = asArray(ev.players).findIndex(p => p.id === ev.victimId);
-      if (index < 0) return;
+    /* the answer slots and used tiles follow what is in the input */
+    function scrSync() {
+      const input = $("#guessInput");
+      if (!input) return;
+      const v = input.value.toUpperCase().replace(/[^A-Z]/g, "");
+      document.querySelectorAll("#scrSlots .slot").forEach((s, i) => {
+        const c = v[i] || "";
+        if (s.textContent !== c) { s.textContent = c; s.classList.toggle("filled", Boolean(c)); if (c) { s.classList.remove("pop"); void s.offsetWidth; s.classList.add("pop"); } }
+      });
+      const left = v.split("");
+      document.querySelectorAll("#scrTiles .tile").forEach(t => {
+        const k = left.indexOf(t.dataset.c);
+        if (k >= 0) { left.splice(k, 1); t.classList.add("used"); } else t.classList.remove("used");
+      });
+    }
 
-      const segment = 360 / ev.players.length;
-      const finalAngle = 1440 - (index + 0.5) * segment;
-
-      rot.style.animation = "none";
-      rot.style.transform = "rotate(0deg)";
-      void rot.offsetWidth;
-      rot.style.transition = "transform 1.8s cubic-bezier(.12,.6,.15,1)";
-      rot.style.transform = `rotate(${finalAngle}deg)`;
-
-      const victim = ev.players[index];
-      const id = ev.victimId;
-
-      setTimeout(() => {
-        const row = document.querySelector(`[data-pid="${CSS.escape(String(id))}"]`);
-        if (row) row.classList.add("out");
-
-        const msg = $("#wheelMsg");
-        if (msg) msg.innerHTML = `💀 <b>${esc(victim.username)}</b> is eliminated!`;
-      }, 1800);
+    /* live numbers (guesses, hint) change without redrawing the letters the player has picked */
+    function patchScramble(ev) {
+      const st = $("#scrStats");
+      if (st) st.textContent = scrStatsText(ev);
+      const h = $("#scrHint");
+      if (h && ev.hint) {
+        const txt = `💡 Hint: ${ev.hint.split("").join(" ")}`;
+        if (h.textContent !== txt) { h.textContent = txt; h.classList.add("on"); h.classList.remove("new"); void h.offsetWidth; h.classList.add("new"); }
+      }
     }
 
     /* re-rendering a block changes its height for a moment; this keeps the page where the user is */
@@ -4270,7 +4494,10 @@
       const ev = STATE.event;
       const sig = eventKey(ev) + "|" + (ME && ME.id);
 
-      if (!force && sig === eventSig) return;
+      if (!force && sig === eventSig) {
+        if (ev && ev.type === "scramble") patchScramble(ev);
+        return;
+      }
       eventSig = sig;
 
       if (!ev) {
@@ -4284,7 +4511,8 @@
 
       keepScroll(box, () => { box.innerHTML = ev.type === "wheel" ? wheelPageHTML(ev) : scramblePageHTML(ev); });
 
-      if (ev.type === "wheel" && ev.status === "running" && ev.phase === "reveal") landWheel(ev);
+      if (ev.type === "wheel") driveWheel(ev);
+      if (ev.type === "scramble") scrSync();
 
       /* focus the answer box once per event, and never on touch screens (that scrolls the page and opens the keyboard) */
       if (ev.type === "scramble" && ev.status === "running" && focusedEventId !== ev.id && !matchMedia("(hover: none)").matches) {
@@ -4316,9 +4544,16 @@
 
       try {
         const result = await api("/api/event/guess", { body: { id: ev.id, guess } });
-        input.value = "";
-        if (result.correct) toast("Correct!", "ok");
-        else { toast("Wrong answer, try again", "err"); input.focus(); }
+        if (result.correct) {
+          $("#scrSlots")?.classList.add("right");
+          toast("Correct! 🎉", "ok");
+        } else {
+          const slots = $("#scrSlots");
+          if (slots) { slots.classList.remove("wrong"); void slots.offsetWidth; slots.classList.add("wrong"); }
+          setTimeout(() => { input.value = ""; scrSync(); }, 350);
+          toast("Wrong answer, try again", "err");
+          if (!matchMedia("(hover: none)").matches) input.focus({ preventScroll: true });
+        }
       } catch (error) { fail(error); }
     }
 
@@ -4507,6 +4742,41 @@
       return `<svg viewBox="0 0 400 400"><defs>${defs}</defs>${rings}${faces}</svg>`;
     }
 
+    /* public jackpot history: every finished round with its winner and the data to verify it */
+    async function showJpHistory() {
+      gridContext = null;
+      viewMatchId = null;
+      openModal(`${modalHeader("🕘 Jackpot History")}<div class="info-scroll" id="jpHist"><div class="empty">Loading…</div></div>`, "small");
+      try {
+        const { list } = await api("/api/jackpot/history");
+        const box = $("#jpHist");
+        if (!box) return;
+        box.innerHTML = asArray(list).length ? asArray(list).map((r, i) => `
+          <details class="jph enter" style="animation-delay:${Math.min(i, 12) * 40}ms">
+            <summary>
+              <div class="jph-av">${avatar(r.winner, "md")}<span>👑</span></div>
+              <div class="jph-main">
+                <b>${esc(getUsername(r.winner))}</b>
+                <small>won with ${Number(r.chance).toFixed(2)}% · ${asArray(r.players).length} players · ${esc(ago(r.finishedAt))}</small>
+              </div>
+              <div class="jph-pot">${GEM}${fmt(r.total)}</div>
+            </summary>
+            <div class="jph-body">
+              ${asArray(r.players).slice().sort((a, b) => b.value - a.value).map(p => `
+                <div class="jph-row ${p.user.id === r.winner.id ? "win" : ""}">
+                  ${avatar(p.user, "sm")}
+                  <span class="n">${esc(getUsername(p.user))}</span>
+                  <span class="muted">${Number(p.items)} pet${Number(p.items) === 1 ? "" : "s"}</span>
+                  <b>${GEM}${fmt(p.value)}</b>
+                  <small>${r.total ? ((p.value / r.total) * 100).toFixed(2) : "0.00"}%</small>
+                </div>`).join("")}
+              <div class="fair" style="margin-top:10px">Round: <code>${esc(r.id)}</code><br>Hash: <code>${esc(r.hash)}</code><br>Seed: <code>${esc(r.seed)}</code><br>Roll: <code>${esc(String(r.roll))}</code> × pot = ticket ${fmt(Number(r.roll) * Number(r.total))}</div>
+            </div>
+          </details>`).join("")
+          : '<div class="empty">No finished jackpot rounds yet.</div>';
+      } catch (error) { fail(error); }
+    }
+
     function jackpotHTML(j) {
       const entries = asArray(j.entries);
       const total = Number(j.total || 0);
@@ -4567,7 +4837,7 @@
             </div>
 
             <div>
-              ${joinBtn}
+              <div class="jp-actions">${joinBtn}<button class="btn gray jp-hist-btn" data-action="jp-history" title="Jackpot history">🕘 History</button></div>
               ${solo ? '<button class="btn gray jp-leave" data-action="jp-leave">Take my items back</button>' : ""}
               <div class="jp-list">${rows || '<div class="empty" style="padding:50px 10px">Nobody has joined yet.<br>The countdown starts when a second player joins.</div>'}</div>
               <div class="fair"><b>Provably fair</b><br>Hash: <code>${esc(j.hash || "—")}</code><br>${fairInfo}</div>
@@ -4872,6 +5142,32 @@
       "submit-giveaway": submitGiveaway,
       "enter-giveaway"(el) { enterGiveaway(el.dataset.id); },
       "dep-step"(el) { openBotsModal(Number(el.dataset.step) || 1); },
+      "jp-history"() { showJpHistory(); },
+      "scr-tile"(el) {
+        const input = $("#guessInput");
+        if (!input || el.classList.contains("used")) return;
+        input.value = (input.value.replace(/[^A-Za-z]/g, "") + el.dataset.c).slice(0, 30);
+        scrSync();
+        const len = Number(STATE.event && STATE.event.length) || 0;
+        if (len && input.value.length === len) submitGuess();
+      },
+      "scr-slot"(el) {
+        const input = $("#guessInput");
+        if (!input) return;
+        const v = input.value.replace(/[^A-Za-z]/g, "");
+        const i = Number(el.dataset.i);
+        input.value = v.slice(0, i) + v.slice(i + 1);
+        scrSync();
+      },
+      "scr-back"() { const i = $("#guessInput"); if (i) { i.value = i.value.slice(0, -1); scrSync(); } },
+      "scr-clear"() { const i = $("#guessInput"); if (i) { i.value = ""; scrSync(); } },
+      "scr-shuffle"() {
+        const box = $("#scrTiles");
+        if (!box) return;
+        const tiles = [...box.children];
+        for (let i = tiles.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [tiles[i], tiles[j]] = [tiles[j], tiles[i]]; }
+        tiles.forEach((t, i) => { t.style.animationDelay = (i * 40) + "ms"; t.classList.remove("reflip"); void t.offsetWidth; t.classList.add("reflip"); box.appendChild(t); });
+      },
       async "gw-delete"(el) {
         const refund = await confirmBox({
           title: "Delete giveaway",
@@ -4922,6 +5218,8 @@
         action(el, event);
       }
     });
+
+    document.addEventListener("input", event => { if (event.target && event.target.id === "guessInput") scrSync(); });
 
     document.addEventListener("keydown", event => {
       if (event.key === "Enter" && event.target && event.target.id === "guessInput") {

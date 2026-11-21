@@ -58,6 +58,7 @@ const S = {
   bounties: [],
   settings: { taxPercent: 0, taxReceiver: 'auto', taxIdx: 0, elveUrl: '' },
   updateNotes: [],
+  jpHistory: [],
   /* deposit bots, managed in the admin panel: { id, username, link, online } */
   bots: []
 };
@@ -327,6 +328,7 @@ function snapshot() {
     giveaways: S.giveaways,
     matches: Object.fromEntries(Object.entries(S.matches).filter(([, m]) => m.state !== 'finished')),
     jackpot: JP && JP.state !== 'finished' ? { ...JP, winner: null } : null,
+    jpHistory: S.jpHistory.slice(0, 100),
     chat: S.chat.slice(-60),
     bots: S.bots.map(b => ({ id: b.id, username: b.username, link: b.link, online: b.online !== false }))
   };
@@ -367,6 +369,7 @@ async function initDb() {
       S.matches = Object.assign(Object.create(null), d.matches || {});
       S.chat = Array.isArray(d.chat) ? d.chat.slice(-60) : [];
       savedJackpot = d.jackpot || null;
+      S.jpHistory = Array.isArray(d.jpHistory) ? d.jpHistory : [];
       console.log('State loaded from MongoDB.');
     }
   } catch (err) {
@@ -1743,6 +1746,11 @@ app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
 });
 
 const UPDATE_LOG = [
+  { version: '3.8', title: 'Jackpot history, new wheel and scramble', changes: [
+    'Public jackpot history (last 100 rounds, saved): winner, pot, chance, players, seed and roll to verify',
+    'Wheel event: smooth spin that slows down onto the eliminated player, ticking pointer, rim lights, avatars, elimination flash, winner screen with confetti',
+    'Word scramble: flip-in tiles, tap letters to spell, shuffle, time bar, hints (first letter at 50%, last at 75%), live guess counter, confetti for the winner'
+  ] },
   { version: '3.7', title: 'Jackpot survives restarts', changes: [
     'The running jackpot round is saved and continues after a restart (waiting, countdown or rolling); the winner is the same because it comes from the round seed'
   ] },
@@ -2074,6 +2082,17 @@ function finishJackpot(j) {
   j.state = 'finished';
   j.winnerId = winEntry.user.id;
 
+  /* public history: who won, how much, with what chance, and the seed to verify it */
+  S.jpHistory.unshift({
+    id: j.id, total: j.total, finishedAt: now(),
+    winner: winEntry.user, winnerValue: winEntry.value,
+    chance: j.total ? round2((winEntry.value / j.total) * 100) : 0,
+    players: j.entries.map(e => ({ user: e.user, value: e.value, items: e.items.length, top: topImage(e.items) })),
+    hash: j.hash, seed: j.seed, roll: j.roll
+  });
+  if (S.jpHistory.length > 100) S.jpHistory.length = 100;
+  markDirty();
+
   if (winner) winner.inventory.push(...allItems);
 
   for (const e of j.entries) {
@@ -2118,6 +2137,10 @@ function finishJackpot(j) {
   emitJackpot(j);
   jpLater(() => newJackpot(), JP_RESULT_MS);
 }
+
+app.get('/api/jackpot/history', (req, res) => {
+  res.json({ list: S.jpHistory.slice(0, 50) });
+});
 
 app.post('/api/jackpot/join', auth, actionLimit, (req, res) => {
   const user = req.user;
@@ -2282,8 +2305,8 @@ const SCRAMBLE_WORDS = [
 ];
 
 const WHEEL_MAX_PLAYERS = 30;
-const SPIN_MS = 3500;
-const REVEAL_MS = 2600;
+const SPIN_MS = 3000;
+const REVEAL_MS = 4200;      /* the wheel slows down and lands during the first ~3 s of the reveal */
 
 let EVENT = null;
 let eventTimers = [];
@@ -2331,12 +2354,25 @@ function publicEvent(ev) {
     };
   }
 
+  /* hints: first letter after half of the time, last letter after 75% */
+  let hint = null;
+  if (ev.status === 'running') {
+    const part = (now() - ev.createdAt) / Math.max(1, ev.endsAt - ev.createdAt);
+    const w = ev.word.toUpperCase();
+    if (part >= 0.75) hint = w[0] + '_'.repeat(Math.max(0, w.length - 2)) + w[w.length - 1];
+    else if (part >= 0.5) hint = w[0] + '_'.repeat(w.length - 1);
+  }
   return {
     ...base,
     scrambled: ev.scrambled,
     length: ev.word.length,
+    startedAt: ev.createdAt,
     endsAt: ev.endsAt,
     winner: ev.winner,
+    guesses: ev.guesses || 0,
+    players: (ev.guessers || []).length,
+    hint,
+    solvedIn: ev.solvedAt ? Math.round((ev.solvedAt - ev.createdAt) / 1000) : null,
     word: ev.status === 'finished' ? ev.word : null
   };
 }
@@ -2477,6 +2513,7 @@ function endScramble(ev, winnerUser) {
   ev.status = 'finished';
 
   if (winnerUser) {
+    ev.solvedAt = now();
     ev.winner = publicUser(winnerUser);
     awardPrize(winnerUser, ev);
     eventChat(`${nick(winnerUser)} solved "${ev.word}" and won ${ev.prize.name}!`);
@@ -2545,6 +2582,9 @@ app.post('/api/admin/event/scramble', auth, adminOnly, (req, res) => {
 
   EVENT = ev;
   later(() => endScramble(ev, null), seconds * 1000);
+  /* send the hints when they unlock */
+  later(() => emitEvent(), Math.ceil(seconds * 500) + 50);
+  later(() => emitEvent(), Math.ceil(seconds * 750) + 50);
 
   emitEvent();
   eventChat(`Word Scramble started! Prize: ${catalogItem.name}. Click to play!`, true);
@@ -2597,6 +2637,15 @@ app.post('/api/event/guess', auth, (req, res) => {
 
   const guess = String(req.body.guess || '').trim().toLowerCase().slice(0, 30);
   if (!guess) return bad(res, 'Type your answer');
+
+  ev.guesses = (ev.guesses || 0) + 1;
+  ev.guessers = ev.guessers || [];
+  if (!ev.guessers.includes(req.user.id)) ev.guessers.push(req.user.id);
+  /* the guess counter on everyone's screen updates at most every 2 seconds */
+  if (!ev.guessEmitPending) {
+    ev.guessEmitPending = true;
+    later(() => { ev.guessEmitPending = false; if (EVENT === ev && ev.status === 'running') emitEvent(); }, 2000);
+  }
 
   if (guess === ev.word) {
     endScramble(ev, req.user);
