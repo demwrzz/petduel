@@ -182,8 +182,23 @@
     }
     .banner h1 { margin: 0 0 5px; color: var(--orange); font-size: 20px; }
     .banner p { margin: 0; color: #bab4a5; font-size: 13px; }
-    .banner .chips { display: flex; gap: 8px; }
-    .banner .chips div { width: 46px; height: 46px; }
+    /* ---------- typing hero ---------- */
+    .hero {
+      position: relative; overflow: hidden; margin-bottom: 14px; padding: 22px 24px; border: 1px solid #22503f; border-radius: 12px;
+      background: radial-gradient(circle at 92% 20%, rgba(0, 239, 160, .18), transparent 45%), radial-gradient(circle at 0% 100%, rgba(77, 163, 255, .12), transparent 50%), linear-gradient(120deg, #121c19, #14161e 70%);
+    }
+    .hero-kicker { margin-bottom: 6px; color: var(--green); font-size: 12px; font-weight: 800; letter-spacing: 3px; }
+    .hero-type { display: flex; align-items: center; min-height: 1.2em; color: #fff; font-size: clamp(26px, 4.4vw, 46px); font-weight: 900; line-height: 1.15; letter-spacing: -.02em; }
+    #heroText { white-space: pre; background: linear-gradient(90deg, #fff 0%, #d9fff1 55%, var(--green) 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .hero-caret { display: inline-block; width: .09em; min-width: 3px; height: 1em; margin-left: 4px; border-radius: 2px; background: var(--green); box-shadow: 0 0 12px var(--green); animation: caret-blink 1s steps(1) infinite; }
+    .hero-caret.typing { animation: none; }
+    @keyframes caret-blink { 50% { opacity: 0; } }
+    @media (max-width: 650px) {
+      .hero { padding: 18px; }
+      .banner { flex-direction: column; align-items: stretch; }
+      .banner h1, .banner.update #bannerTitle { flex-wrap: wrap; font-size: 17px; }
+      .banner-btn { margin: 0; width: 100%; }
+    }
 
     .summary {
       display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin-bottom: 16px;
@@ -1233,7 +1248,6 @@
     @media (max-width: 560px) { .xmas-grid { grid-template-columns: 1fr; } }
     .upd-chip { padding: 3px 8px; border-radius: 6px; color: #04120b; background: var(--green); font-size: 11px; letter-spacing: 1px; box-shadow: 0 0 14px rgba(0, 239, 160, .55); animation: soon-pulse 1.8s ease-in-out infinite; }
     .banner-btn { flex: none; margin-left: auto; margin-right: 10px; }
-    .banner.update .chips { display: none; }
     .banner.announce { border-color: var(--green); background: linear-gradient(100deg, #12332a, #1b2420); box-shadow: 0 0 26px -10px rgba(0, 239, 160, .5); }
     .banner.announce h1 { color: var(--green); }
     .banner.announce p { color: #d5e6df; font-size: 14px; }
@@ -1490,13 +1504,17 @@
       <section class="content" id="homeContent">
         <div id="bountyStrip"></div>
         <div id="eventStrip"></div>
+        <div class="hero" aria-label="Pet Duel: Adopt Me PvP Duels">
+          <div class="hero-kicker">🐾 PETDUEL</div>
+          <div class="hero-type"><span id="heroText"></span><i class="hero-caret"></i></div>
+        </div>
+
         <div class="banner" id="banner">
           <div>
             <h1 id="bannerTitle">Pet Duel Coinflip</h1>
             <p id="bannerText">Create a game, pick a coin and watch it flip.</p>
           </div>
           <button class="btn sm banner-btn" id="bannerBtn" data-action="info" data-page="updates" hidden>See what's new</button>
-          <div class="chips" id="bannerChips"></div>
         </div>
 
         <div class="cf-bar">
@@ -1824,7 +1842,6 @@
       return false;
     }
 
-    $("#bannerChips").innerHTML = `<div>${chip("dog")}</div><div>${chip("cat")}</div>`;
 
     /* ---------- Modals ---------- */
     const modalHeader = (title, closeAction = "close") => `
@@ -2967,6 +2984,31 @@
         await refresh();
       } catch (error) { toast(error.message, "err"); }
     }
+
+    /* ---------- typing hero: types a phrase, waits, deletes it, types the next ---------- */
+    (function heroTyping() {
+      const phrases = ["Adopt Me PvP Duels", "Lowest Tax", "petduel.win", "Coinflip & Jackpot", "Provably Fair"];
+      const el = document.getElementById("heroText");
+      const caret = document.querySelector(".hero-caret");
+      if (!el) return;
+      if (matchMedia("(prefers-reduced-motion: reduce)").matches) { el.textContent = phrases[0]; return; }
+      let p = 0, i = 0, deleting = false;
+      const tick = () => {
+        const word = phrases[p];
+        caret && caret.classList.add("typing");
+        if (!deleting) {
+          i++;
+          el.textContent = word.slice(0, i);
+          if (i === word.length) { deleting = true; caret && caret.classList.remove("typing"); return setTimeout(tick, 1600); }
+          return setTimeout(tick, 70 + Math.random() * 60);
+        }
+        i--;
+        el.textContent = word.slice(0, i);
+        if (i === 0) { deleting = false; p = (p + 1) % phrases.length; return setTimeout(tick, 350); }
+        setTimeout(tick, 35);
+      };
+      setTimeout(tick, 500);
+    })();
 
     /* ---------- Login ---------- */
     const LOGIN_DECO = `
