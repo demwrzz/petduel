@@ -113,10 +113,20 @@
       display: flex; align-items: center; gap: 10px; padding: 4px 10px; height: 44px;
       border-radius: 8px; color: var(--text); background: transparent; font-weight: 700; transition: background .2s;
     }
-    .user-button:hover { background: #20232c; }
+    .user-button { border: 1px solid #2a2e39; background: #171a22; }
+    .user-button:hover, .user-button.open { background: #20232c; }
+    .um-caret { width: 16px; height: 16px; color: #8d909a; transition: transform .2s; }
+    .user-button.open .um-caret, .user-menu-wrap:has(.user-menu.open) .um-caret { transform: rotate(180deg); }
+    .um-head { display: flex; align-items: center; gap: 10px; padding: 8px 8px 12px; margin-bottom: 4px; border-bottom: 1px solid #2c303b; }
+    .um-head b { display: block; color: #fff; font-size: 15px; }
+    .um-head small { color: var(--muted); font-size: 12px; font-weight: 700; }
+    .user-menu button { display: flex !important; align-items: center; gap: 10px; font-weight: 700; }
+    .user-menu button svg { width: 17px; height: 17px; color: #9aa0ad; }
+    .um-sep { height: 1px; margin: 4px 0; background: #2c303b; }
+    .user-menu .um-logout, .user-menu .um-logout svg { color: var(--red); }
     .user-menu {
-      position: absolute; top: calc(100% + 8px); right: 0; z-index: 60; min-width: 200px; padding: 6px;
-      border: 1px solid var(--border); border-radius: 8px; background: #20232c; box-shadow: 0 12px 30px #0008;
+      position: absolute; top: calc(100% + 8px); right: 0; z-index: 60; min-width: 230px; padding: 6px;
+      border: 1px solid var(--border); border-radius: 12px; background: #1b1e27; box-shadow: 0 16px 40px #000a;
       opacity: 0; transform: translateY(-6px); pointer-events: none; transition: opacity .18s, transform .18s;
     }
     .user-menu.open { opacity: 1; transform: none; pointer-events: auto; }
@@ -448,18 +458,31 @@
       display: flex; flex: 1; flex-direction: column; min-height: 0; overflow: hidden;
       border: 1px solid var(--border); border-radius: 8px; background: var(--panel);
     }
-    .chat-head {
-      display: flex; align-items: center; justify-content: space-between; padding: 15px 16px;
-      border-bottom: 1px solid var(--border); font-weight: 800;
-    }
-    .online { color: var(--green); font-size: 12px; }
+    .chat-head { display: flex; align-items: center; gap: 8px; padding: 14px 14px 12px; }
+    .chat-title { flex: 1; color: #fff; font-size: 18px; font-weight: 900; }
+    .chat-online { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 11px; border-radius: 9px; background: #1f232d; color: #fff; font-size: 14px; font-weight: 800; }
+    .chat-online i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: live-ping-g 2s infinite; }
+    @keyframes live-ping-g { 0% { box-shadow: 0 0 0 0 rgba(0, 239, 160, .6); } 100% { box-shadow: 0 0 0 8px rgba(0, 239, 160, 0); } }
+    .chat-ico { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; color: #8d909a; background: #1f232d; transition: color .15s, background .15s; }
+    .chat-ico:hover { color: #fff; background: #2a2f3b; }
+    .chat-ico svg { width: 18px; height: 18px; }
+    .chat-ico.gift { color: #04120b; background: var(--green); box-shadow: 0 6px 16px -6px rgba(0, 239, 160, .7); }
+    .chat-ico.gift:hover { filter: brightness(1.1); }
+    .side-brand { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 6px 0 2px; cursor: pointer; }
+    .side-brand svg { width: 42px; height: 42px; filter: drop-shadow(0 0 12px rgba(0, 239, 160, .45)); }
+    .side-brand span { color: #fff; font-size: 30px; font-weight: 900; letter-spacing: -.5px; }
+    .side-brand b { color: var(--green); }
 
     .messages { display: flex; flex: 1; flex-direction: column; gap: 4px; overflow-y: auto; padding: 10px 14px; scroll-behavior: smooth; }
 
-    .message { display: flex; align-items: flex-start; gap: 12px; padding: 9px 0; font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
+    .message { display: flex; align-items: flex-start; gap: 12px; padding: 8px 4px; border-radius: 10px; font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; transition: background .15s; }
+    .message:hover { background: rgba(255, 255, 255, .025); }
     .message .av { box-shadow: 0 0 0 2px #2c313c; }
-    .message .who { display: flex; align-items: center; gap: 7px; margin-bottom: 3px; }
+    .message .who { display: flex; align-items: center; gap: 7px; margin-bottom: 2px; }
     .message .uname { font-size: 15px; font-weight: 800; color: #fff; cursor: pointer; }
+    .m-time { color: #6f7482; font-size: 12px; font-weight: 600; white-space: nowrap; }
+    .mention { padding: 1px 6px; border-radius: 6px; color: #8fc4ff; background: rgba(77, 163, 255, .16); font-weight: 700; }
+    .mention.me { color: #04120b; background: var(--green); }
     .message .uname:hover { text-decoration: underline; }
     .message .txt { color: #a3a6b0; font-size: 14px; font-weight: 500; }
     .message .ava-click { cursor: pointer; }
@@ -489,20 +512,24 @@
       -webkit-background-clip: text; background-clip: text; color: transparent; animation: owner-chroma 3s linear infinite;
     }
 
-    .chat-input { position: relative; display: flex; flex-direction: column; gap: 10px; padding: 12px; }
-    .chat-input .field { position: relative; }
+    .chat-input { position: relative; display: flex; gap: 8px; padding: 12px; }
+    .chat-input .field { position: relative; flex: 1; min-width: 0; }
     .chat-input input {
-      width: 100%; padding: 15px 44px 15px 16px; border: 0; border-radius: 8px;
-      background: #2a2d38; font-weight: 600; font-size: 14px;
+      width: 100%; height: 50px; padding: 0 46px 0 16px; border: 1px solid #2a2e39; border-radius: 12px;
+      background: #1f232d; font-weight: 600; font-size: 14px; transition: border-color .15s;
     }
+    .chat-input input:focus { border-color: var(--green); }
     .chat-input input::placeholder { color: #8d909a; }
     .chat-input .emoji-btn {
       position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
-      width: 26px; height: 26px; padding: 0; color: #a3a6b0; background: transparent; font-size: 20px; line-height: 1;
+      display: grid; place-items: center; width: 28px; height: 28px; padding: 0; color: #a3a6b0; background: transparent;
     }
+    .chat-input .emoji-btn svg { width: 22px; height: 22px; }
     .chat-input .emoji-btn:hover { color: #fff; }
-    .send-btn { padding: 14px; border-radius: 8px; color: #fff; background: #2d313d; font-weight: 800; transition: background .2s; }
-    .send-btn:hover { background: #383d4b; }
+    .send-btn { display: grid; place-items: center; flex: none; width: 50px; height: 50px; border-radius: 12px; color: #04120b; background: var(--green); transition: filter .2s, transform .12s; }
+    .send-btn:hover { filter: brightness(1.1); }
+    .send-btn:active { transform: scale(.94); }
+    .send-btn svg { width: 22px; height: 22px; }
 
     .emoji-pop {
       position: absolute; right: 12px; bottom: 74px; z-index: 5; display: none; flex-wrap: wrap; gap: 4px;
@@ -1546,12 +1573,23 @@
       <aside class="sidebar">
         <div class="sidebar-top"><span>Chat</span><button class="chat-close" data-action="chat-close" aria-label="Close chat">×</button></div>
 
+        <div class="side-brand" data-action="home">
+          <svg viewBox="0 0 100 100"><use href="#logo-mark"/></svg>
+          <span>PET<b>DUEL</b></span>
+        </div>
+
         <div class="giveaways" id="giveaways"></div>
 
         <div class="chat">
           <div class="chat-head">
-            <span>LIVE CHAT</span>
-            <span class="online" id="online"></span>
+            <span class="chat-title">Chat</span>
+            <span class="chat-online"><i></i><b id="online">0</b></span>
+            <button class="chat-ico" data-action="info" data-page="tos" title="Rules">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3h11a2 2 0 0 1 2 2v2h-4M8 3a2 2 0 0 0-2 2v12a2 2 0 0 1-2 2h11a2 2 0 0 0 2-2V5a2 2 0 0 1 2-2M10 9h4M10 13h4"/></svg>
+            </button>
+            <button class="chat-ico gift" data-action="giveaway" title="Create a giveaway">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8s1-5 4.5-5a2.5 2.5 0 0 1 0 5"/></svg>
+            </button>
           </div>
 
           <div class="messages" id="messages"></div>
@@ -1560,10 +1598,14 @@
 
           <div class="chat-input">
             <div class="field">
-              <input id="chatInput" maxlength="160" placeholder="Say something!" autocomplete="off">
-              <button class="emoji-btn" data-action="emoji" type="button">☺</button>
+              <input id="chatInput" maxlength="160" placeholder="Write something.." autocomplete="off">
+              <button class="emoji-btn" data-action="emoji" type="button" aria-label="Emoji">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5s1.3 2 3.5 2 3.5-2 3.5-2"/><circle cx="9" cy="10" r=".6" fill="currentColor"/><circle cx="15" cy="10" r=".6" fill="currentColor"/></svg>
+              </button>
             </div>
-            <button class="send-btn" data-action="send">Send</button>
+            <button class="send-btn" data-action="send" aria-label="Send">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3.4 20.6 21 12 3.4 3.4l-.1 6.7L15 12l-11.7 1.9z"/></svg>
+            </button>
           </div>
         </div>
       </aside>
@@ -1696,6 +1738,13 @@
     const rankBadge = rank => (rank && rank !== "Rookie" && rank !== "ADMIN")
       ? `<svg class="rank-badge" style="color:${rankColor(rank)}" viewBox="0 0 24 24"><use href="#rk-${rankIcon(rank)}"/></svg>` : "";
 
+    const UM_ICONS = {
+      profile: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>',
+      gift: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8s1-5 4.5-5a2.5 2.5 0 0 1 0 5"/></svg>',
+      settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+      admin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5z"/><path d="m9 12 2 2 4-4"/></svg>',
+      logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>'
+    };
     const OWNER_TAG = '<span class="tag-owner"><svg viewBox="0 0 24 24" fill="currentColor"><path d="m3 8 4.5 4L12 4l4.5 8L21 8l-2 11H5z"/></svg>Owner</span>';
     const ICO = {
       target: '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/></svg>',
@@ -2055,7 +2104,7 @@
       const ci = $("#chatInput");
       if (ci) {
         const locked = ME && !ME.isAdmin && Number(ME.totalBet || 0) <= 0;
-        ci.placeholder = !ME ? "Login to chat" : locked ? "Place a bet to chat" : "Say something!";
+        ci.placeholder = !ME ? "Login to chat" : locked ? "Place a bet to chat" : "Write something..";
       }
 
       const sig = JSON.stringify(ME ? [ME.id, ME.username, ME.avatar, ME.isAdmin, inv.length, value, NOTIFS.unread, NOTIFS.list.length] : null);
@@ -2095,16 +2144,23 @@
         </div>
 
         <div class="user-menu-wrap">
-          <button class="user-button" data-action="user-menu">
-            ${avatar(ME, "sm")}
+          <button class="user-button ${menuOpen ? "open" : ""}" data-action="user-menu">
             <span class="user-name">${esc(ME.username)}</span>
+            ${avatar(ME, "sm")}
+            <svg class="um-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
           </button>
 
           <div class="user-menu ${menuOpen ? "open" : ""}" id="userMenu">
-            <button data-action="profile">👤 Profile</button>
-            <button data-action="giveaway">🎁 Create Giveaway</button>
-            ${ME.isAdmin ? '<button data-action="admin">🛠 Admin Panel</button>' : ""}
-            <button data-action="logout">🚪 Logout</button>
+            <div class="um-head">
+              ${avatar(ME, "md")}
+              <div><b>${esc(ME.username)}</b><small>${ME.isAdmin ? "Owner" : esc(ME.rank || "User")}</small></div>
+            </div>
+            <button data-action="profile">${UM_ICONS.profile}Profile</button>
+            <button data-action="giveaway">${UM_ICONS.gift}Create Giveaway</button>
+            <button data-action="nick-change">${UM_ICONS.settings}Settings</button>
+            ${ME.isAdmin ? `<button data-action="admin">${UM_ICONS.admin}Admin Panel</button>` : ""}
+            <div class="um-sep"></div>
+            <button class="um-logout" data-action="logout">${UM_ICONS.logout}Logout</button>
           </div>
         </div>`;
     }
@@ -2717,6 +2773,19 @@
 
     $("#emojiPop").innerHTML = EMOJIS.map(e => `<button type="button" data-action="emoji-pick" data-e="${e}">${e}</button>`).join("");
 
+    const chatTime = ts => {
+      if (!ts) return "";
+      const sec = Math.floor((Date.now() - clockSkew - Number(ts)) / 1000);
+      if (sec < 60) return "just now";
+      if (sec < 3600) return Math.floor(sec / 60) + "m ago";
+      if (sec < 86400) return Math.floor(sec / 3600) + "h ago";
+      return Math.floor(sec / 86400) + "d ago";
+    };
+    /* @name mentions become a small highlighted chip; mentions of you glow */
+    const chatText = text => esc(text || "").replace(/(^|\s)@([A-Za-z0-9_]{2,20})/g, (all, pre, name) =>
+      `${pre}<span class="mention ${ME && ME.username && name.toLowerCase() === String(ME.username).toLowerCase() ? "me" : ""}">@${name}</span>`);
+    setInterval(() => document.querySelectorAll(".m-time[data-ts]").forEach(el => { el.textContent = chatTime(Number(el.dataset.ts)); }), 30000);
+
     function chatMessage(m, isNew) {
       const user = m.user || {};
       const rank = m.admin ? "ADMIN" : (m.rank || user.rank || "Rookie");
@@ -2730,8 +2799,9 @@
             <div class="who">
               <span class="uname r-${esc(rank)} ${rank === "ADMIN" ? "owner-name" : ""}" ${rank === "ADMIN" ? "" : `style="color:${rank === "Rookie" ? "#fff" : rankColor(rank)}"`} ${click}>${esc(getUsername(user) || "System")}</span>
               ${m.admin ? OWNER_TAG : rankBadge(rank)}
+              <span class="m-time" data-ts="${Number(m.ts || 0)}">${chatTime(m.ts)}</span>
             </div>
-            <div class="txt">${esc(m.text || "")}</div>
+            <div class="txt">${chatText(m.text)}</div>
             ${m.event === true ? '<button class="btn sun sm chat-event-btn" data-action="event">Click to open the event</button>' : ""}
           </div>
         </div>`;
@@ -2903,10 +2973,10 @@
       socket.on("connect", scheduleRefresh);
       socket.on("maintenance", () => refresh());
       socket.on("connect_error", err => { if (err && err.message === "maintenance") refresh(); });
-      socket.on("disconnect", () => { $("#online").textContent = ME ? "Connecting…" : ""; });
+      socket.on("disconnect", () => { $("#online").textContent = "…"; });
 
       socket.on("online", count => {
-        $("#online").textContent = ME ? count + " online" : "";
+        $("#online").textContent = count;
       });
 
       socket.on("chat:msg", m => {
@@ -3035,7 +3105,7 @@
         if (ME && ME.isAdmin && notifUser !== ME.id) { notifUser = ME.id; loadNotifs(); }
         renderChat();
 
-        $("#online").textContent = ME ? Number(STATE.online || 0) + " online" : "";
+        $("#online").textContent = Number(STATE.online || 0);
 
         renderView();
 
