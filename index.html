@@ -1131,6 +1131,37 @@
 
     .banner.update { border-color: #2e5a4b; background: radial-gradient(circle at 90% 30%, rgba(0, 239, 160, .14), transparent 50%), linear-gradient(100deg, #14251f, #171a22 75%); }
     .banner.update #bannerTitle { display: flex; align-items: center; gap: 10px; color: #fff; }
+    /* ---------- Christmas "soon" card ---------- */
+    .xmas {
+      position: relative; overflow: hidden; margin-bottom: 16px; border: 1px solid #2f6b4c; border-radius: 14px;
+      background: radial-gradient(circle at 85% 0%, rgba(239, 68, 68, .28), transparent 50%), radial-gradient(circle at 10% 100%, rgba(0, 239, 160, .2), transparent 55%), linear-gradient(160deg, #10261d, #14161f 60%, #2a1418);
+    }
+    .xmas-snow { position: absolute; inset: 0; pointer-events: none; }
+    .xmas-snow i {
+      position: absolute; top: -10px; border-radius: 50%; background: #fff; box-shadow: 0 0 6px rgba(255, 255, 255, .8);
+      animation-name: snow-fall, snow-sway; animation-timing-function: linear, ease-in-out; animation-iteration-count: infinite, infinite; animation-direction: normal, alternate;
+    }
+    @keyframes snow-fall { to { top: calc(100% + 10px); } }
+    @keyframes snow-sway { from { transform: translateX(-10px); } to { transform: translateX(10px); } }
+    .xmas-lights { position: relative; display: flex; justify-content: space-around; height: 16px; border-top: 2px solid #2b3a30; }
+    .xmas-lights span { width: 9px; height: 13px; margin-top: -1px; border-radius: 50% 50% 45% 45%; animation: xmas-blink 1.4s ease-in-out infinite; }
+    .xmas-lights span:nth-child(4n+1) { background: #ef4444; color: #ef4444; }
+    .xmas-lights span:nth-child(4n+2) { background: #00efa0; color: #00efa0; }
+    .xmas-lights span:nth-child(4n+3) { background: #ffd35a; color: #ffd35a; }
+    .xmas-lights span:nth-child(4n+4) { background: #4da3ff; color: #4da3ff; }
+    @keyframes xmas-blink { 0%, 100% { opacity: 1; box-shadow: 0 0 10px currentColor; } 50% { opacity: .35; box-shadow: none; } }
+    .xmas-body { position: relative; padding: 14px 18px 18px; }
+    .xmas-body small { color: #ffd35a; font-size: 11px; font-weight: 800; letter-spacing: 1.2px; }
+    .xmas-body h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 6px 0 6px; color: #fff; font-size: 24px; text-shadow: 0 2px 14px rgba(0, 0, 0, .5); }
+    .xmas-body p { margin: 0 0 12px; color: #c6d3cc; }
+    .soon { padding: 3px 9px; border-radius: 999px; color: #fff; background: #ef4444; font-size: 11px; font-weight: 800; letter-spacing: 1px; animation: xmas-pulse 1.8s ease-in-out infinite; }
+    @keyframes xmas-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, .55); } 50% { box-shadow: 0 0 0 7px rgba(239, 68, 68, 0); } }
+    .xmas-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .xmas-grid div { padding: 10px 12px; border: 1px solid rgba(255, 255, 255, .08); border-radius: 10px; background: rgba(10, 12, 16, .55); backdrop-filter: blur(2px); }
+    .xmas-grid b { display: block; margin-bottom: 3px; color: #fff; font-size: 14px; }
+    .xmas-grid span { color: #aab4af; font-size: 12px; line-height: 1.45; }
+    .xmas-foot { margin: 12px 0 0 !important; font-weight: 700; color: #e8f5ee !important; }
+    @media (max-width: 560px) { .xmas-grid { grid-template-columns: 1fr; } }
     .upd-chip { padding: 3px 8px; border-radius: 6px; color: #04120b; background: var(--green); font-size: 11px; letter-spacing: 1px; box-shadow: 0 0 14px rgba(0, 239, 160, .55); animation: soon-pulse 1.8s ease-in-out infinite; }
     .banner-btn { flex: none; margin-left: auto; margin-right: 10px; }
     .banner.update .chips { display: none; }
@@ -3727,7 +3758,29 @@
       const tax = Number(STATE.config && STATE.config.tax || 0);
 
       if (page === "updates") {
+        /* snowflakes for the Christmas card: random size, position, speed and drift */
+        const flakes = Array.from({ length: 46 }, () => {
+          const size = (2 + Math.random() * 5).toFixed(1);
+          return `<i style="left:${(Math.random() * 100).toFixed(1)}%;width:${size}px;height:${size}px;opacity:${(.35 + Math.random() * .6).toFixed(2)};` +
+            `animation-duration:${(5 + Math.random() * 7).toFixed(1)}s,${(2 + Math.random() * 3).toFixed(1)}s;animation-delay:-${(Math.random() * 12).toFixed(1)}s,-${(Math.random() * 3).toFixed(1)}s"></i>`;
+        }).join("");
         return `
+          <div class="xmas">
+            <div class="xmas-snow">${flakes}</div>
+            <div class="xmas-lights">${Array.from({ length: 14 }, (_, i) => `<span style="animation-delay:${(i % 4) * .35}s"></span>`).join("")}</div>
+            <div class="xmas-body">
+              <small>NEXT UPDATE</small>
+              <h3>🎄 Christmas Update <span class="soon">SOON</span></h3>
+              <p>Pet Duel is getting into the holiday spirit! Here is what Santa is bringing:</p>
+              <div class="xmas-grid">
+                <div><b>🎅 Christmas Events</b><span>Special wheel and word scramble events with festive prizes</span></div>
+                <div><b>🎁 Daily Giveaways</b><span>Advent giveaways with Christmas pets every day in December</span></div>
+                <div><b>❄️ Gem Rains</b><span>Surprise rains in the chat: be online and catch free gems</span></div>
+                <div><b>✨ Festive Look</b><span>Snow, lights and a Christmas theme all over the site</span></div>
+              </div>
+              <p class="xmas-foot">Stay tuned and join our Discord so you don't miss it! ☃️</p>
+            </div>
+          </div>
           <div class="info">
             ${publicUpdates().map((u, i) => `
               <div class="upd"><b>v${esc(u.v)} · ${esc(u.title)}</b>${i === 0 ? '<span class="tag">LATEST</span>' : ""}
