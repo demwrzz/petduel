@@ -1505,7 +1505,7 @@
         <div id="bountyStrip"></div>
         <div id="eventStrip"></div>
         <div class="hero" aria-label="Pet Duel: Adopt Me PvP Duels">
-          <div class="hero-kicker">🐾 PETDUEL</div>
+          <div class="hero-kicker">PETDUEL</div>
           <div class="hero-type"><span id="heroText"></span><i class="hero-caret"></i></div>
         </div>
 
@@ -4788,7 +4788,7 @@
     async function showJpHistory() {
       gridContext = null;
       viewMatchId = null;
-      openModal(`${modalHeader("🕘 Jackpot History")}<div class="info-scroll" id="jpHist"><div class="empty">Loading…</div></div>`, "small");
+      openModal(`${modalHeader("Jackpot History")}<div class="info-scroll" id="jpHist"><div class="empty">Loading…</div></div>`, "small");
       try {
         const { list } = await api("/api/jackpot/history");
         const box = $("#jpHist");
@@ -4879,7 +4879,7 @@
             </div>
 
             <div>
-              <div class="jp-actions">${joinBtn}<button class="btn gray jp-hist-btn" data-action="jp-history" title="Jackpot history">🕘 History</button></div>
+              <div class="jp-actions">${joinBtn}<button class="btn gray jp-hist-btn" data-action="jp-history" title="Jackpot history">History</button></div>
               ${solo ? '<button class="btn gray jp-leave" data-action="jp-leave">Take my items back</button>' : ""}
               <div class="jp-list">${rows || '<div class="empty" style="padding:50px 10px">Nobody has joined yet.<br>The countdown starts when a second player joins.</div>'}</div>
               <div class="fair"><b>Provably fair</b><br>Hash: <code>${esc(j.hash || "—")}</code><br>${fairInfo}</div>
