@@ -311,12 +311,7 @@ function snapshot() {
   /* open coinflips and the chat are saved as they are, so a restart does not cancel games or clear the chat */
   /* giveaways are saved as they are (they can run for days), so they survive a restart */
 
-  /* items sitting in an unfinished jackpot round go back to their owners */
-  if (JP && JP.state !== 'finished') {
-    for (const e of JP.entries) {
-      if (users[e.user.id]) users[e.user.id].inventory.push(...JSON.parse(JSON.stringify(e.items)));
-    }
-  }
+  /* the running jackpot round is saved too and continues after a restart */
 
   return {
     users,
@@ -331,6 +326,7 @@ function snapshot() {
     updateNotes: S.updateNotes,
     giveaways: S.giveaways,
     matches: Object.fromEntries(Object.entries(S.matches).filter(([, m]) => m.state !== 'finished')),
+    jackpot: JP && JP.state !== 'finished' ? { ...JP, winner: null } : null,
     chat: S.chat.slice(-60),
     bots: S.bots.map(b => ({ id: b.id, username: b.username, link: b.link, online: b.online !== false }))
   };
@@ -370,6 +366,7 @@ async function initDb() {
       S.giveaways = Object.assign(Object.create(null), d.giveaways || {});
       S.matches = Object.assign(Object.create(null), d.matches || {});
       S.chat = Array.isArray(d.chat) ? d.chat.slice(-60) : [];
+      savedJackpot = d.jackpot || null;
       console.log('State loaded from MongoDB.');
     }
   } catch (err) {
@@ -1746,6 +1743,9 @@ app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
 });
 
 const UPDATE_LOG = [
+  { version: '3.7', title: 'Jackpot survives restarts', changes: [
+    'The running jackpot round is saved and continues after a restart (waiting, countdown or rolling); the winner is the same because it comes from the round seed'
+  ] },
   { version: '3.6', title: 'Games and chat survive restarts', changes: [
     'Open coinflips and the last 60 chat messages are saved in the database: a restart / deploy no longer cancels games or clears the chat',
     'Games that were already joined when the server restarted are played to the end with their original (provably fair) result'
@@ -1965,6 +1965,35 @@ const JP_MAX_USER_ITEMS = 40;
 
 let JP = null;
 let jpTimers = [];
+let savedJackpot = null;
+
+/* after a restart: continue the saved round (its result is fixed by its seed, so nothing changes) */
+function resumeJackpot() {
+  const j = savedJackpot;
+  savedJackpot = null;
+  if (!j || !Array.isArray(j.entries) || !j.entries.length || j.state === 'finished') return newJackpot();
+
+  jpTimers.forEach(clearTimeout);
+  jpTimers = [];
+  j.winner = null;
+  JP = j;
+  jpRecalc(j);
+
+  if (j.state === 'countdown') {
+    const left = Math.max(3000, Number(j.endsAt || 0) - now());
+    j.endsAt = now() + left;
+    jpLater(() => rollJackpot(j), left);
+  } else if (j.state === 'rolling') {
+    /* roll again: same seed, same winner, the wheel animation plays once more */
+    j.state = 'countdown';
+    j.endsAt = now() + 3000;
+    jpLater(() => rollJackpot(j), 3000);
+  } else {
+    j.state = 'waiting';
+  }
+  console.log(`Resumed jackpot round ${j.id} (${j.state}, ${j.entries.length} player(s)).`);
+  emitJackpot(j);
+}
 
 function jpLater(fn, ms) { jpTimers.push(setTimeout(fn, ms)); }
 
@@ -4286,7 +4315,7 @@ process.on('uncaughtException', err => console.error('Uncaught exception:', err 
 (async () => {
   await initDb();
   ensureDefaultBot();
-  newJackpot();
+  resumeJackpot();
   auditItems();
   resumeMatches();
   server.listen(PORT, '0.0.0.0', () => {
