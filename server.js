@@ -159,6 +159,8 @@ function isAdmin(user) {
 }
 
 /* 12 ranks, based on total wagered value. "icon" picks the badge shape on the site. */
+/* all values on the site are x1000 (a 117 pet is now 117,000); rank limits follow the same scale */
+const VALUE_SCALE = 1000;
 const RANKS = [
   { name: 'Rookie',      min: 0,       color: '#8d909a', icon: 'medal' },
   { name: 'Bronze',      min: 500,     color: '#cd7f32', icon: 'medal' },
@@ -172,7 +174,39 @@ const RANKS = [
   { name: 'Legend',      min: 1000000, color: '#ef4444', icon: 'crown' },
   { name: 'Mythic',      min: 2500000, color: '#22d3ee', icon: 'bolt' },
   { name: 'Godlike',     min: 5000000, color: '#f0abfc', icon: 'bolt' }
-];
+].map(r => ({ ...r, min: r.min * VALUE_SCALE }));
+
+/* one-time migration: multiply every stored value by VALUE_SCALE (catalog, inventories, games, stats, history...) */
+function scaleAllValues() {
+  if (S.settings.valueScale === VALUE_SCALE) return;
+  const f = VALUE_SCALE / (Number(S.settings.valueScale) || 1);
+  const x = v => round2(Number(v || 0) * f);
+  const items = list => (list || []).forEach(i => { if (i) i.value = x(i.value); });
+
+  S.catalog.forEach(c => { c.value = x(c.value); });
+  for (const u of Object.values(S.users)) {
+    items(u.inventory);
+    u.totalBet = x(u.totalBet); u.totalWon = x(u.totalWon); u.totalLost = x(u.totalLost); u.profit = x(u.profit);
+    (u.tx || []).forEach(t => { t.amount = x(t.amount); });
+  }
+  for (const m of Object.values(S.matches)) { items(m.hostItems); items(m.oppItems); m.hostValue = x(m.hostValue); m.oppValue = x(m.oppValue); }
+  for (const h of S.history) {
+    items(h.hostItems); items(h.joinerItems); if (h.oppItems !== h.joinerItems) items(h.oppItems);
+    h.hostValue = x(h.hostValue); h.oppValue = x(h.oppValue); h.value = x(h.value); if (h.taxValue) h.taxValue = x(h.taxValue);
+  }
+  for (const g of Object.values(S.giveaways)) { items(g.items); g.value = x(g.value); g.minBet = x(g.minBet); }
+  for (const w of S.withdrawals) { items(w.items); w.value = x(w.value); }
+  for (const b of S.bounties) { if (b.prize) b.prize.value = x(b.prize.value); }
+  for (const r of S.jpHistory || []) {
+    r.total = x(r.total); r.winnerValue = x(r.winnerValue);
+    (r.players || []).forEach(p => { p.value = x(p.value); });
+  }
+  if (savedJackpot) (savedJackpot.entries || []).forEach(e => { items(e.items); e.value = x(e.value); });
+
+  S.settings.valueScale = VALUE_SCALE;
+  markDirty();
+  console.log(`Values scaled x${f} (catalog ${S.catalog.length} items, ${Object.keys(S.users).length} players).`);
+}
 
 const rankIndex = name => RANKS.findIndex(r => r.name === name);
 
@@ -1189,6 +1223,17 @@ app.get('/api/profile', auth, (req, res) => {
   });
 });
 
+/* profit after each of the player's last 60 games (coinflip + jackpot), oldest first, for the graph */
+const GAME_TX = /^(Coinflip|Jackpot) (Win|Loss|Tax)$/;
+function profitSeries(user) {
+  const games = (user.tx || []).filter(t => GAME_TX.test(t.type)).slice(0, 60).reverse();
+  const recent = games.reduce((t, g) => t + Number(g.amount || 0), 0);
+  let run = round2(Number(user.profit || 0) - recent);
+  const out = [run];
+  for (const g of games) { run = round2(run + Number(g.amount || 0)); out.push(run); }
+  return out;
+}
+
 /* Public profile card (click on a player in chat / lobby) */
 app.get('/api/user/:id', (req, res) => {
   const user = S.users[String(req.params.id)];
@@ -1205,19 +1250,21 @@ app.get('/api/user/:id', (req, res) => {
       profit: round2(user.profit),
       online: socketsByUser.has(user.id),
       lastSeen: user.lastSeen || 0,
-      owner: isAdmin(user) && user.adminTag !== false
+      owner: isAdmin(user) && user.adminTag !== false,
+      series: profitSeries(user)
     }
   });
 });
 
 app.get('/api/leaderboard', (req, res) => {
-  const by = req.query.by === 'profit' ? 'profit' : 'totalBet';
+  const mode = ['profit', 'least', 'totalBet'].includes(req.query.by) ? req.query.by : 'totalBet';
+  const by = mode === 'totalBet' ? 'totalBet' : 'profit';
   const valueFor = u => u[by] || 0;
 
   const list = Object.values(S.users)
-    .filter(u => !u.banned && valueFor(u) > 0)
-    .sort((a, b) => valueFor(b) - valueFor(a))
-    .slice(0, 20)
+    .filter(u => !u.banned && (mode === 'least' ? valueFor(u) < 0 : valueFor(u) > 0))
+    .sort((a, b) => mode === 'least' ? valueFor(a) - valueFor(b) : valueFor(b) - valueFor(a))
+    .slice(0, 25)
     .map(u => ({
       id: u.id,
       username: nick(u),
@@ -1228,7 +1275,7 @@ app.get('/api/leaderboard', (req, res) => {
       totalWon: round2(u.totalWon)
     }));
 
-  res.json({ by, list });
+  res.json({ by: mode, list });
 });
 
 app.get('/api/history/me', auth, (req, res) => {
@@ -1774,6 +1821,11 @@ app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
 });
 
 const UPDATE_LOG = [
+  { version: '4.1', title: 'Values x1000, new profile card and leaderboard', changes: [
+    'Every value on the site is multiplied by 1000 once (catalog, inventories, games, stats, history, giveaways, withdrawals); rank limits and elvebredd lookups use the same scale',
+    'Lobby shows short values (55K, 1.2M)',
+    'Player card: animated stats and a profit graph of the last games; leaderboard with a top 3 podium and Top Profit / Top Wager / Least Profit'
+  ] },
   { version: '4.0', title: 'Admins cancel games', changes: [
     'Admins can cancel any coinflip that is waiting or counting down (lobby and match window); pets go back to both players and a chat message is posted'
   ] },
@@ -3008,7 +3060,7 @@ app.get('/api/admin/elve', auth, adminOnly, async (req, res) => {
   for (const age of ['normal', 'neon', 'mega']) {
     for (const [pot, fly, ride] of [['none', false, false], ['f', true, false], ['r', false, true], ['fr', true, true]]) {
       const picked = pickValue(exact, age, fly, ride);
-      variants[`${age}-${pot}`] = picked ? round2(picked.value) : null;
+      variants[`${age}-${pot}`] = picked ? round2(picked.value * VALUE_SCALE) : null;
     }
   }
 
@@ -4398,6 +4450,7 @@ process.on('uncaughtException', err => console.error('Uncaught exception:', err 
 (async () => {
   await initDb();
   ensureDefaultBot();
+  scaleAllValues();
   resumeJackpot();
   auditItems();
   resumeMatches();

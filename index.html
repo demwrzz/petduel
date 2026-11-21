@@ -816,6 +816,73 @@
     .success p { margin: 0 0 18px; color: #bfc1c9; line-height: 1.6; }
 
     /* ---------- USER CARD ---------- */
+    /* ---------- player card ---------- */
+    .modal.card-user { width: min(430px, 100%); padding: 0; border-radius: 18px; background: #151820; overflow: hidden; }
+    .uc2 { position: relative; padding: 22px; }
+    .uc2-x { position: absolute; top: 14px; right: 14px; }
+    .uc2-head { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; animation: enter .4s both; }
+    .uc2-av { position: relative; flex: none; border-radius: 50%; padding: 3px; background: conic-gradient(from 0deg, #4da3ff, #00efa0, #4da3ff); animation: av-spin 6s linear infinite; }
+    .uc2-av .av { box-shadow: 0 0 0 3px #151820; animation: av-spin 6s linear infinite reverse; }
+    .uc2-av.on::after { content: ""; position: absolute; right: 4px; bottom: 4px; width: 14px; height: 14px; border: 3px solid #151820; border-radius: 50%; background: var(--green); }
+    @keyframes av-spin { to { transform: rotate(360deg); } }
+    .uc2-name { overflow: hidden; color: #fff; font-size: 24px; font-weight: 900; text-overflow: ellipsis; white-space: nowrap; }
+    .uc2-sub { display: flex; align-items: center; gap: 6px; margin-top: 2px; color: var(--muted); font-weight: 700; }
+    .uc2-id { min-width: 0; }
+    .uc2-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .uc2-stat { padding: 16px; border: 1px solid #262a35; border-radius: 12px; background: #1a1d26; animation: uc-in .45s cubic-bezier(.2, .8, .2, 1) both; animation-delay: var(--d); }
+    @keyframes uc-in { from { opacity: 0; transform: translateY(10px) scale(.97); } }
+    .uc2-stat b { display: flex; align-items: center; gap: 6px; color: #fff; font-size: 22px; font-weight: 900; font-variant-numeric: tabular-nums; }
+    .uc2-stat b .gem-i { width: 18px; height: 18px; margin: 0; }
+    .uc2-stat small { display: block; margin-top: 6px; color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; }
+    .pos { color: #22e08a !important; }
+    .neg { color: var(--red) !important; }
+    .uc2-chart { margin-top: 10px; padding: 14px 14px 10px; border: 1px solid #262a35; border-radius: 12px; background: #1a1d26; animation: uc-in .45s .28s both; }
+    .uc2-chart-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .uc2-chart-head small { color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; }
+    .uc2-chart-head b { display: flex; align-items: center; gap: 4px; font-size: 14px; }
+    .uc-chart { display: block; width: 100%; height: 150px; overflow: visible; }
+    .uc-line { stroke-dasharray: 1000; stroke-dashoffset: 1000; animation: uc-draw 1.4s .35s cubic-bezier(.3, .6, .2, 1) forwards; }
+    .uc-area { opacity: 0; animation: uc-fadein .9s 1.1s forwards; }
+    @keyframes uc-fadein { to { opacity: 1; } }
+    @keyframes uc-draw { to { stroke-dashoffset: 0; } }
+    .uc-end { opacity: 0; animation: uc-dot 1.6s 1.6s ease-in-out infinite; }
+    @keyframes uc-dot { 0% { opacity: 1; r: 4.5; } 50% { opacity: 1; r: 6.5; } 100% { opacity: 1; r: 4.5; } }
+    .uc-nochart { display: grid; place-items: center; height: 110px; color: var(--muted); font-weight: 700; }
+    .uc2-tip { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 50px; margin-top: 14px; border-radius: 12px; font-size: 15px; animation: uc-in .45s .35s both; }
+    .uc2-tip svg { width: 18px; height: 18px; }
+
+    /* ---------- leaderboard ---------- */
+    .lb-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-bottom: 18px; padding: 4px; border: 1px solid var(--border); border-radius: 12px; background: #12141b; }
+    .lb-tabs button { padding: 11px 8px; border-radius: 9px; color: var(--muted); background: transparent; font-weight: 800; transition: background .2s, color .2s; }
+    .lb-tabs button:hover { color: #fff; }
+    .lb-tabs button.on { color: #04120b; background: var(--green); box-shadow: 0 6px 18px -8px rgba(0, 239, 160, .8); }
+    .lb-podium { display: grid; grid-template-columns: 1fr 1.12fr 1fr; align-items: end; gap: 10px; margin-bottom: 18px; }
+    .lb-pod { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 8px 14px; border: 1px solid #343842; border-radius: 14px; background: linear-gradient(180deg, #232733, #191c25); cursor: pointer; text-align: center; animation: pod-in .55s cubic-bezier(.2, .9, .3, 1.2) both; animation-delay: var(--d); transition: transform .2s; }
+    .lb-pod:hover { transform: translateY(-4px); }
+    @keyframes pod-in { from { opacity: 0; transform: translateY(24px) scale(.95); } }
+    .lb-pod.p1 { padding-top: 22px; padding-bottom: 20px; border-color: #a8741a; background: radial-gradient(circle at 50% 0%, rgba(255, 210, 74, .25), transparent 65%), linear-gradient(180deg, #2c2618, #1b1a17); box-shadow: 0 10px 30px -12px rgba(255, 181, 46, .55); }
+    .lb-pod.p2 { border-color: #6b7280; }
+    .lb-pod.p3 { border-color: #8a5a2b; background: linear-gradient(180deg, #2a221c, #1b1a19); }
+    .lb-pod .medal { position: relative; }
+    .lb-pod-av { position: relative; }
+    .lb-pod-av .av { box-shadow: 0 0 0 3px #c0c7d1; }
+    .lb-pod.p1 .lb-pod-av .av { box-shadow: 0 0 0 3px #ffd24a, 0 0 22px rgba(255, 210, 74, .55); }
+    .lb-pod.p3 .lb-pod-av .av { box-shadow: 0 0 0 3px #cd7f32; }
+    .lb-pod-av i { position: absolute; right: -4px; bottom: -4px; display: grid; place-items: center; width: 22px; height: 22px; border: 2px solid #191c25; border-radius: 50%; color: #1a1305; background: #c0c7d1; font-size: 11px; font-style: normal; font-weight: 900; }
+    .lb-pod.p1 .lb-pod-av i { background: #ffd24a; }
+    .lb-pod.p3 .lb-pod-av i { background: #cd7f32; }
+    .lb-pod-name { max-width: 100%; overflow: hidden; color: #fff; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+    .lb-pod-val { display: flex; align-items: center; gap: 3px; font-size: 14px; font-weight: 800; }
+    .lb-pod-val .gem-i { margin: 0; }
+    .empty-pod { visibility: hidden; }
+    .lb-head { display: flex; justify-content: space-between; padding: 0 14px 8px; color: var(--muted); font-size: 11px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; }
+    .lb-list { display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow-y: auto; padding-right: 2px; }
+    .lb-row2 { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid #262a35; border-radius: 12px; background: #1a1d26; cursor: pointer; animation: uc-in .4s both; animation-delay: var(--d); transition: background .2s, transform .2s; }
+    .lb-row2:hover { background: #20242e; transform: translateX(3px); }
+    .lb-pos2 { width: 34px; color: var(--muted); font-weight: 800; }
+    .lb-row2 .n { flex: 1; min-width: 0; overflow: hidden; color: #fff; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+    .lb-row2 b { display: flex; align-items: center; gap: 3px; white-space: nowrap; }
+    .lb-row2 b .gem-i { margin: 0; }
     .uc-head { position: relative; display: flex; align-items: center; gap: 18px; margin-bottom: 20px; }
     .uc-head .x { position: absolute; right: -6px; top: -10px; }
     .uc-name { margin: 0 0 4px; font-size: 22px; font-weight: 800; }
@@ -1657,8 +1724,10 @@
 
     function short(n) {
       n = Number(n || 0);
-      if (n >= 1e6) return Number((n / 1e6).toFixed(2)) + "M";
-      if (n >= 1e3) return Number((n / 1e3).toFixed(1)) + "K";
+      const a = Math.abs(n), sign = n < 0 ? "-" : "";
+      if (a >= 1e9) return sign + Number((a / 1e9).toFixed(2)) + "B";
+      if (a >= 1e6) return sign + Number((a / 1e6).toFixed(2)) + "M";
+      if (a >= 1e3) return sign + Number((a / 1e3).toFixed(1)) + "K";
       return fmt(n);
     }
 
@@ -2086,8 +2155,8 @@
       const liveMatches = matches.filter(m => m.state !== "finished");
       const active = liveMatches.reduce((sum, m) => sum + potOf(m), 0);
       $("#summaryGames").textContent = liveMatches.length;
-      $("#summaryValue").textContent = fmt(active);
-      $("#navCf").innerHTML = `<svg class="gem-i" viewBox="0 0 24 24"><use href="#gem"/></svg>${fmt(active)}`;
+      $("#summaryValue").textContent = short(active);
+      $("#navCf").innerHTML = `<svg class="gem-i" viewBox="0 0 24 24"><use href="#gem"/></svg>${short(active)}`;
 
       const sig = JSON.stringify([
         matches.map(m => [m.id, m.state, m.joiner && m.joiner.id, m.winnerId]),
@@ -2129,11 +2198,11 @@
         } else if (match.state === "flipping") {
           value = match.winnerSide ? coinHTML("landsm", match.winnerSide) : coinHTML("spin");
         } else if (finished) {
-          value = `<div class="v1">${GEM}${fmt(potOf(match))}</div>
+          value = `<div class="v1" title="${esc(fmt(potOf(match)))}">${GEM}${short(potOf(match))}</div>
             <div class="v-win">${esc(getUsername(hostWon ? match.host : match.joiner))} won</div>`;
         } else {
-          value = `<div class="v1">${GEM}${fmt(match.hostValue)}</div>
-            <div class="v2">${GEM}${fmt(Math.ceil(low))} - ${fmt(Math.floor(high))}</div>
+          value = `<div class="v1" title="${esc(fmt(match.hostValue))}">${GEM}${short(match.hostValue)}</div>
+            <div class="v2">${GEM}${short(Math.ceil(low))} - ${short(Math.floor(high))}</div>
             ${Number(match.maxJoin) ? `<span class="max-pill">Max ${Number(match.maxJoin)} pet${Number(match.maxJoin) === 1 ? "" : "s"}</span>` : ""}`;
         }
 
@@ -2709,33 +2778,100 @@
     /* ---------- User card (profile popup) ---------- */
     let ucUser = null;
 
+    /* numbers count up from 0 when the card opens */
+    function countUp(root) {
+      root.querySelectorAll("[data-count]").forEach(el => {
+        const to = Number(el.dataset.count) || 0;
+        const sign = el.dataset.sign === "1";
+        const start = performance.now(), dur = 900;
+        const step = t => {
+          const p = Math.min(1, (t - start) / dur);
+          const v = to * (1 - Math.pow(1 - p, 3));
+          el.textContent = (sign && v > 0 ? "+" : "") + fmt(Math.round(v));
+          if (p < 1) requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+      });
+    }
+
+    /* profit graph: green above zero, red below, drawn with an animation */
+    function profitChart(series) {
+      const pts = asArray(series).map(Number);
+      if (pts.length < 2) return '<div class="uc-nochart">No games yet</div>';
+      const W = 360, H = 150, pad = 8;
+      const min = Math.min(0, ...pts), max = Math.max(0, ...pts);
+      const span = max - min || 1;
+      const X = i => pad + (i / (pts.length - 1)) * (W - pad * 2);
+      const Y = v => pad + (1 - (v - min) / span) * (H - pad * 2);
+      const zeroY = Y(0);
+      const P = pts.map((v, i) => [X(i), Y(v)]);
+      /* smooth curve through the points */
+      let d = `M${P[0][0].toFixed(1)} ${P[0][1].toFixed(1)}`;
+      for (let i = 0; i < P.length - 1; i++) {
+        const p0 = P[i - 1] || P[i], p1 = P[i], p2 = P[i + 1], p3 = P[i + 2] || p2;
+        const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
+        const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+        d += ` C${c1[0].toFixed(1)} ${c1[1].toFixed(1)} ${c2[0].toFixed(1)} ${c2[1].toFixed(1)} ${p2[0].toFixed(1)} ${p2[1].toFixed(1)}`;
+      }
+      const area = `${d} L${P[P.length - 1][0].toFixed(1)} ${zeroY.toFixed(1)} L${P[0][0].toFixed(1)} ${zeroY.toFixed(1)} Z`;
+      const z = Math.max(0, Math.min(1, zeroY / H));
+      const last = P[P.length - 1];
+      const end = pts[pts.length - 1];
+      return `
+        <svg class="uc-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="ucLine" x1="0" y1="0" x2="0" y2="${H}" gradientUnits="userSpaceOnUse">
+              <stop offset="${z}" stop-color="#22e08a"/><stop offset="${z}" stop-color="#ff5968"/>
+            </linearGradient>
+            <linearGradient id="ucFill" x1="0" y1="0" x2="0" y2="${H}" gradientUnits="userSpaceOnUse">
+              <stop offset="0" stop-color="#22e08a" stop-opacity=".45"/><stop offset="${z}" stop-color="#22e08a" stop-opacity=".02"/>
+              <stop offset="${z}" stop-color="#ff5968" stop-opacity=".02"/><stop offset="1" stop-color="#ff5968" stop-opacity=".45"/>
+            </linearGradient>
+          </defs>
+          <line x1="0" x2="${W}" y1="${zeroY}" y2="${zeroY}" stroke="#3a3f4c" stroke-dasharray="3 4"/>
+          <path class="uc-area" d="${area}" fill="url(#ucFill)"/>
+          <path class="uc-line" d="${d}" fill="none" stroke="url(#ucLine)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" pathLength="1000"/>
+          <circle class="uc-end" cx="${last[0]}" cy="${last[1]}" r="4.5" fill="${end >= 0 ? "#22e08a" : "#ff5968"}"/>
+        </svg>`;
+    }
+
     function ucRender() {
       const user = ucUser;
       if (!user) return;
 
       const rank = user.rank || "Rookie";
-      const st = user;
-      const profit = Number(st.profit || 0);
+      const profit = Number(user.profit || 0);
+      const role = user.owner ? OWNER_TAG : `<span class="uc-role" style="color:${rankColor(rank)}">${esc(rank)} ${rankBadge(rank)}</span>`;
 
       $("#modal2").innerHTML = `
-        <div class="uc-head">
-          ${avatar(user, "lg", "ring-green")}
-          <div>
-            <div class="uc-name">${esc(user.username)} ${user.owner ? OWNER_TAG : ""}</div>
-            <div class="uc-rank" style="color:${rankColor(rank)}">${esc(rank)} ${rankBadge(rank)}</div>
-            <div class="seen ${user.online ? "on" : ""}">${user.online ? '<span class="live-dot"></span><span class="live-text">Online now</span>' : "Last seen " + ago(user.lastSeen)}</div>
+        <div class="uc2">
+          <button class="x uc2-x" data-action="close2">×</button>
+          <div class="uc2-head">
+            <div class="uc2-av ${user.online ? "on" : ""}">${avatar(user, "lg")}</div>
+            <div class="uc2-id">
+              <div class="uc2-name">${esc(user.username)}</div>
+              <div class="uc2-sub">${role}</div>
+              <div class="seen ${user.online ? "on" : ""}">${user.online ? '<span class="live-dot"></span><span class="live-text">Online now</span>' : "Last seen " + ago(user.lastSeen)}</div>
+            </div>
           </div>
-          <button class="x" data-action="close2">×</button>
-        </div>
 
-        <div class="uc-grid">
-          <div class="uc-stat"><b>${GEM}${fmt(st.totalBet)}</b><small>Total Bet</small></div>
-          <div class="uc-stat"><b class="${profit >= 0 ? "positive" : "negative"}">${GEM}${profit > 0 ? "+" : ""}${fmt(profit)}</b><small>Total Profit</small></div>
-          <div class="uc-stat"><b>${GEM}${fmt(st.totalWon)}</b><small>Total Won</small></div>
-          <div class="uc-stat"><b>${GEM}${fmt(st.totalLost)}</b><small>Total Lost</small></div>
-        </div>
+          <div class="uc2-grid">
+            <div class="uc2-stat" style="--d:0ms"><b>${GEM}<span data-count="${Number(user.totalBet || 0)}">0</span></b><small>Total bet</small></div>
+            <div class="uc2-stat" style="--d:70ms"><b class="${profit >= 0 ? "pos" : "neg"}">${GEM}<span data-count="${profit}" data-sign="1">0</span></b><small>Total profit</small></div>
+            <div class="uc2-stat" style="--d:140ms"><b class="pos">${GEM}<span data-count="${Number(user.totalWon || 0)}">0</span></b><small>Total won</small></div>
+            <div class="uc2-stat" style="--d:210ms"><b class="neg">${GEM}<span data-count="${Number(user.totalLost || 0)}">0</span></b><small>Total lost</small></div>
+          </div>
 
-        ${ME && ME.id !== user.id ? `<button class="btn tip-btn" data-action="tip" data-id="${esc(user.id)}" data-name="${esc(user.username)}">Tip</button>` : ""}`;
+          <div class="uc2-chart">
+            <div class="uc2-chart-head"><small>Game history</small><b class="${profit >= 0 ? "pos" : "neg"}">${GEM}${profit > 0 ? "+" : ""}${fmt(profit)}</b></div>
+            ${profitChart(user.series)}
+          </div>
+
+          ${ME && ME.id !== user.id ? `<button class="btn uc2-tip" data-action="tip" data-id="${esc(user.id)}" data-name="${esc(user.username)}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8s1-5 4.5-5a2.5 2.5 0 0 1 0 5"/></svg>
+            Send Tip</button>` : ""}
+        </div>`;
+      countUp($("#modal2"));
     }
 
     async function showUserCard(id) {
@@ -3813,6 +3949,11 @@
     /* public update log: only things players see and can be shared openly */
     /* newest first; "note" is the short text shown in the banner in the middle of the home page */
     const PUBLIC_UPDATES = [
+      { v: "3.1", title: "New profiles and leaderboard", note: "Check out the new player cards with a profit graph, and the new leaderboard with a top 3 podium!", items: [
+        "New player card: animated stats and a graph of your last games",
+        "New leaderboard: top 3 podium, Top Profit, Top Wager and Least Profit",
+        "Values are now shown in a bigger scale, like 55K and 1.2M"
+      ] },
       { v: "3.0", title: "Better events and jackpot history", note: "The wheel and word scramble events got a big upgrade, and you can now see every past jackpot round in the jackpot history!", items: [
         "Jackpot history: every finished round with the winner, the pot, the chances and the seed to verify it",
         "Wheel event: smooth spin that slows down onto the eliminated player, lights and a winner celebration",
@@ -4937,7 +5078,7 @@
       const el = $("#navJp");
       if (!el) return;
       const total = j && j.state !== "finished" ? Number(j.total || 0) : 0;
-      el.innerHTML = `<svg class="gem-i" viewBox="0 0 24 24"><use href="#gem"/></svg>${fmt(total)}`;
+      el.innerHTML = `<svg class="gem-i" viewBox="0 0 24 24"><use href="#gem"/></svg>${short(total)}`;
     }
 
     function renderJackpot(force) {
@@ -5053,9 +5194,9 @@
     }
 
     /* ---------- Leaderboard ---------- */
-    let lbBy = "totalBet";
+    let lbBy = "profit";
 
-    async function showLeaderboard(by = "totalBet") {
+    async function showLeaderboard(by = "profit") {
       gridContext = null;
       viewMatchId = null;
       clearReplay();
@@ -5064,42 +5205,63 @@
 
       openModal(`
         ${modalHeader("Leaderboard")}
-        <div class="seg" id="lbTabs">
-          <button data-action="lb-tab" data-by="totalBet">Most Wagered</button>
+        <div class="lb-tabs" id="lbTabs">
           <button data-action="lb-tab" data-by="profit">Top Profit</button>
+          <button data-action="lb-tab" data-by="totalBet">Top Wager</button>
+          <button data-action="lb-tab" data-by="least">Least Profit</button>
         </div>
-        <div id="lbBody"><div class="empty">Loading…</div></div>`, "small");
+        <div id="lbBody"><div class="empty">Loading…</div></div>`, "small lb-modal");
 
       loadLeaderboard();
     }
 
     async function loadLeaderboard() {
       document.querySelectorAll("#lbTabs button").forEach(b => b.classList.toggle("on", b.dataset.by === lbBy));
+      const body = $("#lbBody");
+      if (body) body.innerHTML = '<div class="empty">Loading…</div>';
 
       try {
         const { list } = await api("/api/leaderboard?by=" + encodeURIComponent(lbBy));
-        const body = $("#lbBody");
-        if (!body) return;
+        if (!$("#lbBody")) return;
+        const rows = asArray(list);
+        const isProfit = lbBy !== "totalBet";
+        const val = u => `${GEM}${isProfit && u.value > 0 ? "+" : ""}${fmt(u.value)}`;
+        const cls = u => isProfit ? (u.value >= 0 ? "pos" : "neg") : "";
 
-        body.innerHTML = asArray(list).length
-          ? asArray(list).map((u, i) => `
-            <div class="lb-row ${i < 3 ? "top" + (i + 1) : ""}" data-action="user" data-id="${esc(u.id)}">
-              <div class="lb-pos">${i < 3 ? `<span class="medal m${i + 1}">${i + 1}</span>` : i + 1}</div>
-              <div class="lb-user">
-                ${avatar(u, "md")}
-                <span class="n">${esc(u.username)}</span>
-                ${rankBadge(u.rank)}
-              </div>
-              <div class="lb-val ${lbBy === "profit" ? (u.value >= 0 ? "positive" : "negative") : ""}">${GEM}${lbBy === "profit" && u.value > 0 ? "+" : ""}${fmt(u.value)}</div>
-            </div>`).join("")
-          : '<div class="empty">No players yet</div>';
+        if (!rows.length) { $("#lbBody").innerHTML = '<div class="empty">No players yet</div>'; return; }
+
+        /* podium: 2nd left, 1st in the middle, 3rd right */
+        const podium = [rows[1], rows[0], rows[2]].map((u, k) => {
+          if (!u) return '<div class="lb-pod empty-pod"></div>';
+          const place = [2, 1, 3][k];
+          return `
+            <div class="lb-pod p${place}" data-action="user" data-id="${esc(u.id)}" style="--d:${[120, 0, 240][k]}ms">
+              <span class="medal m${place}">${place}</span>
+              <div class="lb-pod-av">${avatar(u, place === 1 ? "lg" : "md")}<i>${place}</i></div>
+              <b class="lb-pod-name">${esc(u.username)}</b>
+              <span class="lb-pod-val ${cls(u)}">${val(u)}</span>
+            </div>`;
+        }).join("");
+
+        const rest = rows.slice(3).map((u, i) => `
+          <div class="lb-row2" data-action="user" data-id="${esc(u.id)}" style="--d:${Math.min(i, 15) * 35 + 250}ms">
+            <span class="lb-pos2">#${i + 4}</span>
+            ${avatar(u, "md")}
+            <span class="n">${esc(u.username)}</span>
+            ${rankBadge(u.rank)}
+            <b class="${cls(u)}">${val(u)}</b>
+          </div>`).join("");
+
+        $("#lbBody").innerHTML = `
+          <div class="lb-podium">${podium}</div>
+          ${rest ? `<div class="lb-head"><span>Player</span><span>${lbBy === "totalBet" ? "Wagered" : "Profit"}</span></div><div class="lb-list">${rest}</div>` : ""}`;
       } catch (error) { fail(error); }
     }
 
     /* ---------- Click router ---------- */
     const actions = {
       home() { closeModal(); closeModal2(); showPage("home"); },
-      leaderboard() { showLeaderboard("totalBet"); },
+      leaderboard() { showLeaderboard("profit"); },
       "lb-tab"(el) { lbBy = el.dataset.by; loadLeaderboard(); },
       jackpot: openJackpot,
       "jp-join": showJpJoin,
