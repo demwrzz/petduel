@@ -364,6 +364,7 @@ async function initDb() {
       S.bounties = d.bounties || [];
       S.settings = { taxPercent: 0, taxReceiver: 'auto', taxIdx: 0, elveUrl: '', ...(d.settings || {}) };
       S.bots = Array.isArray(d.bots) ? d.bots : [];
+      botsFromDb = Array.isArray(d.bots);
       S.updateNotes = d.updateNotes || [];
       S.giveaways = Object.assign(Object.create(null), d.giveaways || {});
       S.matches = Object.assign(Object.create(null), d.matches || {});
@@ -476,8 +477,13 @@ async function robloxAvatar(id) {
    Deposits are confirmed by hand, so "offline" simply means: do not send trades to this bot right now. */
 const botProfiles = new Map(); /* username (lowercase) -> { robloxId, username, avatar } */
 
+/* the default bot is only added once, on a brand-new database. A list emptied by an admin stays empty. */
+let botsFromDb = false;
 function ensureDefaultBot() {
+  if (botsFromDb || S.settings.botsSeeded) return;
   if (!S.bots.length) S.bots.push({ id: rid(6), username: BOT_NAME, link: BOT_LINK, online: true });
+  S.settings.botsSeeded = true;
+  markDirty();
 }
 
 /* players only see the start and the last letter of a bot's name (ltcspace -> ltcs***e) */
@@ -505,7 +511,6 @@ async function loadBotProfile(username) {
 }
 
 async function loadBots() {
-  ensureDefaultBot();
   for (const b of S.bots) await loadBotProfile(b.username);
   io.emit('bots:update', publicBots());
 }
@@ -1746,6 +1751,9 @@ app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
 });
 
 const UPDATE_LOG = [
+  { version: '3.9', title: 'Default bot fix', changes: [
+    'DedokAmp is no longer added back automatically: the default bot is only created once on a brand-new database, so removed bots stay removed'
+  ] },
   { version: '3.8', title: 'Jackpot history, new wheel and scramble', changes: [
     'Public jackpot history (last 100 rounds, saved): winner, pot, chance, players, seed and roll to verify',
     'Wheel event: smooth spin that slows down onto the eliminated player, ticking pointer, rim lights, avatars, elimination flash, winner screen with confetti',
