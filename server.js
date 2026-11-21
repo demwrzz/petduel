@@ -527,10 +527,36 @@ const staffCookieValue = STAFF_KEY ? sha('staff:' + STAFF_KEY) : '';
 
 const hasStaffCookie = cookieHeader => Boolean(staffCookieValue) &&
   String(cookieHeader || '').split(';').some(c => c.trim() === 'pd_staff=' + staffCookieValue);
-const blockedCountry = headers => {
-  const c = String(headers['cf-ipcountry'] || '').toUpperCase();
-  return Boolean(c) && BLOCK_COUNTRIES.includes(c);
+/* the visitor's real IP: Cloudflare sends it in CF-Connecting-IP, otherwise the first X-Forwarded-For entry */
+const clientIp = (headers, fallback) => {
+  const cf = String(headers['cf-connecting-ip'] || '').trim();
+  if (cf) return cf;
+  const xff = String(headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return xff || String(fallback || '');
 };
+
+/* country: Cloudflare's CF-IPCountry header; if it is missing, a cached lookup of the IP */
+const geoCache = new Map();   /* ip -> { c, exp } */
+async function lookupCountry(ip) {
+  if (!ip || /^(127\.|10\.|192\.168\.|::1|::ffff:127\.)/.test(ip)) return '';
+  const hit = geoCache.get(ip);
+  if (hit && hit.exp > now()) return hit.c;
+  let c = '';
+  try {
+    const r = await fetch(`https://ipwho.is/${encodeURIComponent(ip)}?fields=success,country_code`, { signal: AbortSignal.timeout(2000) });
+    const d = await r.json();
+    if (d && d.success) c = String(d.country_code || '').toUpperCase();
+  } catch { /* unknown country: let the visitor in */ }
+  if (geoCache.size > 50000) geoCache.clear();
+  geoCache.set(ip, { c, exp: now() + (c ? 24 : 1) * 60 * 60 * 1000 });
+  return c;
+}
+async function countryOf(headers, fallbackIp) {
+  const cf = String(headers['cf-ipcountry'] || '').toUpperCase();
+  if (cf && cf !== 'XX' && cf !== 'T1') return { country: cf, source: 'cloudflare' };
+  return { country: await lookupCountry(clientIp(headers, fallbackIp)), source: 'ip lookup' };
+}
+const blockedCountry = async (headers, ip) => BLOCK_COUNTRIES.includes((await countryOf(headers, ip)).country);
 
 const BLOCKED_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Pet Duel</title><style>html,body{margin:0;height:100%}body{display:grid;place-items:center;padding:24px;box-sizing:border-box;
@@ -539,13 +565,24 @@ h1{margin:0;font-size:clamp(56px,14vw,140px);font-weight:900;letter-spacing:-.04
 p{margin:16px 0 0;font-size:clamp(17px,3vw,24px);font-weight:700}small{display:block;margin-top:10px;color:#8d909a;font-size:15px}</style></head>
 <body><div><h1>PET<span>DUEL</span></h1><p>Pet Duel is not available in your country.</p><small>Sorry! This site cannot be used from your location.</small></div></body></html>`;
 
-app.use((req, res, next) => {
+/* check what the server sees: https://petduel.win/api/whereami */
+app.get('/api/whereami', async (req, res) => {
+  const { country, source } = await countryOf(req.headers, req.ip);
+  res.json({
+    country: country || 'unknown', source,
+    blocking: BLOCK_COUNTRIES, blocked: BLOCK_COUNTRIES.includes(country),
+    staffCookie: hasStaffCookie(req.headers.cookie)
+  });
+});
+
+app.use(async (req, res, next) => {
   if (STAFF_KEY && req.query.staff === STAFF_KEY) {
     res.setHeader('Set-Cookie', `pd_staff=${staffCookieValue}; Path=/; Max-Age=31536000; HttpOnly; Secure; SameSite=Lax`);
     return res.redirect('/');
   }
   if (!BLOCK_COUNTRIES.length || req.path === '/health') return next();
-  if (blockedCountry(req.headers) && !hasStaffCookie(req.headers.cookie)) {
+  if (hasStaffCookie(req.headers.cookie)) return next();
+  if (await blockedCountry(req.headers, req.ip)) {
     if (req.path.startsWith('/api/')) return res.status(451).json({ error: 'Pet Duel is not available in your country' });
     return res.status(451).type('html').send(BLOCKED_PAGE);
   }
@@ -655,8 +692,9 @@ const socketIp = socket => {
   return xff.length ? xff[xff.length - 1] : socket.handshake.address;
 };
 
-io.use((socket, next) => {
-  if (BLOCK_COUNTRIES.length && blockedCountry(socket.handshake.headers) && !hasStaffCookie(socket.handshake.headers.cookie)) {
+io.use(async (socket, next) => {
+  if (BLOCK_COUNTRIES.length && !hasStaffCookie(socket.handshake.headers.cookie) &&
+      await blockedCountry(socket.handshake.headers, socket.handshake.address)) {
     return next(new Error('Not available in your country'));
   }
   const ip = socketIp(socket);
@@ -1674,6 +1712,10 @@ app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
 });
 
 const UPDATE_LOG = [
+  { version: '3.3', title: 'Entertainment-only notices, better country detection', changes: [
+    '"For entertainment only, gems have no monetary value" in the footer, Terms of Service, FAQ, login and deposit screens',
+    'Country block falls back to an IP lookup when Cloudflare sends no country; /api/whereami shows what the server sees'
+  ] },
   { version: '3.2', title: 'Country block', changes: [
     'BLOCK_COUNTRIES (e.g. TR) shows visitors from those countries a "not available in your country" page (uses Cloudflare CF-IPCountry); API and live connection are blocked too',
     'STAFF_KEY: open /?staff=KEY once and a cookie lets staff in from a blocked country'

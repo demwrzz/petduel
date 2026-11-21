@@ -1099,6 +1099,12 @@
     .header-right .btn { white-space: nowrap; }
     @media (max-width: 1500px) { .nav-link .nl-t { display: none; } .nav-link { padding: 8px; } }
     @media (max-width: 650px) { .nav-link .nl-t { display: inline; } }
+    .foot-fun { color: #c3e8da !important; }
+    .foot-fun b { color: var(--green); }
+    .foot-links a { color: #9aa0ad; cursor: pointer; text-decoration: underline; }
+    .foot-links a:hover { color: #fff; }
+    .fun-note { margin-bottom: 16px; padding: 14px 16px; border: 1px solid #2e5a4b; border-radius: 10px; background: #12241e; color: #c3e8da; }
+    .fun-note b:first-child { display: block; margin-bottom: 4px; color: var(--green); font-size: 15px; }
     .nl-new { padding: 1px 5px; border-radius: 4px; color: #04120b; background: var(--green); font-size: 9px; font-weight: 800; letter-spacing: .4px; }
     @media (max-width: 1450px) { .nav-link.hide-md { display: none; } }
 
@@ -1425,7 +1431,9 @@
 
     <footer class="site-footer">
       <div class="foot-brand">PET<span>DUEL</span></div>
+      <p class="foot-fun"><b>🎮 For entertainment only.</b> Gems and values on Pet Duel have no monetary value. Nothing is sold for real money and nothing can be cashed out or exchanged for real money.</p>
       <p>Pet Duel is an independent project. It is not affiliated with, endorsed by, sponsored by, or in any way associated with Adopt Me!, Uplift Games or Roblox Corporation. All game names, logos, pet images and trademarks belong to their respective owners.</p>
+      <p class="foot-links"><a data-action="info" data-page="tos">Terms of Service</a> · <a data-action="info" data-page="fair">Provably Fair</a> · <a data-action="info" data-page="faq">FAQ</a></p>
     </footer>
   </div>
 
@@ -2873,7 +2881,7 @@
         ${LOGIN_DECO}
         <div class="lg-body">
           <h2>Welcome to Pet<span>Duel</span></h2>
-          <p class="lg-sub">By logging in, you confirm that you are old enough to bet items where you live, that any pets you wager are not stolen, and that you agree to our Terms of Service.</p>
+          <p class="lg-sub">By logging in, you confirm that you are old enough to bet items where you live, that any pets you wager are not stolen, and that you agree to our Terms of Service. Pet Duel is for entertainment only: gems have no monetary value.</p>
 
           <label class="lg-check">
             <input type="checkbox" id="loginTos">
@@ -3351,6 +3359,7 @@
             <h3>Deposit at your own risk</h3>
             <p>Depositing pets is <b>at your own risk</b>. Roblox / Adopt Me can ban or restrict trading accounts at any time, and pets on a banned bot can be lost. Pet Duel cannot guarantee that lost pets are replaced.</p>
             <p>Only deposit pets you are okay with risking. Never deposit pets that are not yours.</p>
+            <p style="color:#9aa0ad;font-size:13px">Pet Duel is for entertainment only. Gems and values have no monetary value and nothing can be exchanged for real money.</p>
           </div>
           <label class="lg-check dep-ack">
             <input type="checkbox" id="depAck">
@@ -3714,8 +3723,9 @@
       if (page === "tos") {
         return `
           <div class="info">
+            <div class="fun-note"><b>🎮 Entertainment only</b>Pet Duel is made for fun. The gems and values shown on the site <b>have no monetary value</b>: they only compare pets with each other. Nothing on Pet Duel is sold for real money, and nothing can be cashed out or exchanged for real money. Do not buy pets with real money to use them here.</div>
             <h4>1. About Pet Duel</h4>
-            <p>Pet Duel is a fan-made site where players bet Adopt Me pets against each other. It is not made by, sponsored by or connected to Roblox Corporation or the makers of Adopt Me.</p>
+            <p>Pet Duel is a fan-made site for entertainment where players play coinflip and jackpot games with Adopt Me pets. It is not made by, sponsored by or connected to Roblox Corporation or the makers of Adopt Me.</p>
             <h4>2. Who can play</h4>
             <p>You must follow the Roblox Terms of Use and be old enough to take part in item betting where you live. One account per person.</p>
             <h4>3. Items</h4>
@@ -3763,7 +3773,8 @@
 
       return `
         <div class="info">
-          <details open><summary>How do I deposit pets?</summary>Log in, open your Wallet and press Deposit. Join one of the online bots and send it a trade with your pets. They appear in your inventory once an admin confirms the trade.</details>
+          <details open><summary>Do gems have real value?</summary>No. Pet Duel is for entertainment only. Gems and values have no monetary value, nothing is sold for real money and nothing can be cashed out for real money.</details>
+          <details><summary>How do I deposit pets?</summary>Log in, open your Wallet and press Deposit. Join one of the online bots and send it a trade with your pets. They appear in your inventory once an admin confirms the trade.</details>
           <details><summary>How do I withdraw?</summary>Open your Wallet, select the pets you want and press Withdraw. An admin sends them to you in game.</details>
           <details><summary>How does a coinflip work?</summary>Bet up to ${maxItems} pets and pick a side. Another player joins with pets worth about the same (within ${range}%). After a 3 second countdown the coin flips and the winner takes every pet in the game.</details>
           <details><summary>What do M, N, F and R mean?</summary>M = Mega Neon, N = Neon, F = Fly, R = Ride. Hover or tap a pet to see its full name and value.</details>
