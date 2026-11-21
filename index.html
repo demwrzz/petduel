@@ -192,6 +192,29 @@
     }
     .banner h1 { margin: 0 0 5px; color: var(--orange); font-size: 20px; }
     .banner p { margin: 0; color: #bab4a5; font-size: 13px; }
+    /* ---------- game switch (Adopt Me / MM2) ---------- */
+    .game-sw { display: flex; flex: none; gap: 4px; margin-left: 14px; padding: 4px; border: 1px solid #262a35; border-radius: 10px; background: #12141b; }
+    .game-sw button { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border: 0; border-radius: 7px; color: #8d909a; background: transparent; font: inherit; font-size: 13px; font-weight: 900; letter-spacing: .3px; transition: background .2s, color .2s, transform .15s; }
+    .game-sw button img { width: 20px; height: 20px; object-fit: contain; }
+    .game-sw button:hover { color: #fff; }
+    .game-sw button.on { color: #04120b; background: var(--green); box-shadow: 0 0 14px rgba(0, 239, 160, .35); }
+    .game-sw button:active { transform: scale(.95); }
+    @media (max-width: 900px) { .game-sw { margin-left: 8px; } .game-sw button { padding: 0 9px; } .game-sw .gs-t { display: none; } .game-sw button.on .gs-t { display: inline; } }
+    .gtag { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 5px; font-size: 10px; font-weight: 900; letter-spacing: .4px; vertical-align: middle; }
+    .gtag.adoptme { color: #00efa0; background: rgba(0, 239, 160, .12); }
+    .gtag.mm2 { color: #ffb547; background: rgba(255, 160, 40, .14); }
+    /* deposit: pick the game first */
+    .dep-games { display: grid; gap: 10px; }
+    .dep-game { display: flex; align-items: center; gap: 16px; min-height: 100px; padding: 10px 18px 10px 10px; border: 1px solid #3a3326; border-radius: 10px; color: #fff; font: inherit; text-align: left; cursor: pointer; transition: transform .15s, border-color .2s, filter .2s; }
+    .dep-game:hover { transform: translateY(-2px); filter: brightness(1.12); }
+    .dep-game img { width: 92px; height: 82px; object-fit: contain; filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .5)); }
+    .dep-game b { flex: 1; font-size: 19px; font-weight: 800; line-height: 1.25; text-align: center; }
+    .dep-game.mm2 { border-color: #5a4122; background: radial-gradient(circle at 1px 1px, rgba(0, 0, 0, .18) 1px, transparent 1.4px) 0 0 / 7px 7px, linear-gradient(110deg, #8a5a1c 0%, #5b3d1d 38%, #2c2722 100%); }
+    .dep-game.adoptme { border-color: #23504a; background: radial-gradient(circle at 1px 1px, rgba(0, 0, 0, .16) 1px, transparent 1.4px) 0 0 / 7px 7px, linear-gradient(110deg, #b8414f 0%, #6b2e47 38%, #232634 100%); }
+    .pf-gtabs { display: flex; gap: 6px; margin: 0 0 12px; }
+    .pf-gtabs button { flex: 1; height: 34px; border: 1px solid #2a2f3b; border-radius: 9px; color: #8d909a; background: #171a22; font: inherit; font-weight: 900; transition: .2s; }
+    .pf-gtabs button.on { border-color: var(--green); color: #04120b; background: var(--green); }
+
     /* ---------- typing hero ---------- */
     .hero {
       position: relative; overflow: hidden; margin-bottom: 14px; padding: 22px 24px; border: 1px solid #22503f; border-radius: 12px;
@@ -1629,6 +1652,10 @@
         <svg viewBox="0 0 100 100"><use href="#logo-mark"/></svg>
         <div>PET<span>DUEL</span></div>
       </div>
+      <div class="game-sw" id="gameSw">
+        <button data-action="game" data-game="adoptme"><img src="/assets/xmas-dog.png" alt=""><span class="gs-t">Adopt Me</span></button>
+        <button data-action="game" data-game="mm2"><img src="/assets/mm2-knife.png" alt=""><span class="gs-t">MM2</span></button>
+      </div>
 
       <nav class="nav">
         <div class="nav-item active" data-action="home" data-nav="home">
@@ -1970,7 +1997,33 @@
 
     const itemId = item => String(item.uid || item.id || item.catalogId || "");
     const itemImage = item => item.image || item.imageUrl || "";
-    const inventory = () => ME ? asArray(ME.inventory) : [];
+    /* the game the player is looking at: lobby, jackpot, inventory, deposit and withdraw follow it */
+    const GAME_NAMES = { adoptme: "Adopt Me", mm2: "MM2" };
+    const gameOf = x => (x && x.game === "mm2" ? "mm2" : "adoptme");
+    let GAME = "adoptme";
+    try { if (localStorage.getItem("pd_game") === "mm2") GAME = "mm2"; } catch {}
+    const gameTag = g => `<span class="gtag ${g}">${g === "mm2" ? "MM2" : "ADOPT ME"}</span>`;
+    const inventory = () => ME ? asArray(ME.inventory).filter(i => gameOf(i) === GAME) : [];
+    function renderGameSw() {
+      document.querySelectorAll("#gameSw [data-game]").forEach(b => b.classList.toggle("on", b.dataset.game === GAME));
+      document.body.dataset.game = GAME;
+    }
+    renderGameSw();
+    function setGame(g) {
+      g = g === "mm2" ? "mm2" : "adoptme";
+      if (g === GAME) return;
+      GAME = g;
+      try { localStorage.setItem("pd_game", g); } catch {}
+      selected = new Set();
+      STATE.jackpot = (STATE.jackpots || {})[GAME] || null;
+      lobbySig = ""; headerSig = ""; jpSig = "";
+      renderGameSw();
+      renderLobby();
+      renderHeader();
+      renderJpNav();
+      if (currentPage === "jackpot") renderJackpot(true);
+      toast(`${GAME_NAMES[g]} selected`, "ok");
+    }
     const gridItems = () => inventory();
 
     const taxHint = () => Number(STATE.config && STATE.config.tax) > 0
@@ -2199,7 +2252,7 @@
         ci.placeholder = !ME ? "Login to chat" : locked ? "Place a bet to chat" : "Write something..";
       }
 
-      const sig = JSON.stringify(ME ? [ME.id, ME.username, ME.avatar, ME.isAdmin, inv.length, value, NOTIFS.unread, NOTIFS.list.length] : null);
+      const sig = JSON.stringify(ME ? [ME.id, ME.username, ME.avatar, ME.isAdmin, inv.length, value, NOTIFS.unread, NOTIFS.list.length, GAME] : null);
       if (sig === headerSig) return;
       headerSig = sig;
 
@@ -2295,7 +2348,7 @@
       const sortBy = lobbySort;
       const potOf = m => Number(m.hostValue || 0) + Number(m.oppValue || 0);
       const matches = asArray(STATE.matches)
-        .filter(m => m.state !== "cancelled")
+        .filter(m => m.state !== "cancelled" && gameOf(m) === GAME)
         .slice()
         .sort((a, b) =>
           (Number(a.state === "finished") - Number(b.state === "finished")) ||
@@ -2309,14 +2362,14 @@
 
       const sig = JSON.stringify([
         matches.map(m => [m.id, m.state, m.joiner && m.joiner.id, m.winnerId]),
-        ME && ME.id, ME && ME.isAdmin, asArray(STATE.bounties).map(b => b.id), sortBy
+        ME && ME.id, ME && ME.isAdmin, asArray(STATE.bounties).map(b => b.id), sortBy, GAME
       ]);
 
       if (sig === lobbySig) return;
       lobbySig = sig;
 
       if (!matches.length) {
-        $("#lobby").innerHTML = `<div class="card empty enter">No games right now.<br>Bet your items and start the first coinflip!</div>`;
+        $("#lobby").innerHTML = `<div class="card empty enter">No ${GAME_NAMES[GAME]} games right now.<br>Bet your ${GAME === "mm2" ? "items" : "pets"} and start the first coinflip!</div>`;
         return;
       }
 
@@ -2716,8 +2769,8 @@
         const mine = ME && g.host && g.host.id === ME.id;
 
         const chips = [
-          Number(g.minBet) > 0 ? `<span class="gw-chip">Min bet ${fmt(g.minBet)}</span>` : "",
-          g.minRank ? `<span class="gw-chip" style="color:${rankColor(g.minRank)}">Min rank ${esc(g.minRank)}</span>` : ""
+          Number(g.minBet) > 0 ? `<span class="gw-chip">Min ${GAME_NAMES[gameOf(g)]} bet ${fmt(g.minBet)}</span>` : "",
+          g.minRank ? `<span class="gw-chip" style="color:${rankColor(g.minRank)}">Min ${GAME_NAMES[gameOf(g)]} rank ${esc(g.minRank)}</span>` : ""
         ].join("");
 
         const button = mine
@@ -2731,7 +2784,7 @@
             <div class="gw-head">
               ${avatar(g.host, "md")}
               <div class="gw-title">
-                <b>${esc(getUsername(g.host))}'s Giveaway</b>
+                <b>${esc(getUsername(g.host))}'s Giveaway ${gameTag(gameOf(g))}</b>
                 <small>${GEM}${fmt(g.value)} · ${Number(g.entrantCount || 0)} entered</small>
               </div>
               <div class="gw-timer ticker-giveaway" data-end="${Number(g.endsAt || 0)}"></div>
@@ -3044,12 +3097,14 @@
         </svg>`;
     }
 
+    let ucGame = "adoptme";
     function ucRender() {
       const user = ucUser;
       if (!user) return;
 
       const rank = user.rank || "Rookie";
-      const profit = Number(user.profit || 0);
+      const gs = (user.gstats || {})[ucGame] || { bet: user.totalBet, won: user.totalWon, lost: user.totalLost, profit: user.profit };
+      const profit = Number(gs.profit || 0);
       const role = user.owner ? OWNER_TAG : user.support ? SUPPORT_TAG : `<span class="uc-role" style="color:${rankColor(rank)}">${esc(rank)} ${rankBadge(rank)}</span>`;
 
       $("#modal2").innerHTML = `
@@ -3064,16 +3119,18 @@
             </div>
           </div>
 
+          <div class="pf-gtabs">${["adoptme", "mm2"].map(g => `<button class="${g === ucGame ? "on" : ""}" data-action="uc-game" data-game="${g}">${GAME_NAMES[g]}</button>`).join("")}</div>
+
           <div class="uc2-grid">
-            <div class="uc2-stat" style="--d:0ms"><b>${GEM}<span data-count="${Number(user.totalBet || 0)}">0</span></b><small>Total bet</small></div>
-            <div class="uc2-stat" style="--d:70ms"><b class="${profit >= 0 ? "pos" : "neg"}">${GEM}<span data-count="${profit}" data-sign="1">0</span></b><small>Total profit</small></div>
-            <div class="uc2-stat" style="--d:140ms"><b class="pos">${GEM}<span data-count="${Number(user.totalWon || 0)}">0</span></b><small>Total won</small></div>
-            <div class="uc2-stat" style="--d:210ms"><b class="neg">${GEM}<span data-count="${Number(user.totalLost || 0)}">0</span></b><small>Total lost</small></div>
+            <div class="uc2-stat" style="--d:0ms"><b>${GEM}<span data-count="${Number(gs.bet || 0)}">0</span></b><small>${GAME_NAMES[ucGame]} bet</small></div>
+            <div class="uc2-stat" style="--d:70ms"><b class="${profit >= 0 ? "pos" : "neg"}">${GEM}<span data-count="${profit}" data-sign="1">0</span></b><small>${GAME_NAMES[ucGame]} profit</small></div>
+            <div class="uc2-stat" style="--d:140ms"><b class="pos">${GEM}<span data-count="${Number(gs.won || 0)}">0</span></b><small>${GAME_NAMES[ucGame]} won</small></div>
+            <div class="uc2-stat" style="--d:210ms"><b class="neg">${GEM}<span data-count="${Number(gs.lost || 0)}">0</span></b><small>${GAME_NAMES[ucGame]} lost</small></div>
           </div>
 
           <div class="uc2-chart">
-            <div class="uc2-chart-head"><small>Game history</small><b class="${profit >= 0 ? "pos" : "neg"}">${GEM}${profit > 0 ? "+" : ""}${fmt(profit)}</b></div>
-            ${profitChart(user.series)}
+            <div class="uc2-chart-head"><small>${GAME_NAMES[ucGame]} game history</small><b class="${profit >= 0 ? "pos" : "neg"}">${GEM}${profit > 0 ? "+" : ""}${fmt(profit)}</b></div>
+            ${profitChart((user.gseries || {})[ucGame] || user.series)}
           </div>
 
           ${ME && ME.id !== user.id ? `<button class="btn uc2-tip" data-action="tip" data-id="${esc(user.id)}" data-name="${esc(user.username)}">
@@ -3090,6 +3147,7 @@
       try {
         const { user } = await api("/api/user/" + encodeURIComponent(id));
         ucUser = user;
+        ucGame = GAME;
         ucRender();
       } catch (error) {
         closeModal2();
@@ -3160,9 +3218,13 @@
       socket.on("bounty:claimed", showBountyPopup);
 
       socket.on("jackpot:update", j => {
-        if (j) STATE.jackpot = j;
+        if (!j) return;
+        STATE.jackpots = STATE.jackpots || {};
+        STATE.jackpots[gameOf(j)] = j;
+        if (gameOf(j) !== GAME) return;
+        STATE.jackpot = j;
         renderJpNav();
-        if (currentPage === "jackpot" && j) renderJackpot();
+        if (currentPage === "jackpot") renderJackpot();
       });
 
       socket.on("admin:notify", n => {
@@ -3196,6 +3258,7 @@
         const state = await api("/api/state");
         if (state.now) clockSkew = Date.now() - state.now;
         STATE = { ...STATE, ...state };
+        if (state.jackpots) STATE.jackpot = state.jackpots[GAME] || null;
         if (!state.maintenance) STATE.maintenance = false;
 
         if (token) {
@@ -3352,7 +3415,7 @@
 
     /* ---------- typing hero: types a phrase, waits, deletes it, types the next ---------- */
     (function heroTyping() {
-      const phrases = ["Adopt Me PvP Duels", "Lowest Tax", "petduel.win", "Coinflip & Jackpot", "Provably Fair"];
+      const phrases = ["Adopt Me PvP Duels", "MM2 PvP Duels", "Lowest Tax", "petduel.win", "Coinflip & Jackpot", "Provably Fair"];
       const el = document.getElementById("heroText");
       const caret = document.querySelector(".hero-caret");
       if (!el) return;
@@ -3618,7 +3681,7 @@
             <option value="name">Name</option>
           </select>
 
-          <select class="control" disabled><option>Adopt Me</option></select>
+          <select class="control" id="gridGame">${["adoptme", "mm2"].map(g => `<option value="${g}" ${g === GAME ? "selected" : ""}>${GAME_NAMES[g]}</option>`).join("")}</select>
         </div>
 
         <div class="inventory-box">
@@ -3686,6 +3749,14 @@
     function bindGrid() {
       $("#gridSearch")?.addEventListener("input", renderGrid);
       $("#gridSort")?.addEventListener("change", renderGrid);
+      /* switching the game here switches the whole site, then the open window shows that game's items */
+      $("#gridGame")?.addEventListener("change", e => {
+        setGame(e.target.value);
+        const title = $("#modal .mh h3");
+        if (title && /Inventory$/.test(title.textContent)) title.textContent = GAME_NAMES[GAME] + " Inventory";
+        renderGrid();
+        if (gridContext && gridContext.info) gridContext.info();
+      });
       renderGrid();
     }
 
@@ -3784,7 +3855,7 @@
       };
 
       openModal(`
-        ${modalHeader("Inventory")}
+        ${modalHeader(GAME_NAMES[GAME] + " Inventory")}
         <div id="botsOffBox">${botsOffline() ? '<div class="warn"><i>!</i><span>Withdrawals are paused while our withdraw bots are offline. Please try again when a bot is back online.</span></div>' : ""}</div>
         <div id="wdBox"></div>
         <div class="hint" style="margin:0 0 7px">Select Item</div>
@@ -3824,7 +3895,7 @@
             <div class="wd-body"><div>
               ${rows.slice(0, 15).map(w => `
                 <div class="wd-row">
-                  <span class="wd-st ${esc(w.status)}">${label[w.status] || esc(w.status)}</span>
+                  <span class="wd-st ${esc(w.status)}">${label[w.status] || esc(w.status)}</span>${gameTag(gameOf(w))}
                   <div class="items">${thumbs(w.items, 6)}</div>
                   <div class="wd-meta"><b>${GEM}${fmt(w.value)}</b><small>${esc(ago(w.ts))}</small></div>
                   ${wdBotHTML(w.bot)}
@@ -3878,16 +3949,13 @@
 
     /* true when no withdraw bot is online: withdrawals are paused (without withdraw bots the deposit bots send) */
     const withdrawBots = () => {
-      const w = asArray(STATE.bots).filter(b => b.role === "withdraw");
-      return w.length ? w : depositBots();
+      const w = asArray(STATE.bots).filter(b => b.role === "withdraw" && gameOf(b) === GAME);
+      return w.length ? w : depositBots(GAME);
     };
     const botsOffline = () => !withdrawBots().some(b => b.online !== false);
 
-    const depositBots = () => {
-      const list = asArray(STATE.bots).filter(b => b.role !== "withdraw");
-      if (list.length || asArray(STATE.bots).length) return list;
-      return STATE.bot ? [STATE.bot] : [];
-    };
+    const depositBots = (game = depGame) => asArray(STATE.bots).filter(b => b.role !== "withdraw" && gameOf(b) === game);
+    let depGame = "adoptme";
 
     /* the withdraw bot that sends a request: masked name, avatar and its private server */
     const wdBotHTML = bot => !bot ? "" : `
@@ -3902,7 +3970,7 @@
     /* the bot's name is shown masked and big (ltcs***e) so players can match it in game */
     function botsListHTML() {
       const bots = depositBots();
-      if (!bots.length) return '<div class="empty">No deposit bot is available right now. Please try again later.</div>';
+      if (!bots.length) return `<div class="empty">No ${GAME_NAMES[depGame]} deposit bot is available right now. Please try again later.</div>`;
       const anyOnline = bots.some(b => b.online !== false);
       return bots.map(bot => {
         const online = bot.online !== false;
@@ -3927,8 +3995,19 @@
     }
 
     /* Deposit: 1. accept the risk  2. read the trade rules  3. see the bot and the private server */
-    function openBotsModal(step = 1) {
+    function openBotsModal(step = 0) {
       const steps = `<div class="dep-steps">${[1, 2, 3].map(n => `<i class="${n <= step ? "on" : ""}"></i>`).join("")}</div>`;
+      const mm2 = depGame === "mm2";
+
+      if (step === 0) {
+        openModal2(`
+          ${modalHeader("Deposit", "close2")}
+          <div class="dep-games">
+            <button class="dep-game mm2" data-action="dep-game" data-game="mm2"><img src="/assets/mm2-knife.png" alt=""><b>Murder Mystery<br>2</b></button>
+            <button class="dep-game adoptme" data-action="dep-game" data-game="adoptme"><img src="/assets/xmas-dog.png" alt=""><b>Adopt Me!</b></button>
+          </div>`);
+        return;
+      }
 
       if (step === 1) {
         openModal2(`
@@ -3937,8 +4016,8 @@
           <div class="dep-risk">
             <div class="dep-risk-ico">!</div>
             <h3>Deposit at your own risk</h3>
-            <p>Depositing pets is <b>at your own risk</b>. Roblox / Adopt Me can ban or restrict trading accounts at any time, and pets on a banned bot can be lost. Pet Duel cannot guarantee that lost pets are replaced.</p>
-            <p>Only deposit pets you are okay with risking. Never deposit pets that are not yours.</p>
+            <p>Depositing ${mm2 ? "items" : "pets"} is <b>at your own risk</b>. Roblox / ${mm2 ? "Murder Mystery 2" : "Adopt Me"} can ban or restrict trading accounts at any time, and ${mm2 ? "items" : "pets"} on a banned bot can be lost. Pet Duel cannot guarantee that lost ${mm2 ? "items" : "pets"} are replaced.</p>
+            <p>Only deposit ${mm2 ? "items" : "pets"} you are okay with risking. Never deposit ${mm2 ? "items" : "pets"} that are not yours.</p>
             <p style="color:#9aa0ad;font-size:13px">Pet Duel is for entertainment only. Gems and values have no monetary value and nothing can be exchanged for real money.</p>
           </div>
           <label class="lg-check dep-ack">
@@ -3956,11 +4035,11 @@
           ${modalHeader("How to deposit", "close2")}
           ${steps}
           <ol class="dep-rules">
-            <li><b>Join the bot's private server</b> in Adopt Me (next step).</li>
-            <li><b>Send the bot a trade</b> with the pets you want to deposit.</li>
-            <li><span class="dep-food">🍔 Add at least <b>6 food items</b> to every trade.</span> This is required for security. Trades without 6 food items are declined.</li>
+            <li><b>Join the bot's private server</b> in ${mm2 ? "Murder Mystery 2" : "Adopt Me"} (next step).</li>
+            <li><b>Send the bot a trade</b> with the ${mm2 ? "items" : "pets"} you want to deposit.</li>
+            ${mm2 ? "" : '<li><span class="dep-food">🍔 Add at least <b>6 food items</b> to every trade.</span> This is required for security. Trades without 6 food items are declined.</li>'}
             <li><b>Check the bot's name</b> before you accept. Scammers copy bot names with tiny changes.</li>
-            <li>Your pets appear in your inventory <b>once an admin confirms</b> the trade.</li>
+            <li>Your ${mm2 ? "items" : "pets"} appear in your ${GAME_NAMES[depGame]} inventory <b>once an admin confirms</b> the trade.</li>
           </ol>
           <div class="warn"><i>!</i><span>Staff will never DM you asking for pets. Only trade with the bot shown in this window.</span></div>
           <div class="dep-nav">
@@ -3971,10 +4050,10 @@
       }
 
       openModal2(`
-        ${modalHeader("Deposit bot", "close2")}
+        ${modalHeader(GAME_NAMES[depGame] + " deposit bot", "close2")}
         ${steps}
         <div id="depositBots">${botsListHTML()}</div>
-        <p class="hint">Remember: at least <b>6 food items</b> in every trade. Your pets appear in your inventory once an admin confirms them.</p>
+        <p class="hint">${mm2 ? "Your items appear in your MM2 inventory once an admin confirms them." : "Remember: at least <b>6 food items</b> in every trade. Your pets appear in your inventory once an admin confirms them."}</p>
         <div class="dep-nav"><button class="btn gray" data-action="dep-step" data-step="2">Back</button></div>`);
     }
 
@@ -4203,11 +4282,17 @@
     }
 
     /* ---------- Profile (window): stats, profit graph with time ranges, transactions ---------- */
-    let pfData = null, pfRange = "all";
+    let pfData = null, pfRange = "all", pfGame = "adoptme";
+
+    const pfStats = () => {
+      const g = pfData && pfData.gstats && pfData.gstats[pfGame];
+      const st = (pfData && pfData.stats) || {};
+      return g ? { totalBet: g.bet, totalWon: g.won, totalLost: g.lost, profit: g.profit } : st;
+    };
 
     function pfSeries() {
-      const games = asArray(pfData && pfData.games);
-      const profit = Number(pfData && pfData.stats && pfData.stats.profit || 0);
+      const games = asArray(pfData && pfData.games).filter(g => (g.g || "adoptme") === pfGame);
+      const profit = Number(pfStats().profit || 0);
       /* cumulative profit after each game; the start value makes the last point equal the current profit */
       let run = profit - games.reduce((t, g) => t + Number(g.a || 0), 0);
       const pts = [{ ts: games.length ? games[0].ts - 1 : Date.now(), v: run }];
@@ -4226,26 +4311,27 @@
       const change = series.length ? series[series.length - 1] - series[0] : 0;
       return `
         <div class="pf-chart-top">
-          <div><small>Game history</small><b class="${change >= 0 ? "pos" : "neg"}">${GEM}${change > 0 ? "+" : ""}${fmt(change)}</b></div>
+          <div><small>${GAME_NAMES[pfGame]} game history</small><b class="${change >= 0 ? "pos" : "neg"}">${GEM}${change > 0 ? "+" : ""}${fmt(change)}</b></div>
           <div class="pf-range">${["1d", "3d", "7d", "30d", "all"].map(r => `<button class="${r === pfRange ? "on" : ""}" data-action="pf-range" data-r="${r}">${r === "all" ? "All" : r.toUpperCase()}</button>`).join("")}</div>
         </div>
         ${profitChart(series.length >= 2 ? series : [series[0] || 0, series[0] || 0], Math.max(300, Math.round(($("#pfChart")?.clientWidth || 730) - 30)), 180)}`;
     }
 
-    async function showProfile(page = 1) {
+    async function showProfile(page = 1, keep = false) {
       if (!requireLogin()) return;
       gridContext = null;
       viewMatchId = null;
+      if (!keep && !$("#pfWin")) pfGame = GAME;
 
       try {
         const result = await api("/api/profile?page=" + encodeURIComponent(page));
         pfData = result;
-        const st = result.stats || {};
+        const st = pfStats();
         const profit = Number(st.profit || 0);
         const rows = asArray(result.rows);
         const pages = Number(result.pages || 1);
         const cur = Number(result.page) || 1;
-        const reopen = page !== 1 && $("#pfWin");
+        const reopen = (page !== 1 || keep) && $("#pfWin");
 
         const html = `
           <div class="pf2" id="pfWin">
@@ -4262,10 +4348,12 @@
                 : `<button class="pf-discord" data-action="discord-link">${DISCORD_ICO}<span>Link Discord</span></button>`}
             </div>
 
+            <div class="pf-gtabs">${["adoptme", "mm2"].map(g => `<button class="${g === pfGame ? "on" : ""}" data-action="pf-game" data-game="${g}">${GAME_NAMES[g]}</button>`).join("")}</div>
+
             <div class="pf-stats">
-              <div class="uc2-stat" style="--d:0ms"><b>${GEM}<span data-count="${Number(st.totalBet || 0)}">0</span></b><small>Total bet</small></div>
-              <div class="uc2-stat" style="--d:70ms"><b class="pos">${GEM}<span data-count="${Number(st.totalWon || 0)}">0</span></b><small>Total won</small></div>
-              <div class="uc2-stat" style="--d:140ms"><b class="${profit >= 0 ? "pos" : "neg"}">${GEM}<span data-count="${profit}" data-sign="1">0</span></b><small>Profit</small></div>
+              <div class="uc2-stat" style="--d:0ms"><b>${GEM}<span data-count="${Number(st.totalBet || 0)}">0</span></b><small>${GAME_NAMES[pfGame]} bet</small></div>
+              <div class="uc2-stat" style="--d:70ms"><b class="pos">${GEM}<span data-count="${Number(st.totalWon || 0)}">0</span></b><small>${GAME_NAMES[pfGame]} won</small></div>
+              <div class="uc2-stat" style="--d:140ms"><b class="${profit >= 0 ? "pos" : "neg"}">${GEM}<span data-count="${profit}" data-sign="1">0</span></b><small>${GAME_NAMES[pfGame]} profit</small></div>
             </div>
 
             <div class="uc2-chart" id="pfChart"></div>
@@ -4275,7 +4363,7 @@
                 <div class="pf-tr pf-th"><span>Type</span><span>ID</span><span>Date and time</span><span>Amount</span></div>
                 ${rows.map(r => `
                   <div class="pf-tr">
-                    <b>${esc(r.type)}</b>
+                    <b>${esc(r.type)} ${r.g === "mm2" ? gameTag("mm2") : ""}</b>
                     <span class="pf-id" title="${esc(r.id || "")}">${esc(r.id || "")}</span>
                     <span>${r.ts ? esc(new Date(r.ts).toLocaleString()) : ""}</span>
                     <b class="pf-amt ${Number(r.amount) < 0 ? "neg" : "pos"}">${GEM}${Number(r.amount) > 0 ? "+" : ""}${fmt(r.amount)}</b>
@@ -5308,9 +5396,9 @@
     async function showJpHistory() {
       gridContext = null;
       viewMatchId = null;
-      openModal(`${modalHeader("Jackpot History")}<div class="info-scroll" id="jpHist"><div class="empty">Loading…</div></div>`, "small");
+      openModal(`${modalHeader(GAME_NAMES[GAME] + " Jackpot History")}<div class="info-scroll" id="jpHist"><div class="empty">Loading…</div></div>`, "small");
       try {
-        const { list } = await api("/api/jackpot/history");
+        const { list } = await api("/api/jackpot/history?game=" + GAME);
         const box = $("#jpHist");
         if (!box) return;
         box.innerHTML = asArray(list).length ? asArray(list).map((r, i) => `
@@ -5485,7 +5573,7 @@
       };
 
       openModal(`
-        ${modalHeader("Join Jackpot")}
+        ${modalHeader("Join " + GAME_NAMES[GAME] + " Jackpot")}
         <p class="hint">Your chance is your share of the total pot. The winner takes everything.</p>
 
         ${selectionGridHTML()}
@@ -5504,7 +5592,7 @@
       if (!uids.length) return toast("Select items first", "err");
 
       try {
-        await api("/api/jackpot/join", { body: { uids } });
+        await api("/api/jackpot/join", { body: { uids, game: GAME } });
         closeModal();
         toast("You joined the jackpot!", "ok");
         await refresh();
@@ -5513,7 +5601,7 @@
 
     async function jpLeave() {
       try {
-        await api("/api/jackpot/leave", { body: {} });
+        await api("/api/jackpot/leave", { body: { game: GAME } });
         toast("Items returned", "ok");
         await refresh();
       } catch (error) { fail(error); }
@@ -5665,6 +5753,10 @@
       "profile-page"(el) { showProfile(Number(el.dataset.page)); },
       "discord-link"() { discordLink(); },
       "support-panel"() { showSupportPanel(); },
+      game(el) { setGame(el.dataset.game); },
+      "dep-game"(el) { depGame = el.dataset.game === "mm2" ? "mm2" : "adoptme"; openBotsModal(1); },
+      "pf-game"(el) { pfGame = el.dataset.game === "mm2" ? "mm2" : "adoptme"; showProfile(1, true); },
+      "uc-game"(el) { ucGame = el.dataset.game === "mm2" ? "mm2" : "adoptme"; ucRender(); },
       async "sp-mute"() {
         const name = $("#spName")?.value.trim();
         if (!name) return toast("Write a nickname", "err");
