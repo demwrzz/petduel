@@ -570,6 +570,27 @@
       animation: owner-shine 2.4s ease-in-out infinite;
     }
     .tag-owner svg { width: 10px; height: 10px; }
+    .tag-support {
+      position: relative; display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 5px; overflow: hidden;
+      color: #fff; font-size: 10px; font-weight: 900; letter-spacing: .6px; text-transform: uppercase;
+      background: linear-gradient(90deg, #1d4ed8, #3b82f6, #22d3ee, #60a5fa, #1d4ed8); background-size: 300% 100%;
+      box-shadow: 0 0 10px rgba(59, 130, 246, .7); animation: owner-chroma 3s linear infinite;
+    }
+    .tag-support::after { content: ""; position: absolute; top: 0; bottom: 0; left: -60%; width: 40%; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent); transform: skewX(-20deg); animation: owner-shine 2.4s ease-in-out infinite; }
+    .tag-support svg { width: 10px; height: 10px; }
+    .sp-mute { margin-bottom: 14px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: #1a1d26; }
+    .sp-mute-row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    .sp-mute-row input { flex: 1; min-width: 140px; }
+    .sp-h { margin: 0 0 8px; color: var(--muted); font-size: 12px; letter-spacing: .6px; text-transform: uppercase; }
+    .sp-wd { margin-bottom: 10px; padding: 12px; border: 1px solid #5c4a22; border-radius: 12px; background: #1f1d18; }
+    .sp-wd-top { display: flex; align-items: center; gap: 10px; }
+    .sp-wd-who { flex: 1; min-width: 0; }
+    .sp-wd-who b { display: block; color: #fff; }
+    .sp-wd-who small { color: var(--muted); }
+    .sp-wd-val { display: flex; align-items: center; color: var(--orange); }
+    .sp-wd-pets { display: flex; flex-wrap: wrap; gap: 4px; margin: 10px 0; }
+    .sp-wd-pets span { padding: 3px 8px; border-radius: 6px; background: #2a2620; color: #e8d9b0; font-size: 12px; font-weight: 700; }
+    .sp-done { width: 100%; }
     @keyframes owner-chroma { to { background-position: 300% 0; } }
     @keyframes owner-glow { 50% { box-shadow: 0 0 16px rgba(192, 132, 252, .95), 0 0 2px rgba(217, 70, 239, .9) inset; } }
     @keyframes owner-shine { 0%, 40% { left: -60%; } 80%, 100% { left: 130%; } }
@@ -1800,12 +1821,14 @@
       ? `<svg class="rank-badge" style="color:${rankColor(rank)}" viewBox="0 0 24 24"><use href="#rk-${rankIcon(rank)}"/></svg>` : "";
 
     const UM_ICONS = {
+      support: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3zM3 19a2 2 0 0 0 2 2h1v-6H3z"/></svg>',
       profile: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>',
       gift: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8s1-5 4.5-5a2.5 2.5 0 0 1 0 5"/></svg>',
       settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
       admin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5z"/><path d="m9 12 2 2 4-4"/></svg>',
       logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>'
     };
+    const SUPPORT_TAG = '<span class="tag-support"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3zM3 19a2 2 0 0 0 2 2h1v-6H3z"/></svg>Support</span>';
     const OWNER_TAG = '<span class="tag-owner"><svg viewBox="0 0 24 24" fill="currentColor"><path d="m3 8 4.5 4L12 4l4.5 8L21 8l-2 11H5z"/></svg>Owner</span>';
     const ICO = {
       target: '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/></svg>',
@@ -2214,12 +2237,13 @@
           <div class="user-menu ${menuOpen ? "open" : ""}" id="userMenu">
             <div class="um-head">
               ${avatar(ME, "md")}
-              <div><b>${esc(ME.username)}</b><small>${ME.isAdmin ? "Owner" : esc(ME.rank || "User")}</small></div>
+              <div><b>${esc(ME.username)}</b><small>${ME.isAdmin ? "Owner" : ME.isSupport ? "Support" : esc(ME.rank || "User")}</small></div>
             </div>
             <button data-action="profile">${UM_ICONS.profile}Profile</button>
             <button data-action="giveaway">${UM_ICONS.gift}Create Giveaway</button>
             <button data-action="nick-change">${UM_ICONS.settings}Settings</button>
             ${ME.isAdmin ? `<button data-action="admin">${UM_ICONS.admin}Admin Panel</button>` : ""}
+            ${ME.isSupport ? `<button data-action="support-panel">${UM_ICONS.support}Support Panel</button>` : ""}
             <div class="um-sep"></div>
             <button class="um-logout" data-action="logout">${UM_ICONS.logout}Logout</button>
           </div>
@@ -2884,7 +2908,7 @@
           <div style="min-width:0">
             <div class="who">
               <span class="uname r-${esc(rank)} ${rank === "ADMIN" ? "owner-name" : ""}" ${rank === "ADMIN" ? "" : `style="color:${rank === "Rookie" ? "#fff" : rankColor(rank)}"`} ${click}>${esc(getUsername(user) || "System")}</span>
-              ${m.admin ? OWNER_TAG : rankBadge(rank)}
+              ${m.admin ? OWNER_TAG : m.support ? SUPPORT_TAG : rankBadge(rank)}
               <span class="m-time" data-ts="${Number(m.ts || 0)}">${chatTime(m.ts)}</span>
             </div>
             <div class="txt">${chatText(m.text)}</div>
@@ -3018,7 +3042,7 @@
 
       const rank = user.rank || "Rookie";
       const profit = Number(user.profit || 0);
-      const role = user.owner ? OWNER_TAG : `<span class="uc-role" style="color:${rankColor(rank)}">${esc(rank)} ${rankBadge(rank)}</span>`;
+      const role = user.owner ? OWNER_TAG : user.support ? SUPPORT_TAG : `<span class="uc-role" style="color:${rankColor(rank)}">${esc(rank)} ${rankBadge(rank)}</span>`;
 
       $("#modal2").innerHTML = `
         <div class="uc2">
@@ -4061,6 +4085,46 @@
     }
 
     const DISCORD_ICO = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.2a18.4 18.4 0 0 0-5.5 0L8.7 3a19.7 19.7 0 0 0-4.9 1.5C.5 9 -.3 13.6.1 18.1a19.9 19.9 0 0 0 6 3l1.2-2a13 13 0 0 1-1.9-.9l.4-.3a14.2 14.2 0 0 0 12.1 0l.4.3c-.6.4-1.2.7-1.9.9l1.2 2a19.8 19.8 0 0 0 6-3c.5-5.2-.8-9.7-3.5-13.7zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4z"/></svg>';
+
+    /* ---------- Support Panel: pending withdrawals + chat mute ---------- */
+    async function showSupportPanel() {
+      if (!ME || !ME.isSupport) return;
+      gridContext = null;
+      viewMatchId = null;
+      openModal(`
+        ${modalHeader("Support Panel")}
+        <div class="sp-mute">
+          <b>Mute in chat</b>
+          <div class="sp-mute-row">
+            <input id="spName" class="in" placeholder="Nickname" autocomplete="off">
+            <select id="spMin" class="in">
+              <option value="10">10 min</option><option value="60">1 hour</option><option value="360">6 hours</option><option value="1440">24 hours</option><option value="0">Unmute</option>
+            </select>
+            <button class="btn red" data-action="sp-mute">Apply</button>
+          </div>
+        </div>
+        <h4 class="sp-h">Pending withdrawals</h4>
+        <div id="spList"><div class="empty">Loading…</div></div>`, "small");
+      loadSupportList();
+    }
+
+    async function loadSupportList() {
+      try {
+        const { list } = await api("/api/support/withdrawals");
+        const box = $("#spList");
+        if (!box) return;
+        box.innerHTML = list.length ? list.map(w => `
+          <div class="sp-wd">
+            <div class="sp-wd-top">
+              ${avatar({ username: w.nickname, avatar: w.avatar }, "md")}
+              <div class="sp-wd-who"><b>${esc(w.nickname)}</b><small>Roblox: ${esc(w.robloxName)} · ${esc(ago(w.ts))}</small></div>
+              <b class="sp-wd-val">${GEM}${fmt(w.value)}</b>
+            </div>
+            <div class="sp-wd-pets">${w.items.map(i => `<span>${esc(itemLabel(i))}</span>`).join("")}</div>
+            <button class="btn sp-done" data-action="sp-done" data-id="${esc(w.id)}">✅ Mark as sent</button>
+          </div>`).join("") : '<div class="empty">No pending withdrawals 🎉</div>';
+      } catch (error) { fail(error); }
+    }
 
     /* Discord link: the site gives a code, the player types /link CODE in our Discord */
     async function discordLink() {
@@ -5553,6 +5617,21 @@
       profile() { showProfile(1); },
       "profile-page"(el) { showProfile(Number(el.dataset.page)); },
       "discord-link"() { discordLink(); },
+      "support-panel"() { showSupportPanel(); },
+      async "sp-done"(el) {
+        if (!(await confirmBox({ title: "Mark as sent", text: "Did you send these pets to the player in game?", ok: "Yes, sent" }))) return;
+        try { await api("/api/support/withdraw/done", { body: { id: el.dataset.id } }); toast("Marked as sent", "ok"); loadSupportList(); }
+        catch (error) { fail(error); }
+      },
+      async "sp-mute"() {
+        const name = $("#spName")?.value.trim();
+        if (!name) return toast("Write a nickname", "err");
+        try {
+          const r = await api("/api/support/mute", { body: { name, minutes: Number($("#spMin").value) } });
+          toast(Number($("#spMin").value) ? `${r.nickname} muted` : `${r.nickname} unmuted`, "ok");
+          $("#spName").value = "";
+        } catch (error) { fail(error); }
+      },
       "discord-unlink"() { discordUnlink(); },
       "copy-text"(el) { navigator.clipboard?.writeText(el.dataset.text).then(() => toast("Copied", "ok"), () => toast("Select the text and copy it", "err")); },
       "pf-range"(el) { pfRange = el.dataset.r; const c = $("#pfChart"); if (c) c.innerHTML = pfChartHTML(); },

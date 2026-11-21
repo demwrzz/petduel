@@ -21,7 +21,8 @@
     "Owner",
     "Admin",
     "Moderator",
-    "Staff"
+    "Staff",
+    "Support"
   ],
   "linkedRole": "Linked",
   "rankSyncMinutes": 10,
