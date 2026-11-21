@@ -3153,11 +3153,16 @@ const AMV_FIELDS = {
   'mega-none': 'npMegaValue', 'mega-f': 'mfValue', 'mega-r': 'mrValue', 'mega-fr': 'megaValue'
 };
 
-async function loadAmvgg(deadlineMs) {
-  const text = await fetchText('https://amvgg.com/values/pets', deadlineMs);
+async function loadAmvgg(deadlineMs, url) {
+  const text = await fetchText(url || 'https://amvgg.com/values/pets', deadlineMs);
+  return parseAmvgg(text);
+}
+
+function parseAmvgg(text) {
   let joined = '';
   let pos = 0;
   const marker = 'self.__next_f.push(';
+  if (!text.includes('self.__next_f.push(')) joined = text;
   while (joined.length < 8 * 1024 * 1024) {
     const st = text.indexOf(marker, pos);
     if (st < 0) break;
@@ -3182,6 +3187,12 @@ async function loadAmvgg(deadlineMs) {
         const n = numberOf(d[field]);
         amv[key] = n !== null && n > 0 ? n : null;
       }
+      /* pets with a single price per age (no potion split on amvgg): that price counts for every potion */
+      for (const age of ['normal', 'neon', 'mega']) {
+        const base = amv[`${age}-fr`];
+        if (base === null) continue;
+        for (const pot of ['none', 'f', 'r']) if (amv[`${age}-${pot}`] === null) amv[`${age}-${pot}`] = base;
+      }
       const name = String(d.name).trim();
       pets.set(normName(name), { name, image: `https://amvgg.com/items/${encodeURIComponent(name)}.webp`, values: {}, amv });
     } catch { /* ignore */ }
@@ -3201,11 +3212,12 @@ async function loadElve(force) {
     const tried = new Set();
     const errors = [];
 
-    /* amvgg: read its exact format first */
-    if (src === VALUE_SOURCES.amvgg && !custom) {
+    /* amvgg: always read its exact format (field names map straight to the 12 versions) */
+    if (src === VALUE_SOURCES.amvgg) {
       try {
-        const pets = await loadAmvgg(15000);
-        elveCache = { ts: now(), pets, source: 'https://amvgg.com/values/pets' };
+        const amvUrl = /^https:\/\/(www\.)?amvgg\.com\//.test(custom) ? custom : 'https://amvgg.com/values/pets';
+        const pets = await loadAmvgg(15000, amvUrl);
+        elveCache = { ts: now(), pets, source: amvUrl };
         return elveCache;
       } catch (error) {
         errors.push(`amvgg format: ${error.name === 'TimeoutError' ? 'timed out' : error.message}`);
@@ -3220,6 +3232,9 @@ async function loadElve(force) {
       tried.add(url);
       try {
         const text = await fetchText(url, Math.min(7000, deadline - now()));
+        if (text.includes('"npRegularValue"')) {
+          try { const amvPets = parseAmvgg(text); elveCache = { ts: now(), pets: amvPets, source: url }; return elveCache; } catch { /* fall through */ }
+        }
         const pets = [];
         for (const data of extractJson(text)) pets.push(...collectPets(data, url));
 
@@ -3299,8 +3314,8 @@ app.post('/api/admin/values/import', auth, adminOnly, async (req, res) => {
   let data;
   try { data = await loadElve(true); } catch (error) { return bad(res, error.message, 502); }
   const onlyNormal = req.body.mode === 'normal';
-  const have = new Set(S.catalog.map(c => `${normName(c.name)}|${c.age || 'normal'}|${Boolean(c.fly)}|${Boolean(c.ride)}`));
-  let added = 0, skipped = 0, noImage = 0;
+  const have = new Map(S.catalog.map(c => [`${normName(c.name)}|${c.age || 'normal'}|${Boolean(c.fly)}|${Boolean(c.ride)}`, c]));
+  let added = 0, skipped = 0, updated = 0, noImage = 0;
   for (const pet of data.pets) {
     if (!/^https:\/\//.test(pet.image)) { noImage++; continue; }
     const name = pet.name.slice(0, 40);
@@ -3310,15 +3325,21 @@ app.post('/api/admin/values/import', auth, adminOnly, async (req, res) => {
       if (onlyNormal && pot !== 'none') continue;
       const fly = pot === 'f' || pot === 'fr', ride = pot === 'r' || pot === 'fr';
       const k = `${normName(name)}|${age}|${fly}|${ride}`;
-      if (have.has(k)) { skipped++; continue; }
-      have.add(k);
-      S.catalog.push({ id: rid(8), name, image: pet.image, value, age, fly, ride });
+      const old = have.get(k);
+      if (old) {
+        /* already in the catalog: keep the item, correct its value */
+        if (old.value !== value) { old.value = value; updated++; } else skipped++;
+        continue;
+      }
+      const item = { id: rid(8), name, image: pet.image, value, age, fly, ride };
+      have.set(k, item);
+      S.catalog.push(item);
       added++;
     }
   }
   markDirty();
   console.log(`[ADMIN] ${req.user.username} imported ${added} catalog items from ${valueSource().name}`);
-  res.json({ ok: true, added, skipped, pets: data.pets.length, noImage, source: valueSource().name });
+  res.json({ ok: true, added, updated, skipped, pets: data.pets.length, noImage, source: valueSource().name });
 });
 
 app.get('/api/admin/elve', auth, adminOnly, async (req, res) => {
@@ -3330,16 +3351,15 @@ app.get('/api/admin/elve', auth, adminOnly, async (req, res) => {
   catch (error) { return bad(res, error.message, 502); }
 
   const q = normName(name);
-  /* exact name first; otherwise the only pet whose name contains what was typed ("shadow drag" -> Shadow Dragon) */
-  const contains = data.pets.filter(p => normName(p.name).includes(q));
-  const exact = data.pets.find(p => normName(p.name) === q) || (contains.length === 1 ? contains[0] : null);
+  /* exact name only: "Dragon" never picks "Shadow Dragon" */
+  const exact = data.pets.find(p => normName(p.name) === q);
   const similar = data.pets
     .filter(p => normName(p.name) !== q && normName(p.name).includes(q))
     .slice(0, 8)
     .map(p => p.name);
 
   if (!exact) {
-    return bad(res, similar.length ? `Pet not found. Did you mean: ${similar.join(', ')}?` : `Pet not found on ${valueSource().name}`, 404);
+    return bad(res, similar.length ? `No pet named exactly "${name}". Did you mean: ${similar.join(', ')}?` : `No pet named exactly "${name}" on ${valueSource().name}`, 404);
   }
 
   const variants = petVariants(exact);
@@ -4190,13 +4210,14 @@ function adminUI() {
   async function elveFetch() {
     const name = $('a-name').value.trim();
     if (!name) { toast('Enter a pet name', 'err'); return; }
-    $('e-msg').textContent = 'Loading values from elvebredd…';
+    $('e-msg').textContent = 'Loading values…';
     $('e-fetch').disabled = true;
     try {
       const r = await api('/api/admin/elve?name=' + encodeURIComponent(name));
       $('a-name').value = r.name;
       if (r.image) { $('a-img').value = r.image; setPreview(); }
       let n = 0;
+      overlay.querySelectorAll('[data-var]').forEach(b => { b.value = ''; });
       for (const [key, value] of Object.entries(r.variants || {})) {
         const box = overlay.querySelector(`[data-var="${key}"]`);
         if (box && value !== null) { box.value = value; n++; }
@@ -4224,12 +4245,12 @@ function adminUI() {
   };
   const runImport = async mode => {
     const site = $('e-site').value + '.com';
-    if (!(await confirmBox({ title: 'Import pets', text: `Add every pet from ${site} to the catalog (${mode === 'normal' ? 'normal versions only' : 'all versions'}, values x1000)? Pets already in the catalog are skipped.`, ok: 'Import' }))) return;
+    if (!(await confirmBox({ title: 'Import pets', text: `Add every pet from ${site} to the catalog (${mode === 'normal' ? 'normal versions only' : 'all versions'}, values x1000)? Pets already in the catalog keep their item but get the correct value.`, ok: 'Import' }))) return;
     $('imp-msg').textContent = `Loading ${site}…`;
     $('imp-all').disabled = $('imp-normal').disabled = true;
     try {
       const r = await api('/api/admin/values/import', { method: 'POST', body: { mode } });
-      $('imp-msg').textContent = `${r.pets} pets found on ${r.source}: ${r.added} added, ${r.skipped} already in the catalog${r.noImage ? `, ${r.noImage} without picture skipped` : ''}`;
+      $('imp-msg').textContent = `${r.pets} pets found on ${r.source}: ${r.added} added, ${r.updated || 0} values corrected, ${r.skipped} already correct${r.noImage ? `, ${r.noImage} without picture skipped` : ''}`;
       toast(`${r.added} catalog items added`, 'ok');
       await load();
     } catch (err) { $('imp-msg').textContent = err.message; toast(err.message, 'err'); }
