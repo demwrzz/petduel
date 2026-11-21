@@ -23,20 +23,10 @@ const MAX_ITEMS = 20;
 
 const DISCORD_INVITE = E.DISCORD_INVITE || 'https://discord.gg/TaPXaAseP';
 
-/* ---- Discord webhooks ----
-   Paste a webhook URL between the quotes, or set the same name in Render > Environment
-   (the Render value wins). Anyone who can read this file can post with a webhook that is pasted here,
-   so only paste them if the GitHub repository is private. */
-const WEBHOOKS = {
-  giveaway: '',   /* DISCORD_GW_WEBHOOK: new giveaways, giveaway winners, event winners */
-  coinflip: '',   /* DISCORD_CF_WEBHOOK: new and finished coinflips, bounties */
-  jackpot: '',    /* DISCORD_JP_WEBHOOK: jackpot winners (falls back to the coinflip one) */
-  withdraw: ''    /* DISCORD_WD_WEBHOOK: withdraw requests, for staff */
-};
-const WEBHOOK_GW = E.DISCORD_GW_WEBHOOK || WEBHOOKS.giveaway;
-const WEBHOOK_CF = E.DISCORD_CF_WEBHOOK || WEBHOOKS.coinflip;
-const WEBHOOK_JP = E.DISCORD_JP_WEBHOOK || WEBHOOKS.jackpot || WEBHOOK_CF;
-const WEBHOOK_WD = E.DISCORD_WD_WEBHOOK || WEBHOOKS.withdraw;
+/* ---- Discord ----
+   Webhooks are gone: every coinflip / jackpot / giveaway / event / withdraw message is posted by the
+   PetDuel Discord bot, which gets them live from this server (see sendWebhook > io.to('bots')). */
+const WEBHOOK_GW = 'bot', WEBHOOK_CF = 'bot', WEBHOOK_JP = 'bot', WEBHOOK_WD = 'bot';
 const SITE_URL = E.SITE_URL || 'https://petduel.win';
 /* giveaways can run as long as you like (the cap is only a safety limit) */
 const MAX_GW_SECONDS = 365 * 24 * 60 * 60;
@@ -160,17 +150,6 @@ function sendWebhook(url, embed, opts = {}) {
   };
   /* the Discord bot gets every event live, even when no webhook URL is set */
   if (typeof io !== 'undefined') io.to('bots').emit('bot:event', { kind: embedKind(embed.title), embed: full, data: opts.data || null });
-  if (!url) return;
-  fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      username: 'Pet Duel',
-      allowed_mentions: { parse: [] },
-      embeds: [full]
-    }),
-    signal: AbortSignal.timeout(8000)
-  }).catch(err => console.error('Webhook error:', err.message));
 }
 
 function isAdmin(user) {
@@ -1983,6 +1962,9 @@ app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
 });
 
 const UPDATE_LOG = [
+  { version: '4.4', title: 'Webhooks removed', changes: [
+    'Discord webhooks are removed: the PetDuel Discord bot posts coinflips, jackpots, giveaways, events and withdraw requests itself'
+  ] },
   { version: '4.3', title: 'Discord bot connection', changes: [
     'The PetDuel Discord bot connects with a secret key (only its hash is in the code): it can use every admin action, gets every site event live and is not affected by the country block or maintenance',
     'Players link their Discord account: Profile > Link Discord gives a code for /link in Discord'

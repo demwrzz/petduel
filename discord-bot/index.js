@@ -126,26 +126,21 @@ async function start() {
 const staffRoles = guild => guild.roles.cache.filter(r =>
   !r.managed && r.id !== guild.id && (CONFIG.staffRoleNames.includes(r.name) || r.permissions.has(PermissionFlagsBits.ManageMessages)));
 
-const findChannel = (guild, name) => guild.channels.cache.find(c => c.type === ChannelType.GuildText && c.name === name);
-
-async function ensureCategory(guild, name) {
-  return guild.channels.cache.find(c => c.type === ChannelType.GuildCategory && c.name.toLowerCase() === name.toLowerCase()) ||
-    guild.channels.create({ name, type: ChannelType.GuildCategory, reason: 'PetDuel setup' });
-}
-
-async function ensureChannel(guild, name, parent) {
-  const existing = findChannel(guild, name);
-  if (existing) return existing;
-  const everyone = guild.id;
-  const overwrites = [];
-  if (CONFIG.staffOnly.includes(name)) {
-    overwrites.push({ id: everyone, deny: [PermissionFlagsBits.ViewChannel] });
-    for (const r of staffRoles(guild).values()) overwrites.push({ id: r.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] });
-  } else if (CONFIG.readOnly.includes(name)) {
-    overwrites.push({ id: everyone, deny: [PermissionFlagsBits.SendMessages], allow: [PermissionFlagsBits.ViewChannel] });
+/* finds a channel: by the ID in config.json (channelIds), otherwise by name, ignoring emojis and
+   decorations, so "🪙┃coinflips" or "coinflips-🪙" both match "coinflips" */
+const norm = v => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+function findChannel(guild, name) {
+  if (!guild) return null;
+  const key = Object.keys(CH).find(k => CH[k] === name);
+  const id = key && CONFIG.channelIds && CONFIG.channelIds[key];
+  if (id) {
+    const byId = guild.channels.cache.get(String(id));
+    if (byId) return byId;
   }
-  overwrites.push({ id: guild.members.me.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks, PermissionFlagsBits.ManageMessages] });
-  return guild.channels.create({ name, type: ChannelType.GuildText, parent: parent ? parent.id : undefined, permissionOverwrites: overwrites, reason: 'PetDuel setup' });
+  const text = guild.channels.cache.filter(c => c.type === ChannelType.GuildText || c.type === ChannelType.GuildAnnouncement);
+  const want = norm(name);
+  return text.find(c => c.name === name) || text.find(c => norm(c.name) === want) ||
+    text.find(c => norm(c.name).endsWith(want) || norm(c.name).startsWith(want)) || null;
 }
 
 let siteRanks = [];
@@ -180,12 +175,12 @@ async function setupGuild(guild) {
     await guild.members.fetchMe();
     await guild.roles.fetch();
     await guild.channels.fetch();
-    const main = await ensureCategory(guild, CONFIG.category);
-    const staff = await ensureCategory(guild, CONFIG.staffCategory);
-    for (const key of ['announcements', 'rules', 'howToPlay', 'website', 'giveaways', 'coinflips', 'jackpots', 'openTicket', 'chat']) await ensureChannel(guild, CH[key], main);
-    for (const key of ['withdrawals', 'adminChat', 'moderatorChat', 'ticketLogs', 'botLogs']) await ensureChannel(guild, CH[key], staff);
+    /* the bot never creates channels: it uses the ones that already exist */
+    const missing = Object.keys(CH).filter(k => !findChannel(guild, CH[k]));
+    if (missing.length) console.log(`  Not found in "${guild.name}" (ok, those messages are skipped or go to another channel): ${missing.map(k => CH[k]).join(', ')}`);
     await ensureRoles(guild);
 
+    if (!CONFIG.postInfoMessages) { await registerCommands(guild); console.log(`Ready in "${guild.name}".`); return; }
     await postOnce(findChannel(guild, CH.openTicket), ticketPanel());
     await postOnce(findChannel(guild, CH.website), {
       embeds: [embed('🌐 petduel.win', `**Adopt Me PvP duels**: coinflip, jackpot, giveaways and events.\n\n👉 **${SITE}**\n\nLink your account with \`/link\` (get the code on the site: Profile > Link Discord) to get your rank role!`)],
@@ -379,7 +374,9 @@ function connectSite() {
     if (!target || !ev.embed) return;
     for (const guild of client.guilds.cache.values()) {
       if (ONLY_GUILD && guild.id !== ONLY_GUILD) continue;
-      const ch = findChannel(guild, target);
+      const ch = findChannel(guild, target) ||
+        (ev.kind === 'withdraw' ? findChannel(guild, CH.adminChat) : null) ||
+        (ev.kind === 'jackpot' || ev.kind === 'bounty' ? findChannel(guild, CH.coinflips) : null);
       if (!ch) continue;
       const e = { ...ev.embed, color: ev.embed.color || COLOR };
       const payload = { embeds: [e] };
@@ -449,7 +446,8 @@ async function openTicket(interaction) {
   const existing = guild.channels.cache.find(c => c.topic === `ticket:${interaction.user.id}`);
   if (existing) return interaction.reply({ content: `You already have a ticket: ${existing}`, flags: EPHEMERAL });
 
-  const category = await ensureCategory(guild, CONFIG.ticketCategory);
+  const panel = findChannel(guild, CH.openTicket);
+  const parentId = panel ? panel.parentId : null;   /* the ticket opens in the same category as #open-ticket */
   const overwrites = [
     { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
     { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles, PermissionFlagsBits.ReadMessageHistory] },
@@ -458,7 +456,7 @@ async function openTicket(interaction) {
   ];
   const ch = await guild.channels.create({
     name: `ticket-${interaction.user.username}`.toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 90) || 'ticket',
-    type: ChannelType.GuildText, parent: category.id, topic: `ticket:${interaction.user.id}`, permissionOverwrites: overwrites
+    type: ChannelType.GuildText, parent: parentId || undefined, topic: `ticket:${interaction.user.id}`, permissionOverwrites: overwrites
   });
 
   await ch.send({
