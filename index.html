@@ -1100,6 +1100,8 @@
     @media (max-width: 1500px) { .nav-link .nl-t { display: none; } .nav-link { padding: 8px; } }
     @media (max-width: 650px) { .nav-link .nl-t { display: inline; } }
     .foot-fun { color: #c3e8da !important; }
+    .foot-warn { color: #e0c4c7 !important; }
+    .foot-warn b { color: var(--red); }
     .foot-fun b { color: var(--green); }
     .foot-links a { color: #9aa0ad; cursor: pointer; text-decoration: underline; }
     .foot-links a:hover { color: #fff; }
@@ -1432,8 +1434,9 @@
     <footer class="site-footer">
       <div class="foot-brand">PET<span>DUEL</span></div>
       <p class="foot-fun"><b>🎮 For entertainment only.</b> Gems and values on Pet Duel have no monetary value. Nothing is sold for real money and nothing can be cashed out or exchanged for real money.</p>
+      <p class="foot-warn"><b>18+ only.</b> Deposits are at your own risk: bot accounts can be banned and pets can be lost. You are responsible for following the laws of your country; do not use Pet Duel where it is not allowed. Not available in Turkey.</p>
       <p>Pet Duel is an independent project. It is not affiliated with, endorsed by, sponsored by, or in any way associated with Adopt Me!, Uplift Games or Roblox Corporation. All game names, logos, pet images and trademarks belong to their respective owners.</p>
-      <p class="foot-links"><a data-action="info" data-page="tos">Terms of Service</a> · <a data-action="info" data-page="fair">Provably Fair</a> · <a data-action="info" data-page="faq">FAQ</a></p>
+      <p class="foot-links"><a data-action="info" data-page="tos">Terms of Service</a> · <a data-action="info" data-page="privacy">Privacy Policy</a> · <a data-action="info" data-page="fair">Provably Fair</a> · <a data-action="info" data-page="faq">FAQ</a></p>
     </footer>
   </div>
 
@@ -2881,7 +2884,7 @@
         ${LOGIN_DECO}
         <div class="lg-body">
           <h2>Welcome to Pet<span>Duel</span></h2>
-          <p class="lg-sub">By logging in, you confirm that you are old enough to bet items where you live, that any pets you wager are not stolen, and that you agree to our Terms of Service. Pet Duel is for entertainment only: gems have no monetary value.</p>
+          <p class="lg-sub">By logging in, you confirm that you are <b>18 or older</b>, that using Pet Duel is allowed where you live, that any pets you wager are not stolen, and that you agree to our Terms of Service and Privacy Policy. Pet Duel is for entertainment only: gems have no monetary value.</p>
 
           <label class="lg-check">
             <input type="checkbox" id="loginTos">
@@ -3723,34 +3726,84 @@
       if (page === "tos") {
         return `
           <div class="info">
-            <div class="fun-note"><b>🎮 Entertainment only</b>Pet Duel is made for fun. The gems and values shown on the site <b>have no monetary value</b>: they only compare pets with each other. Nothing on Pet Duel is sold for real money, and nothing can be cashed out or exchanged for real money. Do not buy pets with real money to use them here.</div>
+            <p class="muted" style="font-size:12px">Last updated: November 2026. By creating an account or using Pet Duel in any way you agree to these Terms. If you do not agree, do not use the site.</p>
+
+            <div class="fun-note"><b>🎮 Entertainment only, no monetary value</b>Pet Duel is made for fun. The gems and values shown on the site <b>have no monetary value</b>: they are only used to compare pets with each other. Nothing on Pet Duel is sold for real money, nothing can be bought with real money and nothing can be cashed out or exchanged for real money, crypto or any other currency. Do not buy pets or Robux with real money to use them on Pet Duel.</div>
+
             <h4>1. About Pet Duel</h4>
-            <p>Pet Duel is a fan-made site for entertainment where players play coinflip and jackpot games with Adopt Me pets. It is not made by, sponsored by or connected to Roblox Corporation or the makers of Adopt Me.</p>
-            <h4>2. Who can play</h4>
-            <p>You must follow the Roblox Terms of Use and be old enough to take part in item betting where you live. One account per person.</p>
-            <h4>3. Items</h4>
+            <p>Pet Duel ("we", "us", "the site") is an independent, fan-made entertainment site where players play coinflip, jackpot and giveaway games with Adopt Me pets. Pet Duel is <b>not affiliated with, endorsed by, sponsored by or connected to</b> Roblox Corporation, Uplift Games or Adopt Me. All game names, logos, pet images and trademarks belong to their owners.</p>
+
+            <h4>2. Who may use Pet Duel</h4>
             <ul>
-              <li>Pets are virtual items with no real money value. Values on the site are only used to match fair games.</li>
-              <li>Deposits are checked by hand and appear in your inventory once an admin confirms them.</li>
-              <li><b>Deposits are at your own risk.</b> Bot accounts can be banned by Roblox / Adopt Me and pets on a banned bot can be lost.</li>
-              <li>Every deposit trade must contain at least 6 food items.</li>
-              <li>Only trade with the official bots listed in the Deposit window. We are not responsible for trades with impostors.</li>
-              <li>Withdrawals are sent by admins and can take some time.</li>
+              <li>You must be <b>at least 18 years old</b>, or the age of majority where you live if that is higher. If you are younger, you may not use Pet Duel.</li>
+              <li>You are <b>solely responsible</b> for making sure that using Pet Duel is allowed by the laws of your country, state and city. <b>Do not use Pet Duel where it is not allowed.</b> Pet Duel is not offered in, and may not be used from, countries where such games are restricted, including <b>Turkey</b>. Using a VPN or any other tool to get around a country block is a breach of these Terms.</li>
+              <li>You must follow the Roblox Terms of Use and the rules of Adopt Me. Your Roblox account and anything that happens to it is your own responsibility.</li>
+              <li>One account per person. Accounts may not be shared, sold or transferred.</li>
             </ul>
+
+            <h4>3. Pets, deposits and withdrawals</h4>
+            <ul>
+              <li><b>Deposits are entirely at your own risk.</b> Roblox or Adopt Me may ban, restrict or reset trading accounts (including our bot accounts) at any time. Pets held by a banned or restricted account can be lost, and <b>we are not obliged to replace or refund them</b>.</li>
+              <li>You may only deposit pets that you own and obtained legitimately. Stolen, scammed, duplicated or purchased-with-real-money pets are not allowed and may be removed without compensation.</li>
+              <li>Deposits are confirmed by hand and are only credited after an admin confirms them. Every deposit trade must follow the instructions shown in the Deposit window (including at least 6 food items).</li>
+              <li>Only trade with the bot shown in the Deposit window. Staff will never ask you for pets in direct messages. <b>We are not responsible for trades with anyone else</b>, including impostors.</li>
+              <li>Withdrawals are sent by hand and can take time. We may delay, refuse or reverse a withdrawal if we suspect abuse, a bug, fraud or a breach of these Terms.</li>
+              <li>Pets and gems on your Pet Duel balance are a <b>limited, revocable permission</b> to use them on the site, not your property, and have no monetary value.</li>
+            </ul>
+
             <h4>4. Games</h4>
             <ul>
-              <li>Every game result is final. Lost pets are not refunded.</li>
-              <li>${tax > 0 ? `A ${tax}% tax is taken from the pot of each finished coinflip.` : "A small tax may be taken from finished coinflip pots; it is always shown before you play."}</li>
-              <li>Results are provably fair, see the Provably Fair page.</li>
+              <li>All game results are <b>final</b>. Pets lost in a game are not refunded.</li>
+              <li>Results are decided by the provably fair system described on the Provably Fair page.</li>
+              <li>${tax > 0 ? `A ${tax}% fee is taken from the pot of each finished coinflip.` : "A fee may be taken from finished coinflip pots; it is always shown before you play."}</li>
+              <li>If a game is affected by a bug, outage, server restart or abuse, we may cancel it, void the result and return the pets as they were before the game. Our decision is final.</li>
             </ul>
+
             <h4>5. Not allowed</h4>
             <ul>
-              <li>Scamming, impersonating bots or staff, using bugs or alt accounts to get an advantage.</li>
-              <li>Spam, hate speech, threats or advertising in the chat.</li>
+              <li>Scamming, impersonating bots or staff, using bugs, exploits, scripts, multiple accounts or any unfair advantage.</li>
+              <li>Spam, hate speech, threats, harassment, advertising or sharing personal information in the chat.</li>
+              <li>Trying to attack, overload or get unauthorised access to the site.</li>
             </ul>
-            <p>Breaking the rules can lead to a mute, a ban and the loss of items won unfairly.</p>
-            <h4>6. Changes</h4>
-            <p>These terms can change at any time. By using the site you accept the current version.</p>
+            <p>We may mute, suspend or ban any account, remove pets that were won or obtained unfairly, and refuse service to anyone, at any time and without notice.</p>
+
+            <h4>6. No warranty</h4>
+            <p>Pet Duel is provided <b>"as is" and "as available"</b>, without any warranty of any kind. We do not promise that the site will be available, error-free, secure or that any data, balance or pet will be kept. The site may be changed, paused or <b>closed at any time</b>, with or without notice.</p>
+
+            <h4>7. Limitation of liability</h4>
+            <p>To the maximum extent allowed by law, Pet Duel, its owners, admins and helpers are <b>not liable</b> for any loss or damage of any kind, including lost pets, lost Roblox items, banned or restricted Roblox accounts, lost data or any indirect or consequential loss, arising from your use of the site, trades with our bots, actions of Roblox or Adopt Me, outages, bugs or the closure of the site. Where liability cannot be excluded, it is limited to the smallest amount allowed by law.</p>
+
+            <h4>8. Your responsibility</h4>
+            <p>You use Pet Duel at your own risk and you are responsible for your own actions on it. You agree to take responsibility for, and hold Pet Duel and its owners and admins harmless from, any claim, loss or problem caused by your breach of these Terms, of the Roblox / Adopt Me rules or of any law that applies to you.</p>
+
+            <h4>9. Closing the site</h4>
+            <p>We may close Pet Duel permanently at any time. If we do, we will try to announce it and give players the chance to withdraw their pets, but we cannot guarantee this, and nothing remains owed after the site closes.</p>
+
+            <h4>10. Changes</h4>
+            <p>We may change these Terms at any time. The version on the site is the one that applies. If you keep using Pet Duel after a change, you accept the new Terms.</p>
+
+            <h4>11. Contact</h4>
+            <p>Questions or problems: open a ticket in our Discord server.</p>
+          </div>`;
+      }
+
+      if (page === "privacy") {
+        return `
+          <div class="info">
+            <p class="muted" style="font-size:12px">Last updated: November 2026</p>
+            <h4>What we store</h4>
+            <ul>
+              <li>Your <b>Roblox user ID, Roblox username, display name and avatar</b> (to log you in and show your profile).</li>
+              <li>Your <b>site nickname</b>, your pets on the site, your games, transactions, withdrawals and chat messages.</li>
+              <li>Your <b>IP address and country</b>, only to protect the site (rate limits, spam and abuse protection, country blocks). They are not sold or shared.</li>
+              <li>A login token in your browser's local storage, and a cookie for staff access. No advertising or tracking cookies.</li>
+            </ul>
+            <h4>What we do not store</h4>
+            <p>We never ask for and never store your Roblox password. We do not collect payment details, because nothing is sold for money.</p>
+            <h4>Who can see it</h4>
+            <p>Other players see your nickname, avatar, rank, games and public stats. Admins can see your Roblox username to handle deposits and withdrawals. Game results and some events are posted to our Discord server with your nickname and avatar.</p>
+            <h4>Deleting your data</h4>
+            <p>Open a ticket in our Discord server to ask for your account to be deleted. When the site closes, its data is deleted.</p>
           </div>`;
       }
 
@@ -3786,7 +3839,7 @@
     }
 
     function showInfo(page) {
-      const titles = { updates: "Updates", tos: "Terms of Service", fair: "Provably Fair", faq: "FAQ" };
+      const titles = { updates: "Updates", tos: "Terms of Service", privacy: "Privacy Policy", fair: "Provably Fair", faq: "FAQ" };
       const key = titles[page] ? page : "faq";
       gridContext = null;
       viewMatchId = null;
