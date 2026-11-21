@@ -308,11 +308,7 @@ function snapshot() {
      in the snapshot, so nothing is ever lost or duplicated after a restart. */
   const users = JSON.parse(JSON.stringify(S.users));
 
-  for (const m of Object.values(S.matches)) {
-    if (m.state === 'finished') continue;
-    if (users[m.host.id]) users[m.host.id].inventory.push(...JSON.parse(JSON.stringify(m.hostItems)));
-    if (m.opp && users[m.opp.id]) users[m.opp.id].inventory.push(...JSON.parse(JSON.stringify(m.oppItems)));
-  }
+  /* open coinflips and the chat are saved as they are, so a restart does not cancel games or clear the chat */
   /* giveaways are saved as they are (they can run for days), so they survive a restart */
 
   /* items sitting in an unfinished jackpot round go back to their owners */
@@ -334,6 +330,8 @@ function snapshot() {
     settings: S.settings,
     updateNotes: S.updateNotes,
     giveaways: S.giveaways,
+    matches: Object.fromEntries(Object.entries(S.matches).filter(([, m]) => m.state !== 'finished')),
+    chat: S.chat.slice(-60),
     bots: S.bots.map(b => ({ id: b.id, username: b.username, link: b.link, online: b.online !== false }))
   };
 }
@@ -370,6 +368,8 @@ async function initDb() {
       S.bots = Array.isArray(d.bots) ? d.bots : [];
       S.updateNotes = d.updateNotes || [];
       S.giveaways = Object.assign(Object.create(null), d.giveaways || {});
+      S.matches = Object.assign(Object.create(null), d.matches || {});
+      S.chat = Array.isArray(d.chat) ? d.chat.slice(-60) : [];
       console.log('State loaded from MongoDB.');
     }
   } catch (err) {
@@ -1350,6 +1350,20 @@ function finishMatch(match) {
   setTimeout(() => removeFinishedMatch(match.id), 45000);
 }
 
+/* after a restart: games that were already joined are played to the end (their result was fixed when they were joined) */
+function resumeMatches() {
+  for (const m of Object.values(S.matches)) {
+    if (m.state === 'countdown') {
+      m.startedAt = now();
+      runMatch(m);
+    } else if (m.state === 'flipping') {
+      setTimeout(() => finishMatch(m), 2400);
+    }
+  }
+  const open = Object.values(S.matches).length;
+  if (open) console.log(`Resumed ${open} open coinflip(s) after restart.`);
+}
+
 function runMatch(match) {
   setTimeout(() => {
     if (match.state !== 'countdown') return;
@@ -1467,6 +1481,7 @@ app.post('/api/match/cancel', auth, actionLimit, (req, res) => {
 function pushChat(message) {
   S.chat.push(message);
   if (S.chat.length > 60) S.chat.shift();
+  markDirty();
   io.emit('chat:msg', message);
 }
 
@@ -1731,6 +1746,10 @@ app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
 });
 
 const UPDATE_LOG = [
+  { version: '3.6', title: 'Games and chat survive restarts', changes: [
+    'Open coinflips and the last 60 chat messages are saved in the database: a restart / deploy no longer cancels games or clears the chat',
+    'Games that were already joined when the server restarted are played to the end with their original (provably fair) result'
+  ] },
   { version: '3.5', title: 'No withdrawals while bots are offline', changes: [
     'Withdraw requests are refused while every deposit bot is offline; the wallet shows a notice and disables the button'
   ] },
@@ -4269,6 +4288,7 @@ process.on('uncaughtException', err => console.error('Uncaught exception:', err 
   ensureDefaultBot();
   newJackpot();
   auditItems();
+  resumeMatches();
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`Pet Duel running on port ${PORT}`);
     console.log(mongoColl ? 'Storage: MongoDB' : 'Storage: MEMORY ONLY (resets on restart)');
