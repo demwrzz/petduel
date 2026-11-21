@@ -14,12 +14,12 @@ Bunları kimseyle paylaşma, GitHub'a yükleme.
   **Server Members Intent** ve **Message Content Intent** açık olsun (giriş/çıkış ve silinen mesaj logları için).
 - Sunucuda botun rolüne **Administrator** ver ve bot rolünü rank rollerinin **üstüne** taşı.
 
-## Bot ilk açıldığında otomatik olarak
-- PET DUEL ve STAFF kategorilerini ve şu kanalları oluşturur (varsa dokunmaz):
-  announcements, rules, how-to-play, website, giveaways, coinflips, jackpots, open-ticket, chat,
-  withdrawals, admin-chat, moderator-chat, ticket-logs, bot-logs
-- Sitedeki 12 rank için renkli roller + `Linked` rolü oluşturur
-- open-ticket'e ticket butonu, rules / how-to-play / website kanallarına bilgi mesajlarını koyar
+## Kanallar
+- Bot **hiç kanal kurmaz**, var olan kanalları kullanır.
+- Kanalları `config.json` → `channelIds` içindeki ID ile, ID yoksa isimle bulur (emoji ve süsler önemsiz: "🪙┃coinflips" = coinflips).
+- Coinflip ve jackpot → coinflip kanalı, giveaway ve event'ler → giveaway kanalı, çekim istekleri → #withdrawals (yoksa #admin-chat).
+- Sitedeki 12 rank için renkli roller + `Linked` rolü sadece eksikse oluşturulur.
+- Ticket butonunu koymak için kanalda `/ticketpanel` yaz.
 
 ## Komutlar
 Herkes: `/link` `/unlink` `/profile` `/rank` `/leaderboard` `/stats` `/games` `/website` `/coinflip` `/help`
