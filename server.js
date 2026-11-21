@@ -3142,6 +3142,54 @@ async function fetchText(url, ms = 7000) {
   return (await response.text()).slice(0, 6 * 1024 * 1024);
 }
 
+/* ---------- amvgg.com: exact format ----------
+   The values page is a Next.js page; its data comes in self.__next_f.push chunks. Every pet is an object like
+   {"id":"…","name":"Shadow Dragon","regularValue":"3.775","npRegularValue":"4.55","fValue":…,"rValue":…,
+    "neonValue":…,"npNeonValue":…,"nfValue":…,"nrValue":…,"megaValue":…,"npMegaValue":…,"mfValue":…,"mrValue":…}
+   np = no potion, regular / neon / mega = fly ride, f = fly, r = ride. Pictures: /items/<name>.webp */
+const AMV_FIELDS = {
+  'normal-none': 'npRegularValue', 'normal-f': 'fValue', 'normal-r': 'rValue', 'normal-fr': 'regularValue',
+  'neon-none': 'npNeonValue', 'neon-f': 'nfValue', 'neon-r': 'nrValue', 'neon-fr': 'neonValue',
+  'mega-none': 'npMegaValue', 'mega-f': 'mfValue', 'mega-r': 'mrValue', 'mega-fr': 'megaValue'
+};
+
+async function loadAmvgg(deadlineMs) {
+  const text = await fetchText('https://amvgg.com/values/pets', deadlineMs);
+  let joined = '';
+  let pos = 0;
+  const marker = 'self.__next_f.push(';
+  while (joined.length < 8 * 1024 * 1024) {
+    const st = text.indexOf(marker, pos);
+    if (st < 0) break;
+    const arr = sliceJson(text, st + marker.length);
+    if (!arr) { pos = st + marker.length; continue; }
+    pos = st + marker.length + arr.length;
+    try { const v = JSON.parse(arr); if (typeof v[1] === 'string') joined += v[1]; } catch { /* ignore */ }
+  }
+  const pets = new Map();
+  pos = 0;
+  while (pets.size < 5000) {
+    const st = joined.indexOf('{"id":"', pos);
+    if (st < 0) break;
+    const obj = sliceJson(joined, st, 20000);
+    pos = st + 7;
+    if (!obj || !obj.includes('"npRegularValue"')) continue;
+    try {
+      const d = JSON.parse(obj);
+      if (!d.name) continue;
+      const amv = {};
+      for (const [key, field] of Object.entries(AMV_FIELDS)) {
+        const n = numberOf(d[field]);
+        amv[key] = n !== null && n > 0 ? n : null;
+      }
+      const name = String(d.name).trim();
+      pets.set(normName(name), { name, image: `https://amvgg.com/items/${encodeURIComponent(name)}.webp`, values: {}, amv });
+    } catch { /* ignore */ }
+  }
+  if (pets.size < 5) throw new Error('amvgg.com page has no pet data');
+  return [...pets.values()];
+}
+
 async function loadElve(force) {
   if (!force && elveCache.pets.length && now() - elveCache.ts < ELVE_TTL) return elveCache;
   if (elveLoading) return elveLoading;
@@ -3152,6 +3200,17 @@ async function loadElve(force) {
     const queue = custom ? [custom, ...src.urls] : [...src.urls];
     const tried = new Set();
     const errors = [];
+
+    /* amvgg: read its exact format first */
+    if (src === VALUE_SOURCES.amvgg && !custom) {
+      try {
+        const pets = await loadAmvgg(15000);
+        elveCache = { ts: now(), pets, source: 'https://amvgg.com/values/pets' };
+        return elveCache;
+      } catch (error) {
+        errors.push(`amvgg format: ${error.name === 'TimeoutError' ? 'timed out' : error.message}`);
+      }
+    }
     /* Cloudflare in front of the site cuts requests after ~100 s, so the whole lookup must stay short */
     const deadline = now() + 20000;
 
@@ -3220,6 +3279,11 @@ function pickValue(pet, age, fly, ride) {
 
 /* the 12 versions of one pet in the site's scale (null = the value site has no price for it) */
 function petVariants(pet) {
+  if (pet.amv) {
+    const out = {};
+    for (const [key, v] of Object.entries(pet.amv)) out[key] = v === null ? null : round2(v * VALUE_SCALE);
+    return out;
+  }
   const out = {};
   for (const age of ['normal', 'neon', 'mega']) {
     for (const [pot, fly, ride] of [['none', false, false], ['f', true, false], ['r', false, true], ['fr', true, true]]) {
@@ -3266,7 +3330,9 @@ app.get('/api/admin/elve', auth, adminOnly, async (req, res) => {
   catch (error) { return bad(res, error.message, 502); }
 
   const q = normName(name);
-  const exact = data.pets.find(p => normName(p.name) === q);
+  /* exact name first; otherwise the only pet whose name contains what was typed ("shadow drag" -> Shadow Dragon) */
+  const contains = data.pets.filter(p => normName(p.name).includes(q));
+  const exact = data.pets.find(p => normName(p.name) === q) || (contains.length === 1 ? contains[0] : null);
   const similar = data.pets
     .filter(p => normName(p.name) !== q && normName(p.name).includes(q))
     .slice(0, 8)
