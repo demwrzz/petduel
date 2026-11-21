@@ -370,7 +370,8 @@ function snapshot() {
     jackpot: JP && JP.state !== 'finished' ? { ...JP, winner: null } : null,
     jpHistory: S.jpHistory.slice(0, 100),
     chat: S.chat.slice(-60),
-    bots: S.bots.map(b => ({ id: b.id, username: b.username, link: b.link, online: b.online !== false }))
+    bots: S.bots.map(b => ({ id: b.id, username: b.username, link: b.link, online: b.online !== false })),
+    eventEscrow: S.eventEscrow || null
   };
 }
 
@@ -411,6 +412,14 @@ async function initDb() {
       S.chat = Array.isArray(d.chat) ? d.chat.slice(-60) : [];
       savedJackpot = d.jackpot || null;
       S.jpHistory = Array.isArray(d.jpHistory) ? d.jpHistory : [];
+      /* an event prize from an admin's inventory was in play when the server stopped: give it back */
+      const esc = d.eventEscrow;
+      if (esc && esc.item && S.users[esc.userId]) {
+        S.users[esc.userId].inventory.push(esc.item);
+        console.log(`Event prize ${esc.item.name} returned to ${S.users[esc.userId].username} after a restart`);
+        dirty = true;
+      }
+      S.eventEscrow = null;
       console.log('State loaded from MongoDB.');
     }
   } catch (err) {
@@ -1971,7 +1980,9 @@ const UPDATE_LOG = [
     'Support members can only mute (up to 24 h); withdrawals are handled by admins only (site and Discord)',
     'Every Support mute / unmute shows up in the admin notification bell with who, whom, how long and the reason',
     'Optional "Delete messages" box when muting: off keeps the player\'s chat messages, on removes them',
-    'Pet values: exact pet names only, amvgg fields read directly, import corrects the values of pets already in the catalog'
+    'Pet values: exact pet names only, amvgg fields read directly, import corrects the values of pets already in the catalog',
+    'Events: pick the prize from your own inventory (it comes back to you if nobody wins, the event is cancelled or the server restarts) or from the catalog',
+    'A Christmas dog walks to the end of the typing text at the top of the site'
   ] },
   { version: '4.5', title: 'Support team and amvgg values', changes: [
     'Support role: admins give / remove it in the admin panel. Support members get a blue SUPPORT tag and a Support Panel (mark withdrawals as sent, mute up to 24 h)',
@@ -2550,7 +2561,7 @@ app.get('/api/withdrawals', auth, (req, res) => {
 });
 
 /* ================= EVENTS (wheel + word scramble) =================
-   Prize items are created from a catalog item only when someone wins.
+   The prize is a pet from the admin's own inventory (kept aside, returned if nobody wins) or a catalog item.
    Events live in memory: a restart simply ends the running event. */
 
 const SCRAMBLE_WORDS = [
@@ -2656,8 +2667,42 @@ function scheduleEventClear(ev) {
   }, 60000);
 }
 
+/* the prize comes from the admin's own inventory (invUid) or is created from a catalog item (itemId) */
+function takeEventPrize(req) {
+  const uid = String(req.body.invUid || '');
+  if (uid) {
+    const idx = req.user.inventory.findIndex(i => i.uid === uid);
+    if (idx < 0) return { error: 'That pet is not in your inventory anymore' };
+    return { item: req.user.inventory[idx], fromUser: req.user.id, idx };
+  }
+  const catalogItem = S.catalog.find(x => x.id === req.body.itemId);
+  if (!catalogItem) return { error: 'Pick a prize pet' };
+  return { item: newItem(catalogItem), fromUser: null };
+}
+
+function lockEventPrize(req, picked) {
+  if (picked.fromUser) {
+    req.user.inventory.splice(picked.idx, 1);
+    S.eventEscrow = { userId: req.user.id, item: picked.item };
+    emitMe(req.user);
+    markDirty();
+  }
+}
+
+/* nobody won (or the event was cancelled): an inventory prize goes back to its owner */
+function returnEventPrize(ev) {
+  if (!ev.prizeFrom || ev.prizeSettled) return;
+  ev.prizeSettled = true;
+  const owner = S.users[ev.prizeFrom];
+  if (owner) { owner.inventory.push(ev.prize); emitMe(owner); }
+  S.eventEscrow = null;
+  markDirty();
+}
+
 function awardPrize(user, ev) {
   const item = ev.prize;
+  ev.prizeSettled = true;
+  if (ev.prizeFrom) { S.eventEscrow = null; markDirty(); }
 
   user.inventory.push(item);
   addTransaction(user, 'Event Win', ev.id, item.value);
@@ -2692,6 +2737,7 @@ function beginWheel(ev) {
   if (alive.length < 2) {
     ev.status = 'finished';
     ev.note = 'Not enough players (at least 2 needed).';
+    returnEventPrize(ev);
     emitEvent();
     eventChat('Wheel event cancelled: not enough players.');
     scheduleEventClear(ev);
@@ -2746,7 +2792,7 @@ function finishWheel(ev) {
   ev.phase = 'done';
   ev.winner = winnerPublic || null;
 
-  if (user) awardPrize(user, ev);
+  if (user) awardPrize(user, ev); else returnEventPrize(ev);
 
   emitEvent();
   if (winnerPublic) eventChat(`${nick(winnerPublic)} won the wheel event and got ${ev.prize.name}!`);
@@ -2775,6 +2821,7 @@ function endScramble(ev, winnerUser) {
     eventChat(`${nick(winnerUser)} solved "${ev.word}" and won ${ev.prize.name}!`);
   } else {
     ev.note = 'Time is up! Nobody solved it.';
+    returnEventPrize(ev);
     eventChat(`Time is up! The word was "${ev.word}".`);
   }
 
@@ -2787,8 +2834,8 @@ function endScramble(ev, winnerUser) {
 app.post('/api/admin/event/wheel', auth, adminOnly, (req, res) => {
   if (eventBusy()) return bad(res, 'An event is already running');
 
-  const catalogItem = S.catalog.find(x => x.id === req.body.itemId);
-  if (!catalogItem) return bad(res, 'Pick a prize item');
+  const picked = takeEventPrize(req);
+  if (picked.error) return bad(res, picked.error);
 
   const seconds = Math.floor(Number(req.body.seconds));
   if (!(seconds >= 15 && seconds <= 600)) return bad(res, 'Join time must be 15–600 seconds');
@@ -2797,25 +2844,26 @@ app.post('/api/admin/event/wheel', auth, adminOnly, (req, res) => {
 
   const ev = {
     id: rid(6), type: 'wheel', status: 'joining',
-    host: publicUser(req.user), prize: newItem(catalogItem), createdAt: now(),
+    host: publicUser(req.user), prize: picked.item, prizeFrom: picked.fromUser, createdAt: now(),
     joinEndsAt: now() + seconds * 1000,
     participants: [], players: [], eliminated: [],
     round: 0, phase: 'join', phaseEndsAt: 0, victim: null, victimId: null, winner: null
   };
 
+  lockEventPrize(req, picked);
   EVENT = ev;
   later(() => beginWheel(ev), seconds * 1000);
 
   emitEvent();
-  eventChat(`Wheel event started! Prize: ${catalogItem.name}. Click to join!`, true);
+  eventChat(`Wheel event started! Prize: ${picked.item.name}. Click to join!`, true);
   res.json({ ok: true });
 });
 
 app.post('/api/admin/event/scramble', auth, adminOnly, (req, res) => {
   if (eventBusy()) return bad(res, 'An event is already running');
 
-  const catalogItem = S.catalog.find(x => x.id === req.body.itemId);
-  if (!catalogItem) return bad(res, 'Pick a prize item');
+  const picked = takeEventPrize(req);
+  if (picked.error) return bad(res, picked.error);
 
   const seconds = Math.floor(Number(req.body.seconds));
   if (!(seconds >= 30 && seconds <= 600)) return bad(res, 'Time must be 30–600 seconds');
@@ -2832,10 +2880,11 @@ app.post('/api/admin/event/scramble', auth, adminOnly, (req, res) => {
 
   const ev = {
     id: rid(6), type: 'scramble', status: 'running',
-    host: publicUser(req.user), prize: newItem(catalogItem), createdAt: now(),
+    host: publicUser(req.user), prize: picked.item, prizeFrom: picked.fromUser, createdAt: now(),
     word, scrambled: scrambleWord(word), endsAt: now() + seconds * 1000, winner: null
   };
 
+  lockEventPrize(req, picked);
   EVENT = ev;
   later(() => endScramble(ev, null), seconds * 1000);
   /* send the hints when they unlock */
@@ -2843,7 +2892,7 @@ app.post('/api/admin/event/scramble', auth, adminOnly, (req, res) => {
   later(() => emitEvent(), Math.ceil(seconds * 750) + 50);
 
   emitEvent();
-  eventChat(`Word Scramble started! Prize: ${catalogItem.name}. Click to play!`, true);
+  eventChat(`Word Scramble started! Prize: ${picked.item.name}. Click to play!`, true);
   res.json({ ok: true });
 });
 
@@ -2855,6 +2904,7 @@ app.post('/api/admin/event/cancel', auth, adminOnly, (req, res) => {
   ev.status = 'finished';
   ev.phase = 'done';
   ev.note = 'This event was cancelled by an admin.';
+  returnEventPrize(ev);
 
   emitEvent();
   eventChat('Event cancelled by an admin.');
@@ -3411,6 +3461,7 @@ app.get('/api/admin/data', auth, adminOnly, (req, res) => {
     updateLog: UPDATE_LOG,
     updateNotes: S.updateNotes,
     bots: publicBots(true),
+    myInventory: req.user.inventory.map(i => ({ uid: i.uid, name: i.name, image: i.image, value: i.value, age: i.age, fly: i.fly, ride: i.ride })),
     elveUrl: S.settings.elveUrl || '',
     valueSource: S.settings.valueSource || 'amvgg',
     maintenance: maintenanceOn(),
@@ -3891,7 +3942,16 @@ function adminUI() {
 
       <h4 style="margin:16px 0 8px">🎉 Events</h4>
       <div style="background:#f5faff;padding:14px;border-radius:12px">
-        <select id="ev-item" class="in" style="width:100%;margin-bottom:8px"></select>
+        <div class="ev-src">
+          <button type="button" data-ev-src="inv" class="on">🎒 My inventory</button>
+          <button type="button" data-ev-src="cat">📚 Catalog</button>
+        </div>
+        <div id="ev-inv-box">
+          <input id="ev-inv-q" class="in" style="width:100%;margin-bottom:8px" placeholder="Search your pets…" autocomplete="off">
+          <div id="ev-inv" class="ev-inv"></div>
+          <p id="ev-inv-sel" class="hint" style="margin:6px 0 8px">Click a pet to use it as the prize.</p>
+        </div>
+        <select id="ev-item" class="in" style="width:100%;margin-bottom:8px;display:none"></select>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
           <div><small>Wheel: join time (seconds)</small><input id="ev-wsec" class="in" type="number" min="15" max="600" value="60" style="width:100%"></div>
           <div><small>Scramble: time (seconds)</small><input id="ev-ssec" class="in" type="number" min="30" max="600" value="120" style="width:100%"></div>
@@ -3902,7 +3962,7 @@ function adminUI() {
           <button id="ev-scr" class="btn" style="flex:1">🔤 Start Word Scramble</button>
           <button id="ev-cancel" class="btn red">Cancel event</button>
         </div>
-        <p class="hint">The prize is created from the selected catalog item and given to the winner. Starting an event posts an announcement in chat and a banner on the home page.</p>
+        <p class="hint">My inventory: the pet leaves your inventory when the event starts and goes to the winner. If nobody wins, the event is cancelled or the server restarts, it comes back to you. Catalog: a new pet is created for the winner. Starting an event posts an announcement in chat and a banner on the home page.</p>
       </div>
 
       <h4 style="margin:16px 0 8px">📢 Announcement (shown in the top banner)</h4>
@@ -3936,6 +3996,16 @@ function adminUI() {
         #cat-panel .cat-card { animation: cat-in .35s cubic-bezier(.2, .8, .2, 1) both; transition: transform .15s, border-color .15s; }
         #cat-panel .cat-card:hover { transform: translateY(-3px); border-color: #00efa0 !important; }
         @keyframes cat-in { from { opacity: 0; transform: translateY(14px) scale(.95); } }
+        .ev-src { display: flex; gap: 6px; margin-bottom: 8px; }
+        .ev-src button { flex: 1; padding: 8px; border: 1px solid #343842; border-radius: 10px; background: #1d212b; color: #9aa0ad; font: inherit; font-weight: 800; cursor: pointer; transition: .15s; }
+        .ev-src button.on { border-color: #00efa0; background: rgba(0, 239, 160, .12); color: #00efa0; }
+        .ev-inv { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; max-height: 300px; overflow-y: auto; padding: 2px; }
+        .ev-pet { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 6px; border: 2px solid #343842; border-radius: 12px; background: #1d212b; color: #fff; font: inherit; cursor: pointer; transition: transform .15s, border-color .15s; }
+        .ev-pet:hover { transform: translateY(-2px); border-color: #4da3ff; }
+        .ev-pet.on { border-color: #00efa0; background: rgba(0, 239, 160, .12); box-shadow: 0 0 0 3px rgba(0, 239, 160, .18); }
+        .ev-pet img { width: 54px; height: 54px; object-fit: contain; }
+        .ev-pet b { width: 100%; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+        .ev-pet small { color: #9aa0ad; font-size: 11px; font-weight: 700; }
       </style>
       <div id="cat-panel">
         <div class="cat-sheet">
@@ -4066,6 +4136,10 @@ function adminUI() {
       ? data.catalog.map(i => `<option value="${esc(i.id)}">${esc(i.name)} (${fmt(i.value)})</option>`).join('')
       : '<option value="">No catalog items</option>';
     if (prevItem) $('ev-item').value = prevItem;
+
+    myInv = data.myInventory || [];
+    if (evPick && !myInv.some(i => i.uid === evPick)) evPick = '';
+    renderEvInv();
 
     const prevBounty = $('bt-item').value;
     $('bt-item').innerHTML = $('ev-item').innerHTML;
@@ -4651,13 +4725,48 @@ function adminUI() {
     } catch (err) { toast(err.message, 'err'); }
   };
 
+  /* event prize: a pet from my own inventory, or a catalog item */
+  let myInv = [], evPick = '', evSrc = 'inv';
+  function renderEvInv() {
+    const q = $('ev-inv-q').value.trim().toLowerCase();
+    const list = myInv.filter(i => !q || i.name.toLowerCase().includes(q)).sort((a, b) => b.value - a.value);
+    $('ev-inv').innerHTML = list.length
+      ? list.slice(0, 200).map(i => `
+        <button type="button" class="ev-pet ${i.uid === evPick ? 'on' : ''}" data-ev-pick="${esc(i.uid)}" title="${esc(i.name)}">
+          <img src="${esc(i.image)}" alt="" loading="lazy">
+          <b>${esc(i.name)}</b>
+          <small>${tags(i)} ${fmt(i.value)}</small>
+        </button>`).join('')
+      : `<p class="hint" style="grid-column:1/-1;text-align:center;padding:16px">${myInv.length ? 'No pet matches your search.' : 'Your inventory is empty. Deposit pets or use the Catalog.'}</p>`;
+    const sel = myInv.find(i => i.uid === evPick);
+    $('ev-inv-sel').innerHTML = sel ? `Prize: <b>${esc(sel.name)}</b> (${fmt(sel.value)})` : 'Click a pet to use it as the prize.';
+  }
+  $('ev-inv-q').oninput = renderEvInv;
+  $('ev-inv').onclick = e => {
+    const b = e.target.closest('[data-ev-pick]');
+    if (!b) return;
+    evPick = evPick === b.dataset.evPick ? '' : b.dataset.evPick;
+    renderEvInv();
+  };
+  overlay.querySelectorAll('[data-ev-src]').forEach(b => {
+    b.onclick = () => {
+      evSrc = b.dataset.evSrc;
+      overlay.querySelectorAll('[data-ev-src]').forEach(x => x.classList.toggle('on', x === b));
+      $('ev-inv-box').style.display = evSrc === 'inv' ? '' : 'none';
+      $('ev-item').style.display = evSrc === 'cat' ? '' : 'none';
+    };
+  });
+
   async function startEvent(kind) {
     try {
+      if (evSrc === 'inv' && !evPick) { toast('Pick a pet from your inventory', 'err'); return; }
+      const prize = evSrc === 'inv' ? { invUid: evPick } : { itemId: $('ev-item').value };
       const body = kind === 'wheel'
-        ? { itemId: $('ev-item').value, seconds: $('ev-wsec').value }
-        : { itemId: $('ev-item').value, seconds: $('ev-ssec').value, word: $('ev-word').value };
+        ? { ...prize, seconds: $('ev-wsec').value }
+        : { ...prize, seconds: $('ev-ssec').value, word: $('ev-word').value };
       await api('/api/admin/event/' + kind, { method: 'POST', body });
       toast('Event started!', 'ok');
+      if (evSrc === 'inv') { evPick = ''; await load(); }
     } catch (err) { toast(err.message, 'err'); }
   }
 
