@@ -521,12 +521,21 @@ app.set('trust proxy', 1);
    BLOCK_COUNTRIES=TR (comma separated country codes) blocks visitors from those countries.
    Cloudflare tells us the visitor's country in the CF-IPCountry header.
    Staff open https://petduel.win/?staff=STAFF_KEY once: a cookie then lets them in from anywhere. */
-const BLOCK_COUNTRIES = (E.BLOCK_COUNTRIES || '').split(',').map(x => x.trim().toUpperCase()).filter(Boolean);
+const ENV_BLOCK = (E.BLOCK_COUNTRIES || '').split(',').map(x => x.trim().toUpperCase()).filter(Boolean);
+/* blocked countries come from the admin panel (saved in the database) plus BLOCK_COUNTRIES if it is set */
+const blockList = () => [...new Set([...ENV_BLOCK, ...((S.settings && S.settings.blockCountries) || [])])];
 const STAFF_KEY = E.STAFF_KEY || '';
-const staffCookieValue = STAFF_KEY ? sha('staff:' + STAFF_KEY) : '';
+/* staff key: STAFF_KEY from Railway, or one the site creates itself (saved in the database) */
+const staffKey = () => {
+  if (STAFF_KEY) return STAFF_KEY;
+  if (!S.settings.staffKey) { S.settings.staffKey = rid(12); markDirty(); }
+  return S.settings.staffKey;
+};
+const staffCookieValue = () => sha('staff:' + staffKey());
+const staffCookieHeader = () => `pd_staff=${staffCookieValue()}; Path=/; Max-Age=31536000; HttpOnly; Secure; SameSite=Lax`;
 
-const hasStaffCookie = cookieHeader => Boolean(staffCookieValue) &&
-  String(cookieHeader || '').split(';').some(c => c.trim() === 'pd_staff=' + staffCookieValue);
+const hasStaffCookie = cookieHeader =>
+  String(cookieHeader || '').split(';').some(c => c.trim() === 'pd_staff=' + staffCookieValue());
 /* the visitor's real IP: Cloudflare sends it in CF-Connecting-IP, otherwise the first X-Forwarded-For entry */
 const clientIp = (headers, fallback) => {
   const cf = String(headers['cf-connecting-ip'] || '').trim();
@@ -556,7 +565,7 @@ async function countryOf(headers, fallbackIp) {
   if (cf && cf !== 'XX' && cf !== 'T1') return { country: cf, source: 'cloudflare' };
   return { country: await lookupCountry(clientIp(headers, fallbackIp)), source: 'ip lookup' };
 }
-const blockedCountry = async (headers, ip) => BLOCK_COUNTRIES.includes((await countryOf(headers, ip)).country);
+const blockedCountry = async (headers, ip) => blockList().includes((await countryOf(headers, ip)).country);
 
 const BLOCKED_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Pet Duel</title><style>html,body{margin:0;height:100%}body{display:grid;place-items:center;padding:24px;box-sizing:border-box;
@@ -570,17 +579,17 @@ app.get('/api/whereami', async (req, res) => {
   const { country, source } = await countryOf(req.headers, req.ip);
   res.json({
     country: country || 'unknown', source,
-    blocking: BLOCK_COUNTRIES, blocked: BLOCK_COUNTRIES.includes(country),
+    blocking: blockList(), blocked: blockList().includes(country),
     staffCookie: hasStaffCookie(req.headers.cookie)
   });
 });
 
 app.use(async (req, res, next) => {
-  if (STAFF_KEY && req.query.staff === STAFF_KEY) {
-    res.setHeader('Set-Cookie', `pd_staff=${staffCookieValue}; Path=/; Max-Age=31536000; HttpOnly; Secure; SameSite=Lax`);
+  if (req.query.staff && req.query.staff === staffKey()) {
+    res.setHeader('Set-Cookie', staffCookieHeader());
     return res.redirect('/');
   }
-  if (!BLOCK_COUNTRIES.length || req.path === '/health') return next();
+  if (!blockList().length || req.path === '/health' || req.path === '/api/whereami') return next();
   if (hasStaffCookie(req.headers.cookie)) return next();
   if (await blockedCountry(req.headers, req.ip)) {
     if (req.path.startsWith('/api/')) return res.status(451).json({ error: 'Pet Duel is not available in your country' });
@@ -693,7 +702,7 @@ const socketIp = socket => {
 };
 
 io.use(async (socket, next) => {
-  if (BLOCK_COUNTRIES.length && !hasStaffCookie(socket.handshake.headers.cookie) &&
+  if (blockList().length && !hasStaffCookie(socket.handshake.headers.cookie) &&
       await blockedCountry(socket.handshake.headers, socket.handshake.address)) {
     return next(new Error('Not available in your country'));
   }
@@ -1672,6 +1681,16 @@ function claimBounty(winner, loser, match) {
   }, { thumb: winner, author: winner, image: topImage([b.prize]) });
 }
 
+app.post('/api/admin/block', auth, adminOnly, (req, res) => {
+  const list = String(req.body.countries || '').split(/[\s,]+/).map(x => x.trim().toUpperCase()).filter(x => /^[A-Z]{2}$/.test(x));
+  S.settings.blockCountries = [...new Set(list)].slice(0, 50);
+  markDirty();
+  /* the admin who turns the block on always keeps access from this browser */
+  res.setHeader('Set-Cookie', staffCookieHeader());
+  console.log(`[ADMIN] ${req.user.username} set blocked countries: ${S.settings.blockCountries.join(',') || 'none'}`);
+  res.json({ ok: true, countries: blockList() });
+});
+
 app.post('/api/admin/maintenance', auth, adminOnly, (req, res) => {
   S.settings.maintenance = Boolean(req.body.on);
   S.settings.maintenanceText = String(req.body.text || '').trim().slice(0, 200);
@@ -1712,6 +1731,9 @@ app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
 });
 
 const UPDATE_LOG = [
+  { version: '3.4', title: 'Country block in the admin panel', changes: [
+    'Admin panel: Country block box (Block Turkey / any codes / Unblock all), saved in the database; BLOCK_COUNTRIES in Railway still works too'
+  ] },
   { version: '3.3', title: 'Entertainment-only notices, better country detection', changes: [
     '"For entertainment only, gems have no monetary value" in the footer, Terms of Service, FAQ, login and deposit screens',
     'Country block falls back to an IP lookup when Cloudflare sends no country; /api/whereami shows what the server sees'
@@ -2892,7 +2914,10 @@ app.get('/api/admin/data', auth, adminOnly, (req, res) => {
     bots: publicBots(true),
     elveUrl: S.settings.elveUrl || '',
     maintenance: maintenanceOn(),
-    maintenanceText: S.settings.maintenanceText || ''
+    maintenanceText: S.settings.maintenanceText || '',
+    blockCountries: (S.settings.blockCountries || []).join(', '),
+    blockEnv: ENV_BLOCK.join(', '),
+    staffLink: SITE_URL.replace(/\/+$/, '') + '/?staff=' + staffKey()
   });
 });
 
@@ -3224,6 +3249,20 @@ function adminUI() {
         <p class="hint" style="margin:6px 0 0">When it is ON nobody except admins can use the site: players see a big PET DUEL closed screen and are disconnected right away. Admins can still log in and play normally.</p>
       </div>
 
+      <div style="margin-bottom:16px;padding:14px;border-radius:12px;border:1px solid #343842">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <b style="font-size:15px">🌍 Country block</b>
+          <span id="cb-state" style="font-weight:800"></span>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <input id="cb-list" class="in" style="flex:1;min-width:160px" placeholder="Country codes, e.g. TR (empty = nobody blocked)">
+          <button id="cb-tr" class="btn red">Block Turkey</button>
+          <button id="cb-save" class="btn gray">Save</button>
+          <button id="cb-off" class="btn gray">Unblock all</button>
+        </div>
+        <p class="hint" id="cb-hint" style="margin:6px 0 0"></p>
+      </div>
+
       <h4 style="margin:0 0 8px">📤 Pending Withdrawals</h4>
       <div id="adm-wd" style="margin-bottom:16px"></div>
 
@@ -3475,6 +3514,8 @@ function adminUI() {
     if (prevBounty) $('bt-item').value = prevBounty;
 
     renderBots(data.bots || []);
+    if (document.activeElement !== $('cb-list')) $('cb-list').value = data.blockCountries || '';
+    renderBlock(data.blockCountries || '', data.blockEnv || '', data.staffLink || '');
     mtOn = Boolean(data.maintenance);
     if (document.activeElement !== $('mt-text')) $('mt-text').value = data.maintenanceText || '';
     renderMaint();
@@ -3514,6 +3555,30 @@ function adminUI() {
         </div>`).join('')
       : '<p class="hint">No active bounties.</p>';
   }
+
+  function renderBlock(list, env, staffLink) {
+    const all = [list, env].filter(Boolean).join(', ');
+    $('cb-state').textContent = all ? `● Blocking: ${all}` : '● Nobody blocked';
+    $('cb-state').style.color = all ? '#ff5968' : '#00efa0';
+    $('cb-hint').innerHTML = (all
+      ? 'Visitors from these countries see "Pet Duel is not available in your country". '
+      : 'Two-letter country codes, separated by commas (TR = Turkey). ') +
+      'This browser keeps access automatically. For other phones / browsers / admins open this secret staff link once: ' +
+      `<code style="user-select:all;word-break:break-all">${esc(staffLink)}</code> (do not share it publicly).` +
+      (env ? ` (${esc(env)} comes from Railway and can only be removed there.)` : '');
+  }
+  async function saveBlock(value) {
+    if (value && !(await confirmBox({ title: 'Block countries?', text: `Visitors from ${value} will not be able to open the site. Make sure you can still get in (staff link or VPN).`, ok: 'Block', danger: true }))) return;
+    try {
+      const r = await api('/api/admin/block', { method: 'POST', body: { countries: value } });
+      $('cb-list').value = r.countries.join(', ');
+      toast(r.countries.length ? 'Blocked: ' + r.countries.join(', ') : 'Nobody is blocked now', 'ok');
+      await load();
+    } catch (err) { toast(err.message, 'err'); }
+  }
+  $('cb-tr').onclick = () => saveBlock('TR');
+  $('cb-save').onclick = () => saveBlock($('cb-list').value);
+  $('cb-off').onclick = () => saveBlock('');
 
   let mtOn = false;
   function renderMaint() {
