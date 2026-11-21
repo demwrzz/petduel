@@ -2091,7 +2091,7 @@
 
       const sig = JSON.stringify([
         matches.map(m => [m.id, m.state, m.joiner && m.joiner.id, m.winnerId]),
-        ME && ME.id, asArray(STATE.bounties).map(b => b.id), sortBy
+        ME && ME.id, ME && ME.isAdmin, asArray(STATE.bounties).map(b => b.id), sortBy
       ]);
 
       if (sig === lobbySig) return;
@@ -2137,11 +2137,13 @@
             ${Number(match.maxJoin) ? `<span class="max-pill">Max ${Number(match.maxJoin)} pet${Number(match.maxJoin) === 1 ? "" : "s"}</span>` : ""}`;
         }
 
-        const join = match.state === "waiting"
+        const join = (match.state === "waiting"
           ? (mine
             ? `<button class="btn red" data-action="cancel" data-id="${esc(match.id)}">Cancel</button>`
             : `<button class="btn" data-action="join" data-id="${esc(match.id)}">Join</button>`)
-          : "";
+          : "") +
+          (ME && ME.isAdmin && !mine && (match.state === "waiting" || match.state === "countdown")
+            ? `<button class="btn red adm-cancel" data-action="admin-cancel" data-id="${esc(match.id)}" title="Cancel this game (admin)">Cancel</button>` : "");
 
         return `
           <div class="match st-${esc(match.state)} ${finished ? "finished" : ""} ${isNew ? "enter" : ""}">
@@ -2247,6 +2249,9 @@
         footer = mine
           ? `<button class="btn red" data-action="cancel" data-id="${esc(match.id)}">Cancel Match</button>`
           : `<button class="btn" data-action="join" data-id="${esc(match.id)}">Join Match</button>`;
+      }
+      if (!replay && !mine && ME && ME.isAdmin && (phase === "wait" || phase === "count")) {
+        footer = `<button class="btn red" data-action="admin-cancel" data-id="${esc(match.id)}">Cancel game (admin)</button>` + footer;
       }
 
       const verify = revealed && match.seed
@@ -2360,6 +2365,21 @@
             ? ' <b class="positive">✔ Verified: hash and result match</b>'
             : ' <b class="negative">✘ Hash or result mismatch</b>';
         }
+      } catch (error) { fail(error); }
+    }
+
+    async function adminCancelMatch(id) {
+      const ok = await confirmBox({
+        title: "Cancel game (admin)",
+        text: "Cancel this coinflip? Every pet goes back to its owner and a message is posted in the chat.",
+        ok: "Cancel game", danger: true
+      });
+      if (!ok) return;
+      try {
+        await api("/api/admin/match/cancel", { body: { id } });
+        closeModal();
+        toast("Game cancelled. Pets returned.", "ok");
+        await refresh();
       } catch (error) { fail(error); }
     }
 
@@ -5185,6 +5205,7 @@
       "enter-giveaway"(el) { enterGiveaway(el.dataset.id); },
       "dep-step"(el) { openBotsModal(Number(el.dataset.step) || 1); },
       "jp-history"() { showJpHistory(); },
+      "admin-cancel"(el) { adminCancelMatch(el.dataset.id); },
       "scr-tile"(el) {
         const input = $("#guessInput");
         if (!input || el.classList.contains("used")) return;

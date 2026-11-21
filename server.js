@@ -1481,6 +1481,29 @@ app.post('/api/match/cancel', auth, actionLimit, (req, res) => {
   res.json({ ok: true });
 });
 
+/* admins can cancel any game that has not started flipping yet; every pet goes back to its owner */
+app.post('/api/admin/match/cancel', auth, adminOnly, (req, res) => {
+  const match = S.matches[String(req.body.id || '')];
+  if (!match || (match.state !== 'waiting' && match.state !== 'countdown')) {
+    return bad(res, 'This game cannot be cancelled any more (it is already flipping or finished)');
+  }
+  /* mark it first: the countdown timer of this game then does nothing */
+  match.state = 'cancelled';
+  delete S.matches[match.id];
+
+  const host = S.users[match.host.id];
+  if (host) { host.inventory.push(...match.hostItems); emitMe(host); }
+  if (match.opp) {
+    const opp = S.users[match.opp.id];
+    if (opp) { opp.inventory.push(...match.oppItems); emitMe(opp); }
+  }
+  markDirty();
+  console.log(`[ADMIN] ${req.user.username} cancelled coinflip ${match.id} of ${match.host.username}`);
+  pushChat({ id: rid(4), user: { username: 'System', avatar: null }, text: `${nick(match.host)}'s coinflip was cancelled by an admin. All pets were returned.`, ts: now() });
+  io.emit('match:remove', { id: match.id });
+  res.json({ ok: true });
+});
+
 /* ================= CHAT ================= */
 
 function pushChat(message) {
@@ -1751,6 +1774,9 @@ app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
 });
 
 const UPDATE_LOG = [
+  { version: '4.0', title: 'Admins cancel games', changes: [
+    'Admins can cancel any coinflip that is waiting or counting down (lobby and match window); pets go back to both players and a chat message is posted'
+  ] },
   { version: '3.9', title: 'Default bot fix', changes: [
     'DedokAmp is no longer added back automatically: the default bot is only created once on a brand-new database, so removed bots stay removed'
   ] },
