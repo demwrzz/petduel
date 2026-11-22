@@ -697,7 +697,7 @@ const blockedCountry = async (headers, ip) => blockList().includes((await countr
 const BLOCKED_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Pet Duel</title><style>html,body{margin:0;height:100%}body{display:grid;place-items:center;padding:24px;box-sizing:border-box;
 background:radial-gradient(circle at 50% 40%,#10291f,#0b0d12 70%);color:#fff;font-family:system-ui,Arial,sans-serif;text-align:center}
-h1{margin:0;font-size:clamp(56px,14vw,140px);font-weight:900;letter-spacing:-.04em}h1 span{color:#9d5cff}
+h1{margin:0;font-size:clamp(56px,14vw,140px);font-weight:900;letter-spacing:-.04em}h1 span{color:#00efa0}
 p{margin:16px 0 0;font-size:clamp(17px,3vw,24px);font-weight:700}small{display:block;margin-top:10px;color:#8d909a;font-size:15px}</style></head>
 <body><div><h1>PET<span>DUEL</span></h1><p>Pet Duel is not available in your country.</p><small>Sorry! This site cannot be used from your location.</small></div></body></html>`;
 
@@ -1263,6 +1263,7 @@ function buildState() {
     bots: publicBots(),
     bounties: publicBounties(),
     announcement: S.announcement,
+    bannerOff: S.settings.bannerOff === true,
     event: publicEvent(EVENT),
     jackpot: publicJackpot(JPS.mm2),
     jackpots: Object.fromEntries(GAMES.map(g => [g, publicJackpot(JPS[g])])),
@@ -2076,6 +2077,12 @@ const UPDATE_LOG = [
     'A Christmas dog walks to the end of the typing text at the top of the site',
     'Separate withdraw bots: the admin panel has Deposit bots and Withdraw bots; each withdraw request gets an online withdraw bot that players see in their wallet'
   ] },
+  { version: '5.2', title: 'Green again, no jackpot', changes: [
+    'Back to the green theme; logo: green ring, white inside, MM2 knife in the middle; coins are blue and red with the knife',
+    'Jackpot removed (menu, page and joining); items of an unfinished round go back to their owners on restart',
+    'Admin: "Remove the banner completely" hides the banner above the coinflip lobby for everyone (a new announcement shows it again)',
+    'Deposit window: every bot with its full name, status and a Join button; the same bots take deposits and send withdrawals'
+  ] },
   { version: '5.1', title: 'MM2 only', changes: [
     'Adopt Me is removed: the site runs on Murder Mystery 2 only (no game menu any more)',
     'On the first start every Adopt Me pet, catalog item, bot, game, giveaway, jackpot round, withdrawal, bounty, history entry and transaction is deleted; stats become each player\'s MM2 stats',
@@ -2349,8 +2356,16 @@ const jpTimers = { mm2: [] };
 let savedJackpots = {};
 
 /* after a restart: continue the saved rounds (their result is fixed by their seed, so nothing changes) */
+/* The jackpot was removed: items of a round that was still open when the server stopped go back to their owners. */
 function resumeJackpot() {
-  for (const game of GAMES) resumeJackpotOf(game, savedJackpots[game]);
+  for (const j of Object.values(savedJackpots || {})) {
+    if (!j || !Array.isArray(j.entries) || j.state === 'finished') continue;
+    for (const e of j.entries) {
+      const u = e && e.user && S.users[e.user.id];
+      if (u && Array.isArray(e.items)) { u.inventory.push(...e.items); console.log(`Jackpot removed: ${e.items.length} item(s) returned to ${u.username}`); }
+    }
+    markDirty();
+  }
   savedJackpots = {};
 }
 
@@ -2523,6 +2538,7 @@ app.get('/api/jackpot/history', (req, res) => {
 });
 
 app.post('/api/jackpot/join', auth, actionLimit, (req, res) => {
+  return bad(res, 'The jackpot was removed');
   const user = req.user;
   const j = JPS[cleanGame(req.body.game)];
 
@@ -3854,9 +3870,19 @@ app.post('/api/admin/ban', auth, adminOnly, (req, res) => {
   res.json({ ok: true });
 });
 
+/* hide the banner above the coinflip lobby completely (announcement and update note), or show it again */
+app.post('/api/admin/banner', auth, adminOnly, (req, res) => {
+  S.settings.bannerOff = req.body.off === true;
+  markDirty();
+  io.emit('banner:update', { off: S.settings.bannerOff });
+  res.json({ ok: true, off: S.settings.bannerOff });
+});
+
 app.post('/api/admin/announce', auth, adminOnly, (req, res) => {
   const title = String(req.body.title || '').trim().slice(0, 60);
   const text = String(req.body.text || '').trim().slice(0, 300);
+  /* publishing a new announcement shows the banner again */
+  if ((title || text) && S.settings.bannerOff) { S.settings.bannerOff = false; io.emit('banner:update', { off: false }); }
 
   if (!title && !text) {
     S.announcement = null;
@@ -4139,6 +4165,8 @@ function adminUI() {
           <button id="an-send" class="btn" style="flex:1">Publish</button>
           <button id="an-clear" class="btn gray">Remove announcement</button>
         </div>
+        <button id="an-banner" class="btn red" style="width:100%;margin-top:8px">🗑 Remove the banner completely</button>
+        <p class="hint" style="margin:6px 0 0">Hides the whole banner above the coinflip lobby (announcement and update note) for everyone. Publishing a new announcement shows it again.</p>
       </div>
 
       <h4 style="margin:16px 0 8px">📦 Catalog</h4>
@@ -4157,15 +4185,15 @@ function adminUI() {
         #cat-panel .cat-scroll { flex: 1; overflow-y: auto; padding: 4px; }
         #cat-panel .cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
         #cat-panel .cat-card { animation: cat-in .35s cubic-bezier(.2, .8, .2, 1) both; transition: transform .15s, border-color .15s; }
-        #cat-panel .cat-card:hover { transform: translateY(-3px); border-color: #9d5cff !important; }
+        #cat-panel .cat-card:hover { transform: translateY(-3px); border-color: #00efa0 !important; }
         @keyframes cat-in { from { opacity: 0; transform: translateY(14px) scale(.95); } }
         .ev-src { display: flex; gap: 6px; margin-bottom: 8px; }
         .ev-src button { flex: 1; padding: 8px; border: 1px solid #343842; border-radius: 10px; background: #1d212b; color: #9aa0ad; font: inherit; font-weight: 800; cursor: pointer; transition: .15s; }
-        .ev-src button.on { border-color: #9d5cff; background: rgba(157, 92, 255, .12); color: #9d5cff; }
+        .ev-src button.on { border-color: #00efa0; background: rgba(0, 239, 160, .12); color: #00efa0; }
         .ev-inv { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; max-height: 300px; overflow-y: auto; padding: 2px; }
         .ev-pet { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 6px; border: 2px solid #343842; border-radius: 12px; background: #1d212b; color: #fff; font: inherit; cursor: pointer; transition: transform .15s, border-color .15s; }
         .ev-pet:hover { transform: translateY(-2px); border-color: #4da3ff; }
-        .ev-pet.on { border-color: #9d5cff; background: rgba(157, 92, 255, .12); box-shadow: 0 0 0 3px rgba(157, 92, 255, .18); }
+        .ev-pet.on { border-color: #00efa0; background: rgba(0, 239, 160, .12); box-shadow: 0 0 0 3px rgba(0, 239, 160, .18); }
         .ev-pet img { width: 54px; height: 54px; object-fit: contain; }
         .ev-pet b { width: 100%; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
         .ev-pet small { color: #9aa0ad; font-size: 11px; font-weight: 700; }
@@ -4380,7 +4408,7 @@ function adminUI() {
   function renderBlock(list, env, staffLink) {
     const all = [list, env].filter(Boolean).join(', ');
     $('cb-state').textContent = all ? `● Blocking: ${all}` : '● Nobody blocked';
-    $('cb-state').style.color = all ? '#ff5968' : '#9d5cff';
+    $('cb-state').style.color = all ? '#ff5968' : '#00efa0';
     $('cb-hint').innerHTML = (all
       ? 'Visitors from these countries see "Pet Duel is not available in your country". '
       : 'Two-letter country codes, separated by commas (TR = Turkey). ') +
@@ -4404,7 +4432,7 @@ function adminUI() {
   let mtOn = false;
   function renderMaint() {
     $('mt-state').textContent = mtOn ? '● ON: the site is closed' : '● OFF: the site is open';
-    $('mt-state').style.color = mtOn ? '#ff5968' : '#9d5cff';
+    $('mt-state').style.color = mtOn ? '#ff5968' : '#00efa0';
     $('mt-box').style.borderColor = mtOn ? '#ff5968' : '#343842';
     $('mt-toggle').textContent = mtOn ? 'Open the site' : 'Close the site';
     $('mt-toggle').className = mtOn ? 'btn' : 'btn red';
@@ -4429,7 +4457,7 @@ function adminUI() {
         <div style="display:flex;align-items:center;gap:10px;padding:8px;border-bottom:1px solid #e0edfb;flex-wrap:wrap">
           ${b.avatar ? `<img src="${esc(b.avatar)}" alt="" style="width:32px;height:32px;border-radius:50%">` : ''}
           <b style="min-width:110px">${esc(b.username)}</b>
-          <span style="color:${b.online ? '#9d5cff' : '#ff5968'};font-weight:800">● ${b.online ? 'Online' : 'Offline'}</span>
+          <span style="color:${b.online ? '#00efa0' : '#ff5968'};font-weight:800">● ${b.online ? 'Online' : 'Offline'}</span>
           <input class="in" data-bot-link="${esc(b.id)}" value="${esc(b.link)}" style="flex:1;min-width:180px">
           <button class="btn sm ${b.online ? 'gray' : 'mint'}" data-bot-toggle="${esc(b.id)}" data-on="${b.online ? '0' : '1'}">${b.online ? 'Set offline' : 'Set online'}</button>
           <button class="btn red sm" data-bot-del="${esc(b.id)}">🗑</button>
@@ -4984,7 +5012,21 @@ function adminUI() {
     } catch (err) { toast(err.message, 'err'); }
   };
 
-  $('an-send').onclick = () => announce(false);
+  let bannerOff = false;
+  const renderBannerBtn = () => {
+    $('an-banner').textContent = bannerOff ? '👁 Show the banner again' : '🗑 Remove the banner completely';
+    $('an-banner').className = bannerOff ? 'btn mint' : 'btn red';
+  };
+  $('an-banner').onclick = async () => {
+    try {
+      const r = await api('/api/admin/banner', { method: 'POST', body: { off: !bannerOff } });
+      bannerOff = r.off;
+      renderBannerBtn();
+      toast(bannerOff ? 'Banner removed' : 'Banner shown again', 'ok');
+    } catch (err) { toast(err.message, 'err'); }
+  };
+  $('an-send').onclick = async () => { await announce(false); bannerOff = false; renderBannerBtn(); };
+  api('/api/admin/data').then(d => { bannerOff = Boolean(d.settings && d.settings.bannerOff); renderBannerBtn(); }).catch(() => {});
   $('an-clear').onclick = () => announce(true);
 
   load().catch(err => { toast(err.message, 'err'); overlay.remove(); });
