@@ -5347,7 +5347,15 @@ process.on('uncaughtException', err => console.error('Uncaught exception:', err 
    Deposits: a scan every minute compares each address with what was already credited (u.cw.seen) and credits
    the difference in USD at the current price. Collect moves the money to the owner's addresses (admin panel). */
 
-const CW = require('./crypto-wallet');
+/* the crypto module is loaded safely: if it ever fails to load, the rest of the site keeps running */
+let CW;
+try { CW = require('./crypto-wallet'); } catch (e) {
+  console.error('[WALLET] crypto module failed to load:', e.message);
+  const off = () => { throw new Error('Crypto is unavailable right now'); };
+  CW = { COINS: { usdt: { name: 'USDT', label: 'USDT', network: 'BNB Smart Chain (BEP20)', min: '1' }, sol: { name: 'Solana', label: 'SOL', network: 'Solana', min: '0.01' }, ltc: { name: 'Litecoin', label: 'LTC', network: 'Litecoin', min: '0.001' } },
+    enabled: () => false, setupError: () => 'crypto module failed to load: ' + e.message, newMnemonic: off, addressesFor: off, gasWalletAddress: off,
+    gasWalletBalance: off, validAddress: () => false, prices: off, readAddress: off, toUnits: off, fromUnits: off, collect: { usdt: off, sol: off, ltc: off } };
+}
 const CW_COINS = Object.keys(CW.COINS);
 const cents = usd => Math.round(Number(usd) * 100);
 const usdOf = c => Math.round(Number(c || 0)) / 100;

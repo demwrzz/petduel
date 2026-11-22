@@ -5,7 +5,7 @@
   "description": "Pet Duel server",
   "main": "server.js",
   "engines": {
-    "node": ">=18"
+    "node": "22.x"
   },
   "scripts": {
     "start": "node server.js"

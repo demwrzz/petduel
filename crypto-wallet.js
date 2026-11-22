@@ -23,7 +23,9 @@ const bip39 = require('@scure/bip39');
 const { wordlist } = require('@scure/bip39/wordlists/english');
 const btc = require('@scure/btc-signer');
 const { derivePath } = require('ed25519-hd-key');
-const sol = require('@solana/web3.js');
+/* loaded only when Solana is used, so a problem with it can never stop the site */
+let solLib = null;
+const S0L = () => (solLib ||= require('@solana/web3.js'));
 
 const E = process.env;
 const BSC_RPC = E.BSC_RPC || 'https://bsc-rpc.publicnode.com';
@@ -61,7 +63,7 @@ const setupError = () => { try { keys(); return E.WALLET_MNEMONIC ? '' : 'WALLET
 const newMnemonic = () => bip39.generateMnemonic(wordlist, 128);
 
 const evmWallet = i => keys().evm.derivePath(`m/44'/60'/0'/0/${i}`);
-const solKeypair = i => sol.Keypair.fromSeed(derivePath(`m/44'/501'/${i}'/0'`, keys().seedHex).key);
+const solKeypair = i => S0L().Keypair.fromSeed(derivePath(`m/44'/501'/${i}'/0'`, keys().seedHex).key);
 const ltcNode = i => keys().hd.derive(`m/84'/2'/0'/0/${i}`);
 const ltcAddress = i => btc.p2wpkh(ltcNode(i).publicKey, LTC_NET).address;
 
@@ -76,7 +78,7 @@ const gasWalletAddress = () => evmWallet(0).address;
 function validAddress(coin, a) {
   a = String(a || '').trim();
   if (coin === 'usdt') return ethers.isAddress(a);
-  if (coin === 'sol') { try { return sol.PublicKey.isOnCurve(new sol.PublicKey(a).toBytes()) || /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a); } catch { return false; } }
+  if (coin === 'sol') { try { return S0L().PublicKey.isOnCurve(new (S0L().PublicKey)(a).toBytes()) || /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a); } catch { return false; } }
   if (coin === 'ltc') { try { btc.Address(LTC_NET).decode(a); return true; } catch { return false; } }
   return false;
 }
@@ -90,7 +92,7 @@ async function getJson(url, opts = {}) {
 let bscProvider = null;
 const bsc = () => (bscProvider ||= new ethers.JsonRpcProvider(BSC_RPC, 56, { staticNetwork: true }));
 let solConn = null;
-const solana = () => (solConn ||= new sol.Connection(SOL_RPC, 'finalized'));
+const solana = () => (solConn ||= new (S0L().Connection)(SOL_RPC, 'finalized'));
 
 /* ---------- prices in USD (USDT = 1) ---------- */
 let priceCache = { t: 0, p: null };
@@ -120,7 +122,7 @@ async function readAddress(coin, address) {
     const token = new ethers.Contract(USDT_BSC, ERC20, bsc());
     return (await token.balanceOf(address, { blockTag: head - BSC_CONFIRMS })).toString();
   }
-  if (coin === 'sol') return String(await solana().getBalance(new sol.PublicKey(address), 'finalized'));
+  if (coin === 'sol') return String(await solana().getBalance(new (S0L().PublicKey)(address), 'finalized'));
   if (coin === 'ltc') {
     const d = await getJson(`${LTC_API}/address/${address}`);
     return String(d.chain_stats.funded_txo_sum);
@@ -163,8 +165,8 @@ async function collectUsdt(entries, to) {
 
 /* SOL: each address sends everything except the network fee */
 async function collectSol(entries, to) {
-  const conn = new sol.Connection(SOL_RPC, 'confirmed');
-  const dest = new sol.PublicKey(to);
+  const conn = new (S0L().Connection)(SOL_RPC, 'confirmed');
+  const dest = new (S0L().PublicKey)(to);
   const out = [];
   for (const { index } of entries) {
     try {
@@ -172,8 +174,8 @@ async function collectSol(entries, to) {
       const bal = await conn.getBalance(kp.publicKey, 'confirmed');
       const fee = 5000;
       if (bal < Number(toUnits(COINS.sol.min, 'sol'))) continue;
-      const tx = new sol.Transaction().add(sol.SystemProgram.transfer({ fromPubkey: kp.publicKey, toPubkey: dest, lamports: bal - fee }));
-      const sig = await sol.sendAndConfirmTransaction(conn, tx, [kp], { commitment: 'confirmed' });
+      const tx = new (S0L().Transaction)().add(S0L().SystemProgram.transfer({ fromPubkey: kp.publicKey, toPubkey: dest, lamports: bal - fee }));
+      const sig = await S0L().sendAndConfirmTransaction(conn, tx, [kp], { commitment: 'confirmed' });
       out.push({ index, amount: String(bal - fee), fee: String(fee), tx: sig });
     } catch (e) {
       out.push({ index, error: e.message });
