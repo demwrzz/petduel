@@ -590,10 +590,9 @@ function ensureDefaultBot() {
 /* every bot is either a deposit bot (players trade pets to it) or a withdraw bot (it sends pets out) */
 const botRole = b => (b.role === 'withdraw' ? 'withdraw' : 'deposit');
 /* the bots that send withdrawals of a game; while that game has no withdraw bot, its deposit bots do it */
-function withdrawBotPool(game) {
-  const mine = S.bots.filter(b => gameOf(b) === game);
-  const w = mine.filter(b => botRole(b) === 'withdraw');
-  return w.length ? w : mine.filter(b => botRole(b) === 'deposit');
+/* MM2: the same bots take deposits and send withdrawals (there are no separate withdraw bots) */
+function withdrawBotPool() {
+  return S.bots;
 }
 let wdBotTurn = 0;
 function pickWithdrawBot(game) {
@@ -606,7 +605,7 @@ function publicWdBot(ref, full = false) {
   const b = S.bots.find(x => x.id === ref.id);
   const p = botProfiles.get(String(ref.username).toLowerCase()) || {};
   const name = p.username || ref.username;
-  return { username: full ? name : maskName(name), avatar: p.avatar || null, link: b ? b.link : '', online: b ? b.online !== false : false };
+  return { username: name, avatar: p.avatar || null, link: b ? b.link : '', online: b ? b.online !== false : false };
 }
 
 /* players only see the start and the last letter of a bot's name (ltcspace -> ltcs***e) */
@@ -615,7 +614,7 @@ const publicBots = (full = false) => S.bots.map(b => {
   const p = botProfiles.get(b.username.toLowerCase()) || {};
   const name = p.username || b.username;
   return {
-    id: b.id, username: full ? name : maskName(name), ...(full ? { robloxId: p.robloxId || null } : {}),
+    id: b.id, username: name, ...(full ? { robloxId: p.robloxId || null } : {}),
     avatar: p.avatar || null, link: b.link, joinLink: b.link, online: b.online !== false, role: botRole(b), game: gameOf(b)
   };
 });
@@ -4061,20 +4060,20 @@ function adminUI() {
         </div>
       </div>
 
-      <h4 style="margin:16px 0 8px">📥 Deposit bots</h4>
+      <h4 style="margin:16px 0 8px">🤖 Bots</h4>
       <div style="background:#f5faff;padding:14px;border-radius:12px">
         <div id="bot-list" data-role="deposit" style="margin-bottom:10px"></div>
         <div style="display:grid;grid-template-columns:1fr 2fr auto;gap:8px">
           <select id="bot-game" class="in" style="display:none"><option value="mm2">MM2</option></select>
-          <input id="bot-name" class="in" maxlength="20" placeholder="Deposit bot Roblox username">
+          <input id="bot-name" class="in" maxlength="20" placeholder="Bot Roblox username">
           <input id="bot-link" class="in" placeholder="Join link (https://www.roblox.com/share?...)">
-          <button id="bot-add" class="btn">Add deposit bot</button>
+          <button id="bot-add" class="btn">Add bot</button>
         </div>
-        <p class="hint">Players trade their pets / items to these bots. Players cannot join an offline bot.</p>
+        <p class="hint">The same bots take deposits and send withdrawals. Players see every bot with its full name and status in the Deposit window, and each withdraw request goes to an online bot (in turns). Players cannot join an offline bot.</p>
       </div>
 
-      <h4 style="margin:16px 0 8px">📤 Withdraw bots</h4>
-      <div style="background:#f5faff;padding:14px;border-radius:12px">
+      <h4 style="display:none">📤 Withdraw bots</h4>
+      <div style="display:none">
         <div id="wbot-list" data-role="withdraw" style="margin-bottom:10px"></div>
         <div style="display:grid;grid-template-columns:1fr 2fr auto;gap:8px">
           <select id="wbot-game" class="in" style="display:none"><option value="mm2">MM2</option></select>
@@ -4422,8 +4421,9 @@ function adminUI() {
   };
 
   function renderBots(all) {
-    for (const [id, role] of [['bot-list', 'deposit'], ['wbot-list', 'withdraw']]) {
-      const bots = all.filter(b => (b.role || 'deposit') === role);
+    /* one list: the same MM2 bots take deposits and send withdrawals */
+    for (const [id, role] of [['bot-list', 'deposit']]) {
+      const bots = all;
       $(id).innerHTML = bots.length
       ? bots.map(b => `
         <div style="display:flex;align-items:center;gap:10px;padding:8px;border-bottom:1px solid #e0edfb;flex-wrap:wrap">
@@ -4443,7 +4443,7 @@ function adminUI() {
       const r = await api('/api/admin/bots/add', { method: 'POST', body: { username: $(pre + '-name').value, link: $(pre + '-link').value, role, game: $(pre + '-game').value } });
       $(pre + '-name').value = ''; $(pre + '-link').value = '';
       renderBots(r.bots);
-      toast(role === 'withdraw' ? 'Withdraw bot added' : 'Deposit bot added', 'ok');
+      toast('Bot added', 'ok');
     } catch (err) { toast(err.message, 'err'); }
   };
   $('bot-add').onclick = () => addBot('deposit', 'bot');

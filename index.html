@@ -202,6 +202,19 @@
     .gtag.mm2 { color: #ffb547; background: rgba(255, 160, 40, .14); }
     /* deposit: pick the game first */
     .dep-games { display: grid; gap: 10px; }
+    /* deposit window: every bot with its full name, status and a Join block */
+    .dp-warn { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; padding: 14px 18px; border: 1px solid #8a6a2c; border-radius: 9px; color: #f3cf7a; background: #2a2418; font-size: 15px; font-weight: 700; line-height: 1.45; }
+    .dp-warn i { display: grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: 50%; color: #2a2418; background: #f3a712; font-style: normal; font-weight: 900; }
+    .dp-list { display: grid; gap: 10px; }
+    .dp-bot { display: flex; align-items: stretch; min-height: 60px; overflow: hidden; border: 1px solid #262a35; border-radius: 8px; background: #161920; animation: enter .35s both; }
+    .dp-who { display: flex; flex: 1; align-items: center; gap: 12px; min-width: 0; padding: 8px 16px; }
+    .dp-who b { overflow: hidden; color: #fff; font-size: 17px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+    .dp-dot { flex: none; width: 12px; height: 12px; border-radius: 50%; background: #5a5f6b; box-shadow: 0 0 0 3px rgba(90, 95, 107, .25); }
+    .dp-dot.on { background: #12b76a; box-shadow: 0 0 0 3px rgba(18, 183, 106, .25); }
+    .dp-join { flex: none; width: 68px; border: 0; color: #04120b; background: var(--green); font: inherit; font-size: 16px; font-weight: 800; cursor: pointer; transition: filter .15s; }
+    .dp-join:hover { filter: brightness(1.1); }
+    .dp-join:disabled { width: auto; padding: 0 14px; color: #8d909a; background: #22262f; cursor: not-allowed; filter: none; }
+    .dp-foot { margin: 14px 0 0; color: #8d909a; font-size: 14px; }
     .dep-game { display: flex; align-items: center; gap: 16px; min-height: 100px; padding: 10px 18px 10px 10px; border: 1px solid #3a3326; border-radius: 10px; color: #fff; font: inherit; text-align: left; cursor: pointer; transition: transform .15s, border-color .2s, filter .2s; }
     .dep-game:hover { transform: translateY(-2px); filter: brightness(1.12); }
     .dep-game img { width: 92px; height: 82px; object-fit: contain; filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .5)); }
@@ -3946,12 +3959,11 @@
 
     /* true when no withdraw bot is online: withdrawals are paused (without withdraw bots the deposit bots send) */
     const withdrawBots = () => {
-      const w = asArray(STATE.bots).filter(b => b.role === "withdraw" && gameOf(b) === GAME);
-      return w.length ? w : depositBots(GAME);
+      return asArray(STATE.bots);
     };
     const botsOffline = () => !withdrawBots().some(b => b.online !== false);
 
-    const depositBots = (game = depGame) => asArray(STATE.bots).filter(b => b.role !== "withdraw" && gameOf(b) === game);
+    const depositBots = () => asArray(STATE.bots);
     let depGame = "mm2";
 
     /* the withdraw bot that sends a request: masked name, avatar and its private server */
@@ -3964,34 +3976,26 @@
           : '<span class="bot-status off"><span class="dot off"></span>Offline</span>'}
       </div>`;
 
-    /* the bot's name is shown masked and big (ltcs***e) so players can match it in game */
+    /* the bots with their full Roblox names, so players can match them in game */
     function botsListHTML() {
       const bots = depositBots();
-      if (!bots.length) return `<div class="empty">No ${GAME_NAMES[depGame]} deposit bot is available right now. Please try again later.</div>`;
-      const anyOnline = bots.some(b => b.online !== false);
-      return bots.map(bot => {
+      if (!bots.length) return '<div class="empty">No bot is available right now. Please try again later.</div>';
+      return `<div class="dp-list">${bots.map(bot => {
         const online = bot.online !== false;
         return `
-          <div class="dep-bot ${online ? "" : "off"}">
-            <div class="dep-bot-top">
+          <div class="dp-bot ${online ? "" : "off"}">
+            <div class="dp-who">
               ${avatar({ username: bot.username, avatar: bot.avatar }, "md")}
-              <div class="dep-bot-name">
-                <small>Trade only with</small>
-                <b>${esc(bot.username)}</b>
-              </div>
-              <span class="bot-status ${online ? "on" : "off"}"><span class="dot ${online ? "" : "off"}"></span>${online ? "Online" : "Offline"}</span>
+              <b>${esc(bot.username)}</b>
+              <i class="dp-dot ${online ? "on" : ""}" title="${online ? "Online" : "Offline"}"></i>
             </div>
             ${online
-              ? `<button class="btn dep-join" data-action="bot-join" data-link="${esc(bot.link || bot.joinLink || BOT_LINK)}">
-                   <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5.2 2 2 18.8 18.8 22 22 5.2zm8.6 12.7-4.5-.9.9-4.5 4.5.9z"/></svg>
-                   Join private server
-                 </button>`
-              : '<button class="btn gray dep-join" disabled>Offline</button>'}
+              ? `<button class="dp-join" data-action="bot-join" data-link="${esc(bot.link || bot.joinLink || BOT_LINK)}">Join</button>`
+              : '<button class="dp-join" disabled>Offline</button>'}
           </div>`;
-      }).join("") + (anyOnline ? "" : '<p class="hint" style="color:#ffc65a">All bots are offline right now. Please wait until one is back online before depositing.</p>');
+      }).join("")}</div>`;
     }
 
-    /* Deposit: 1. accept the risk  2. read the trade rules  3. see the bot and the private server */
     function openBotsModal(step = 3) {
       const steps = `<div class="dep-steps">${[1, 2, 3].map(n => `<i class="${n <= step ? "on" : ""}"></i>`).join("")}</div>`;
       const mm2 = depGame === "mm2";
@@ -4046,9 +4050,10 @@
       }
 
       openModal2(`
-        ${modalHeader("Deposit", "close2")}
+        ${modalHeader("Murder Mystery 2", "close2")}
+        <div class="dp-warn"><i>!</i><span>Always verify that the username of your trading partner matches exactly, users often impersonate bots with similar names.</span></div>
         <div id="depositBots">${botsListHTML()}</div>
-        <p class="hint">Join the bot's private server and send it a trade. Your items appear in your inventory once an admin confirms them.</p>`);
+        <p class="dp-foot">To initiate a trade with the bot, send the bot a trade request.</p>`);
     }
 
     /* ---------- Create / Join ---------- */
