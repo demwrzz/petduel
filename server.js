@@ -697,7 +697,7 @@ const blockedCountry = async (headers, ip) => blockList().includes((await countr
 const BLOCKED_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Pet Duel</title><style>html,body{margin:0;height:100%}body{display:grid;place-items:center;padding:24px;box-sizing:border-box;
 background:radial-gradient(circle at 50% 40%,#10291f,#0b0d12 70%);color:#fff;font-family:system-ui,Arial,sans-serif;text-align:center}
-h1{margin:0;font-size:clamp(56px,14vw,140px);font-weight:900;letter-spacing:-.04em}h1 span{color:#00efa0}
+h1{margin:0;font-size:clamp(56px,14vw,140px);font-weight:900;letter-spacing:-.04em}h1 span{color:#9d5cff}
 p{margin:16px 0 0;font-size:clamp(17px,3vw,24px);font-weight:700}small{display:block;margin-top:10px;color:#8d909a;font-size:15px}</style></head>
 <body><div><h1>PET<span>DUEL</span></h1><p>Pet Duel is not available in your country.</p><small>Sorry! This site cannot be used from your location.</small></div></body></html>`;
 
@@ -4157,15 +4157,15 @@ function adminUI() {
         #cat-panel .cat-scroll { flex: 1; overflow-y: auto; padding: 4px; }
         #cat-panel .cat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
         #cat-panel .cat-card { animation: cat-in .35s cubic-bezier(.2, .8, .2, 1) both; transition: transform .15s, border-color .15s; }
-        #cat-panel .cat-card:hover { transform: translateY(-3px); border-color: #00efa0 !important; }
+        #cat-panel .cat-card:hover { transform: translateY(-3px); border-color: #9d5cff !important; }
         @keyframes cat-in { from { opacity: 0; transform: translateY(14px) scale(.95); } }
         .ev-src { display: flex; gap: 6px; margin-bottom: 8px; }
         .ev-src button { flex: 1; padding: 8px; border: 1px solid #343842; border-radius: 10px; background: #1d212b; color: #9aa0ad; font: inherit; font-weight: 800; cursor: pointer; transition: .15s; }
-        .ev-src button.on { border-color: #00efa0; background: rgba(0, 239, 160, .12); color: #00efa0; }
+        .ev-src button.on { border-color: #9d5cff; background: rgba(157, 92, 255, .12); color: #9d5cff; }
         .ev-inv { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; max-height: 300px; overflow-y: auto; padding: 2px; }
         .ev-pet { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 6px; border: 2px solid #343842; border-radius: 12px; background: #1d212b; color: #fff; font: inherit; cursor: pointer; transition: transform .15s, border-color .15s; }
         .ev-pet:hover { transform: translateY(-2px); border-color: #4da3ff; }
-        .ev-pet.on { border-color: #00efa0; background: rgba(0, 239, 160, .12); box-shadow: 0 0 0 3px rgba(0, 239, 160, .18); }
+        .ev-pet.on { border-color: #9d5cff; background: rgba(157, 92, 255, .12); box-shadow: 0 0 0 3px rgba(157, 92, 255, .18); }
         .ev-pet img { width: 54px; height: 54px; object-fit: contain; }
         .ev-pet b { width: 100%; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
         .ev-pet small { color: #9aa0ad; font-size: 11px; font-weight: 700; }
@@ -4380,7 +4380,7 @@ function adminUI() {
   function renderBlock(list, env, staffLink) {
     const all = [list, env].filter(Boolean).join(', ');
     $('cb-state').textContent = all ? `● Blocking: ${all}` : '● Nobody blocked';
-    $('cb-state').style.color = all ? '#ff5968' : '#00efa0';
+    $('cb-state').style.color = all ? '#ff5968' : '#9d5cff';
     $('cb-hint').innerHTML = (all
       ? 'Visitors from these countries see "Pet Duel is not available in your country". '
       : 'Two-letter country codes, separated by commas (TR = Turkey). ') +
@@ -4404,7 +4404,7 @@ function adminUI() {
   let mtOn = false;
   function renderMaint() {
     $('mt-state').textContent = mtOn ? '● ON: the site is closed' : '● OFF: the site is open';
-    $('mt-state').style.color = mtOn ? '#ff5968' : '#00efa0';
+    $('mt-state').style.color = mtOn ? '#ff5968' : '#9d5cff';
     $('mt-box').style.borderColor = mtOn ? '#ff5968' : '#343842';
     $('mt-toggle').textContent = mtOn ? 'Open the site' : 'Close the site';
     $('mt-toggle').className = mtOn ? 'btn' : 'btn red';
@@ -4429,7 +4429,7 @@ function adminUI() {
         <div style="display:flex;align-items:center;gap:10px;padding:8px;border-bottom:1px solid #e0edfb;flex-wrap:wrap">
           ${b.avatar ? `<img src="${esc(b.avatar)}" alt="" style="width:32px;height:32px;border-radius:50%">` : ''}
           <b style="min-width:110px">${esc(b.username)}</b>
-          <span style="color:${b.online ? '#00efa0' : '#ff5968'};font-weight:800">● ${b.online ? 'Online' : 'Offline'}</span>
+          <span style="color:${b.online ? '#9d5cff' : '#ff5968'};font-weight:800">● ${b.online ? 'Online' : 'Offline'}</span>
           <input class="in" data-bot-link="${esc(b.id)}" value="${esc(b.link)}" style="flex:1;min-width:180px">
           <button class="btn sm ${b.online ? 'gray' : 'mint'}" data-bot-toggle="${esc(b.id)}" data-on="${b.online ? '0' : '1'}">${b.online ? 'Set offline' : 'Set online'}</button>
           <button class="btn red sm" data-bot-del="${esc(b.id)}">🗑</button>
