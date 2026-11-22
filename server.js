@@ -50,6 +50,8 @@ const S = {
   updateNotes: [],
   jpHistory: [],
   processedTrades: [],
+  /* MM2 withdrawals handled by the in-game bot (the items wait here until the trade) */
+  botWithdrawals: [],
   /* deposit bots, managed in the admin panel: { id, username, link, online } */
   bots: []
 };
@@ -385,7 +387,8 @@ function snapshot() {
     chat: S.chat.slice(-60),
     bots: S.bots.map(b => ({ id: b.id, username: b.username, link: b.link, online: b.online !== false, role: botRole(b), ...(b.game === 'mm2' ? { game: 'mm2' } : {}) })),
     eventEscrow: S.eventEscrow || null,
-    processedTrades: (S.processedTrades || []).slice(0, 5000)
+    processedTrades: (S.processedTrades || []).slice(0, 5000),
+    botWithdrawals: S.botWithdrawals.slice(0, 2000)
   };
 }
 
@@ -502,6 +505,7 @@ async function initDb() {
       savedJackpots = d.jackpots || { adoptme: d.jackpot || null };
       S.jpHistory = Array.isArray(d.jpHistory) ? d.jpHistory : [];
       S.processedTrades = Array.isArray(d.processedTrades) ? d.processedTrades : [];
+      S.botWithdrawals = Array.isArray(d.botWithdrawals) ? d.botWithdrawals : [];
       /* an event prize from an admin's inventory was in play when the server stopped: give it back */
       const esc = d.eventEscrow;
       if (esc && esc.item && S.users[esc.userId]) {
@@ -1310,7 +1314,8 @@ function buildState() {
       range: RANGE, maxItems: MAX_ITEMS, ranks: RANKS,
       tax: Number(S.settings.taxPercent) || 0,
       captcha: { mode: TURNSTILE_SECRET && TURNSTILE_SITE_KEY ? 'turnstile' : 'builtin', siteKey: TURNSTILE_SITE_KEY },
-      robloxLogin: oauthOn()
+      robloxLogin: oauthOn(),
+      autoBot: autoDepositOn() ? DEPOSIT_BOT_NAME : ''
     }
   };
 }
@@ -5158,6 +5163,7 @@ function auditItems() {
     if (m.state === 'finished') continue;
     [...m.hostItems, ...m.oppItems].forEach(i => add(i.uid, `match ${m.id}`, false));
   }
+  for (const w of S.botWithdrawals) if (w.status === 'pending') w.items.forEach(i => add(i.uid, `bot withdraw ${w.id}`, false));
 
   for (const J of Object.values(JPS)) if (J && J.state !== 'finished') J.entries.forEach(e => e.items.forEach(i => add(i.uid, `jackpot ${J.id}`, false)));
 
@@ -5263,9 +5269,11 @@ app.post('/api/deposit/init', auth, actionLimit, (req, res) => {
   const asked = String(req.body.robloxUsername || '').trim();
   if (asked && sessionKey(asked) !== sessionKey(user.username)) return bad(res, `You can only deposit from your own Roblox account (${user.username})`);
   const key = sessionKey(user.username);
-  const old = activeSessions.get(key);
+  const busy = activeSessions.get(key);
+  if (busy && busy.type === 'withdraw') return bad(res, 'Finish or cancel your withdrawal first');
+  const old = busy;
   const sess = {
-    robloxUsername: user.username, userId: user.id,
+    type: 'deposit', robloxUsername: user.username, userId: user.id,
     verificationCode: old && old.expiresAt > now() ? old.verificationCode : String(crypto.randomInt(100000, 1000000)),
     startedAt: old && old.expiresAt > now() ? old.startedAt : now(),
     expiresAt: now() + DEPOSIT_SESSION_MS
@@ -5277,7 +5285,7 @@ app.post('/api/deposit/init', auth, actionLimit, (req, res) => {
 /* the deposit window asks every 2 seconds */
 app.get('/api/deposit/status', auth, (req, res) => {
   const sess = activeSessions.get(sessionKey(req.user.username));
-  const live = sess && sess.expiresAt > now() ? sess : null;
+  const live = sess && sess.type !== 'withdraw' && sess.expiresAt > now() ? sess : null;
   res.json({ username: req.user.username, inventory: mm2Inventory(req.user), hasPendingSession: Boolean(live), session: sessionView(live) });
 });
 
@@ -5285,7 +5293,16 @@ app.get('/api/deposit/status', auth, (req, res) => {
 app.get('/api/bot/verify-player/:robloxUsername', gameBotOnly, (req, res) => {
   const sess = activeSessions.get(sessionKey(req.params.robloxUsername));
   const ok = Boolean(sess && sess.expiresAt > now() && S.users[sess.userId] && !S.users[sess.userId].banned);
-  res.json(ok ? { allowed: true, verificationCode: sess.verificationCode, expiresAt: sess.expiresAt } : { allowed: false });
+  if (!ok) return res.json({ allowed: false });
+  if (sess.type === 'withdraw') {
+    const w = S.botWithdrawals.find(x => x.id === sess.withdrawId && x.status === 'pending');
+    if (!w) return res.json({ allowed: false });
+    /* the bot is trading now: the player cannot cancel for a few minutes (the items may already be handed over) */
+    w.botSeenAt = now();
+    markDirty();
+    return res.json({ allowed: true, type: 'withdraw', items: groupItems(w.items), verificationCode: sess.verificationCode, expiresAt: sess.expiresAt });
+  }
+  res.json({ allowed: true, type: 'deposit', verificationCode: sess.verificationCode, expiresAt: sess.expiresAt });
 });
 
 /* the in-game bot: the trade is done, credit the items */
@@ -5307,7 +5324,7 @@ app.post('/api/bot/confirm-deposit', gameBotOnly, (req, res) => {
 
   const key = sessionKey(name);
   const sess = activeSessions.get(key);
-  if (!sess || sess.expiresAt + DEPOSIT_GRACE_MS < now()) return res.status(403).json({ error: 'No active deposit session for this player' });
+  if (!sess || sess.type === 'withdraw' || sess.expiresAt + DEPOSIT_GRACE_MS < now()) return res.status(403).json({ error: 'No active deposit session for this player' });
   const user = S.users[sess.userId];
   if (!user) return res.status(404).json({ error: 'Player not found on the site' });
 
@@ -5336,6 +5353,162 @@ app.post('/api/bot/confirm-deposit', gameBotOnly, (req, res) => {
   res.json({ success: true, inventory: mm2Inventory(user), credited, unmatched });
 });
 
+/* ================= MM2 AUTOMATIC WITHDRAW (in-game bot) =================
+   1. The player picks MM2 items and presses Withdraw: POST /api/withdraw/init takes them out of the inventory into a
+      saved withdraw record (S.botWithdrawals, kept in MongoDB, so a restart never loses them) and opens a
+      15 minute session of type "withdraw".
+   2. verify-player answers { allowed: true, type: "withdraw", items: [{ name, amount }] } to the bot.
+   3. After handing the items over the bot calls POST /api/bot/confirm-withdraw { tradeId, robloxUsername, items }.
+      Items it did not hand over go back to the player.
+   4. Cancel (POST /api/withdraw/cancel) or 15 minutes without a trade: everything goes back to the inventory.
+      Cancel is refused for 3 minutes after the bot started trading with the player. */
+
+const WD_SESSION_MS = 15 * 60 * 1000;
+const WD_BOT_LOCK_MS = 3 * 60 * 1000;
+const WD_MAX_ITEMS = 20;
+
+function groupItems(items) {
+  const m = new Map();
+  for (const i of items) m.set(i.name, (m.get(i.name) || 0) + 1);
+  return [...m].map(([name, amount]) => ({ name, amount }));
+}
+
+function wdView(w) {
+  if (!w) return null;
+  return {
+    id: w.id, status: w.status, botUsername: DEPOSIT_BOT_NAME, verificationCode: w.verificationCode, expiresAt: w.expiresAt, ts: w.ts,
+    items: w.items.map(publicItem), grouped: groupItems(w.items), value: valueOf(w.items),
+    canCancel: w.status === 'pending' && !(w.botSeenAt && now() - w.botSeenAt < WD_BOT_LOCK_MS)
+  };
+}
+
+const pendingBotWithdraw = userId => S.botWithdrawals.find(w => w.userId === userId && w.status === 'pending') || null;
+
+/* give the items back and close the record (cancel / expired) */
+function refundBotWithdraw(w, status) {
+  if (!w || w.status !== 'pending') return false;
+  w.status = status;
+  w.doneAt = now();
+  const user = S.users[w.userId];
+  if (user) { user.inventory.push(...w.items); emitMe(user); }
+  const key = sessionKey(w.robloxUsername);
+  const sess = activeSessions.get(key);
+  if (sess && sess.withdrawId === w.id) activeSessions.delete(key);
+  markDirty();
+  if (user) io.to('u:' + user.id).emit('withdraw:update', wdView(w));
+  return true;
+}
+
+/* sessions are in memory: after a restart they are rebuilt from the saved records */
+function resumeBotWithdrawals() {
+  for (const w of S.botWithdrawals) {
+    if (w.status !== 'pending') continue;
+    activeSessions.set(sessionKey(w.robloxUsername), { type: 'withdraw', robloxUsername: w.robloxUsername, userId: w.userId, withdrawId: w.id, verificationCode: w.verificationCode, startedAt: w.ts, expiresAt: w.expiresAt });
+  }
+}
+
+setInterval(() => {
+  const t = now();
+  for (const w of S.botWithdrawals) {
+    if (w.status !== 'pending' || w.expiresAt > t) continue;
+    if (w.botSeenAt && t - w.botSeenAt < WD_BOT_LOCK_MS) continue; /* the bot is in the middle of the trade */
+    refundBotWithdraw(w, 'expired');
+    console.log(`[WITHDRAW] ${w.robloxUsername}: no trade in 15 minutes, ${w.items.length} item(s) returned`);
+  }
+}, 30 * 1000);
+
+app.post('/api/withdraw/init', auth, actionLimit, (req, res) => {
+  if (!autoDepositOn()) return bad(res, 'Automatic withdrawals are not set up yet', 503);
+  const user = req.user;
+  if (pendingBotWithdraw(user.id)) return bad(res, 'You already have a withdrawal waiting. Trade the bot or cancel it first.');
+  const uids = selectionToUids(req.body);
+  const picked = pickItems(user, uids, WD_MAX_ITEMS);
+  if (!picked) return bad(res, `Select 1-${WD_MAX_ITEMS} items from your inventory`);
+  if (!picked.every(i => i.game === 'mm2')) return bad(res, 'Only MM2 items can be withdrawn with the bot');
+  /* a waiting deposit session of this player is replaced by the withdrawal */
+  const items = takeItems(user, uids, WD_MAX_ITEMS);
+  const w = {
+    id: rid(8), userId: user.id, nickname: nick(user), robloxUsername: user.username, items,
+    verificationCode: String(crypto.randomInt(100000, 1000000)), status: 'pending', ts: now(), expiresAt: now() + WD_SESSION_MS
+  };
+  S.botWithdrawals.unshift(w);
+  if (S.botWithdrawals.length > 2000) S.botWithdrawals.length = 2000;
+  activeSessions.set(sessionKey(user.username), { type: 'withdraw', robloxUsername: user.username, userId: user.id, withdrawId: w.id, verificationCode: w.verificationCode, startedAt: w.ts, expiresAt: w.expiresAt });
+  addTransaction(user, 'Withdraw Request', w.id, -valueOf(items), 'mm2');
+  markDirty();
+  emitMe(user);
+  notifyAdmins('withdraw', `📤 MM2 bot withdraw by ${nick(user)} (${user.username}): ${groupItems(items).map(g => `${g.amount}x ${g.name}`).join(', ')} · ${valueOf(items)}`);
+  res.json({ status: 'ready', withdraw: wdView(w), inventory: mm2Inventory(user) });
+});
+
+app.get('/api/withdraw/status', auth, (req, res) => {
+  const w = pendingBotWithdraw(req.user.id) || S.botWithdrawals.find(x => x.userId === req.user.id && x.id === String(req.query.id || '')) || null;
+  res.json({ withdraw: wdView(w), inventory: mm2Inventory(req.user) });
+});
+
+app.post('/api/withdraw/cancel', auth, actionLimit, (req, res) => {
+  const w = pendingBotWithdraw(req.user.id);
+  if (!w) return bad(res, 'You have no withdrawal waiting');
+  if (w.botSeenAt && now() - w.botSeenAt < WD_BOT_LOCK_MS) return bad(res, 'The bot is trading with you right now. Wait a few minutes before cancelling.');
+  refundBotWithdraw(w, 'cancelled');
+  addTransaction(req.user, 'Withdraw Refund', w.id, valueOf(w.items), 'mm2');
+  res.json({ ok: true, withdraw: wdView(w), inventory: mm2Inventory(req.user) });
+});
+
+app.post('/api/bot/confirm-withdraw', gameBotOnly, (req, res) => {
+  const tradeId = String(req.body.tradeId || '').trim();
+  const name = String(req.body.robloxUsername || '').trim();
+  const rows = Array.isArray(req.body.items) ? req.body.items : [];
+  if (!/^[\w:.\-]{1,100}$/.test(tradeId)) return bad(res, 'tradeId is missing or invalid');
+  if (processedTrades.has(tradeId)) return res.status(409).json({ error: 'This trade was already processed', tradeId });
+  const key = sessionKey(name);
+  const sess = activeSessions.get(key);
+  const w = sess && sess.type === 'withdraw' ? S.botWithdrawals.find(x => x.id === sess.withdrawId && x.status === 'pending') : null;
+  if (!w) return res.status(403).json({ error: 'No active withdraw session for this player' });
+
+  /* what the bot says it handed over, by name */
+  const given = new Map();
+  for (const r of rows) {
+    const n = normName(r && r.name);
+    const a = Math.floor(Number(r && r.amount === undefined ? 1 : r && r.amount));
+    if (n && a > 0) given.set(n, (given.get(n) || 0) + Math.min(a, 500));
+  }
+  const delivered = [], back = [];
+  for (const item of w.items) {
+    const n = normName(item.name);
+    if ((given.get(n) || 0) > 0) { given.set(n, given.get(n) - 1); delivered.push(item); } else back.push(item);
+  }
+  const extra = [...given].filter(([, a]) => a > 0);
+
+  processedTrades.add(tradeId);
+  S.processedTrades = [tradeId, ...(S.processedTrades || []).filter(x => x !== tradeId)].slice(0, 5000);
+  w.status = 'completed';
+  w.doneAt = now();
+  w.tradeId = tradeId;
+  w.delivered = delivered.length;
+  activeSessions.delete(key);
+  const user = S.users[w.userId];
+  if (user && back.length) {
+    /* items the bot did not hand over stay with the player */
+    user.inventory.push(...back);
+    addTransaction(user, 'Withdraw Refund', w.id, valueOf(back), 'mm2');
+  }
+  w.items = delivered;
+  markDirty();
+  if (user) {
+    emitMe(user);
+    io.to('u:' + user.id).emit('withdraw:update', wdView(w));
+    const n = delivered.length;
+    if (n) systemChat(`${nick(user)} successfully withdrew ${n} MM2 item${n === 1 ? '' : 's'} worth ${Number(valueOf(delivered)).toLocaleString('en-US')}! 🎉`, { withdraw: true });
+  }
+  if (back.length || extra.length) {
+    notifyAdmins('security', `MM2 withdraw ${w.id} of ${w.robloxUsername}: ${back.length} item(s) not handed over (returned to the player)` +
+      (extra.length ? `; the bot reported extra items: ${extra.map(([n, a]) => `${a}x ${n}`).join(', ')}` : ''));
+  }
+  console.log(`[WITHDRAW] ${w.robloxUsername} trade ${tradeId}: ${delivered.length} delivered, ${back.length} returned`);
+  res.json({ success: true, delivered: groupItems(delivered), returned: groupItems(back) });
+});
+
 /* ================= START ================= */
 
 (async () => {
@@ -5343,6 +5516,7 @@ app.post('/api/bot/confirm-deposit', gameBotOnly, (req, res) => {
   ensureDefaultBot();
   scaleAllValues();
   for (const t of S.processedTrades || []) processedTrades.add(t);
+  resumeBotWithdrawals();
   resumeJackpot();
   auditItems();
   resumeMatches();
