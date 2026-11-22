@@ -3992,7 +3992,7 @@
     }
 
     /* Deposit: 1. accept the risk  2. read the trade rules  3. see the bot and the private server */
-    function openBotsModal(step = 1) {
+    function openBotsModal(step = 3) {
       const steps = `<div class="dep-steps">${[1, 2, 3].map(n => `<i class="${n <= step ? "on" : ""}"></i>`).join("")}</div>`;
       const mm2 = depGame === "mm2";
 
@@ -4046,11 +4046,9 @@
       }
 
       openModal2(`
-        ${modalHeader(GAME_NAMES[depGame] + " deposit bot", "close2")}
-        ${steps}
+        ${modalHeader("Deposit", "close2")}
         <div id="depositBots">${botsListHTML()}</div>
-        <p class="hint">${mm2 ? "Your items appear in your MM2 inventory once an admin confirms them." : "Remember: at least <b>6 food items</b> in every trade. Your pets appear in your inventory once an admin confirms them."}</p>
-        <div class="dep-nav"><button class="btn gray" data-action="dep-step" data-step="2">Back</button></div>`);
+        <p class="hint">Join the bot's private server and send it a trade. Your items appear in your inventory once an admin confirms them.</p>`);
     }
 
     /* ---------- Create / Join ---------- */
