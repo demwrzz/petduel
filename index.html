@@ -196,6 +196,11 @@
     .game-dd .gd-ico, .game-dd .cf-menu img { width: 20px; height: 20px; object-fit: contain; flex: none; }
     .game-dd .cf-menu button { display: flex; align-items: center; gap: 8px; }
     .game-dd { z-index: 21; }
+    .gd-off { display: none; margin-left: auto; padding: 1px 6px; border-radius: 5px; color: #ff8a94; background: rgba(255, 89, 104, .12); font-size: 10px; font-weight: 800; }
+    body.am-off .gd-am { opacity: .55; cursor: not-allowed; }
+    body.am-off .gd-off { display: inline-block; }
+    .dep-off { position: relative; opacity: .5; cursor: not-allowed; filter: grayscale(.6); }
+    .dep-off small { display: block; margin-top: 4px; color: #ffb3ba; font-size: 12px; font-weight: 800; }
     .jp-gbar { margin-bottom: 12px; }
     .gtag { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 5px; font-size: 10px; font-weight: 900; letter-spacing: .4px; vertical-align: middle; }
     .gtag.adoptme { color: #00efa0; background: rgba(0, 239, 160, .12); }
@@ -1778,7 +1783,7 @@
               <svg class="caret" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
             </button>
             <div class="cf-menu">
-              <button data-action="game" data-game="adoptme"><img src="/assets/xmas-dog.png" alt="">Adopt Me</button>
+              <button data-action="game" data-game="adoptme" class="gd-am"><img src="/assets/xmas-dog.png" alt="">Adopt Me<small class="gd-off">Currently disabled</small></button>
               <button data-action="game" data-game="mm2"><img src="/assets/mm2-knife.png" alt="">MM2</button>
             </div>
           </div>
@@ -1817,7 +1822,7 @@
               <svg class="caret" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
             </button>
             <div class="cf-menu">
-              <button data-action="game" data-game="adoptme"><img src="/assets/xmas-dog.png" alt="">Adopt Me</button>
+              <button data-action="game" data-game="adoptme" class="gd-am"><img src="/assets/xmas-dog.png" alt="">Adopt Me<small class="gd-off">Currently disabled</small></button>
               <button data-action="game" data-game="mm2"><img src="/assets/mm2-knife.png" alt="">MM2</button>
             </div>
           </div></div><div id="jackpotView"></div></section>
@@ -2048,8 +2053,11 @@
     /* the game the player is looking at: lobby, jackpot, inventory, deposit and withdraw follow it */
     const GAME_NAMES = { adoptme: "Adopt Me", mm2: "MM2" };
     const gameOf = x => (x && x.game === "mm2" ? "mm2" : "adoptme");
-    let GAME = "adoptme";
-    try { if (localStorage.getItem("pd_game") === "mm2") GAME = "mm2"; } catch {}
+    /* the site opens on MM2 while Adopt Me is disabled (the server says so in config.adoptMeOff) */
+    let GAME = "mm2";
+    try { if (localStorage.getItem("pd_game") === "adoptme") GAME = "adoptme"; } catch {}
+    const amOff = () => !STATE.config || STATE.config.adoptMeOff !== false;
+    if (GAME === "adoptme") GAME = "mm2";
     const gameTag = g => `<span class="gtag ${g}">${g === "mm2" ? "MM2" : "ADOPT ME"}</span>`;
     const inventory = () => ME ? asArray(ME.inventory).filter(i => gameOf(i) === GAME) : [];
     function renderGameSw() {
@@ -2064,6 +2072,7 @@
     renderGameSw();
     function setGame(g) {
       g = g === "mm2" ? "mm2" : "adoptme";
+      if (g === "adoptme" && amOff()) { toast("Adopt Me is currently disabled", "err"); renderGameSw(); return; }
       if (g === GAME) return;
       GAME = g;
       try { localStorage.setItem("pd_game", g); } catch {}
@@ -3267,6 +3276,8 @@
 
       socket.on("bounty:claimed", showBountyPopup);
 
+      socket.on("adoptme:update", d => { if (STATE.config) STATE.config.adoptMeOff = Boolean(d && d.off); scheduleRefresh(); });
+
       socket.on("autobot:status", d => { if (STATE.config) STATE.config.autoBotOnline = Boolean(d && d.online); headerSig = ""; updateWithdrawGate(); scheduleRefresh(); });
 
       socket.on("withdraw:update", w => { if (w && bwView && w.id === bwView.id && $("#bwBox")) { bwView = w; renderBotWithdraw(); } scheduleRefresh(); });
@@ -3313,6 +3324,9 @@
         if (state.now) clockSkew = Date.now() - state.now;
         STATE = { ...STATE, ...state };
         setTimeout(updateWithdrawGate, 0);
+        if (GAME === "adoptme" && amOff()) { GAME = "mm2"; lobbySig = ""; headerSig = ""; jpSig = ""; }
+        document.body.classList.toggle("am-off", amOff());
+        renderGameSw();
         if (state.jackpots) STATE.jackpot = state.jackpots[GAME] || null;
         if (!state.maintenance) STATE.maintenance = false;
 
@@ -3470,7 +3484,7 @@
 
     /* ---------- typing hero: types a phrase, waits, deletes it, types the next ---------- */
     (function heroTyping() {
-      const phrases = ["Adopt Me PvP Duels", "MM2 PvP Duels", "Lowest Tax", "petduel.win", "Coinflip & Jackpot", "Provably Fair"];
+      const phrases = ["MM2 PvP Duels", "Adopt Me PvP Duels", "MM2 PvP Duels", "Lowest Tax", "petduel.win", "Coinflip & Jackpot", "Provably Fair"];
       const el = document.getElementById("heroText");
       const caret = document.querySelector(".hero-caret");
       if (!el) return;
@@ -3736,7 +3750,7 @@
             <option value="name">Name</option>
           </select>
 
-          <select class="control" id="gridGame">${["adoptme", "mm2"].map(g => `<option value="${g}" ${g === GAME ? "selected" : ""}>${GAME_NAMES[g]}</option>`).join("")}</select>
+          <select class="control" id="gridGame">${["adoptme", "mm2"].map(g => `<option value="${g}" ${g === GAME ? "selected" : ""} ${g === "adoptme" && amOff() ? "disabled" : ""}>${GAME_NAMES[g]}${g === "adoptme" && amOff() ? " (currently disabled)" : ""}</option>`).join("")}</select>
         </div>
 
         <div class="inventory-box">
@@ -4212,7 +4226,9 @@
           ${modalHeader("Deposit", "close2")}
           <div class="dep-games">
             <button class="dep-game mm2" data-action="dep-game" data-game="mm2"><img src="/assets/mm2-knife.png" alt=""><b>Murder Mystery<br>2</b></button>
-            <button class="dep-game adoptme" data-action="dep-game" data-game="adoptme"><img src="/assets/xmas-dog.png" alt=""><b>Adopt Me!</b></button>
+            ${amOff()
+              ? '<div class="dep-game adoptme dep-off"><img src="/assets/xmas-dog.png" alt=""><b>Adopt Me!<small>Currently disabled</small></b></div>'
+              : '<button class="dep-game adoptme" data-action="dep-game" data-game="adoptme"><img src="/assets/xmas-dog.png" alt=""><b>Adopt Me!</b></button>'}
           </div>`);
         return;
       }
