@@ -183,25 +183,25 @@ async function setupGuild(guild) {
     if (!CONFIG.postInfoMessages) { await registerCommands(guild); console.log(`Ready in "${guild.name}".`); return; }
     await postOnce(findChannel(guild, CH.openTicket), ticketPanel());
     await postOnce(findChannel(guild, CH.website), {
-      embeds: [embed('🌐 petduel.win', `**Adopt Me PvP duels**: coinflip, jackpot, giveaways and events.\n\n👉 **${SITE}**\n\nLink your account with \`/link\` (get the code on the site: Profile > Link Discord) to get your rank role!`)],
+      embeds: [embed('🌐 petduel.win', `**MM2 PvP duels**: coinflip, jackpot, giveaways and events.\n\n👉 **${SITE}**\n\nLink your account with \`/link\` (get the code on the site: Profile > Link Discord) to get your rank role!`)],
       components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setLabel('Open Pet Duel').setStyle(ButtonStyle.Link).setURL(SITE))]
     });
     await postOnce(findChannel(guild, CH.rules), { embeds: [embed('📜 Server Rules', [
       '1. Be respectful. No hate speech, threats or harassment.',
-      '2. No scamming, impersonating staff or bots, or asking for pets in DMs.',
+      '2. No scamming, impersonating staff or bots, or asking for items in DMs.',
       '3. No spam, advertising or links to other sites.',
       '4. Only trade with the deposit bot shown on petduel.win.',
       '5. You must be 18+ and allowed to use Pet Duel where you live.',
-      '6. Staff will **never** DM you asking for pets or your password.',
+      '6. Staff will **never** DM you asking for items or your password.',
       '',
-      '⚠️ Pet Duel is not responsible for item losses due to rollbacks, bans or trade restrictions by Adopt Me moderators or Roblox. **Deposit and play at your own risk.**',
+      '⚠️ Pet Duel is not responsible for item losses due to rollbacks, bans or trade restrictions by Murder Mystery 2 moderators or Roblox. **Deposit and play at your own risk.**',
       '🎮 Pet Duel is for entertainment only. Gems and values have no monetary value.'
     ].join('\n'))] });
     await postOnce(findChannel(guild, CH.howToPlay), { embeds: [embed('🎮 How to play', [
       `**1. Log in** on ${SITE} with your Roblox account and choose a nickname.`,
-      '**2. Deposit:** Wallet > Deposit. Join the bot\'s private server and trade your pets (add at least 6 food items). An admin confirms it.',
+      '**2. Deposit:** Wallet > Deposit. Join the bot\'s private server and trade your items. An admin confirms it.',
       '**3. Play:** create or join a **Coinflip** (pick paw or cat), or join the **Jackpot**: the bigger your share, the bigger your chance.',
-      '**4. Withdraw:** Wallet > select pets > Withdraw. An admin sends them to you in game.',
+      '**4. Withdraw:** Wallet > select items > Withdraw. An admin sends them to you in game.',
       '**5. Link Discord:** Profile > Link Discord on the site, then `/link CODE` here for your rank role.',
       '',
       'Every result is provably fair. Questions? Open a ticket.'
@@ -285,14 +285,14 @@ function commandList() {
       .addSubcommand(s => s.setName('ban').setDescription('Ban or unban on the site')
         .addStringOption(o => o.setName('nickname').setDescription('Nickname or Roblox name').setRequired(true))
         .addBooleanOption(o => o.setName('ban').setDescription('true = ban, false = unban').setRequired(true)))
-      .addSubcommand(s => s.setName('give').setDescription('Give pets (for confirmed deposits)')
+      .addSubcommand(s => s.setName('give').setDescription('Give items (for confirmed deposits)')
         .addStringOption(o => o.setName('nickname').setDescription('Nickname or Roblox name').setRequired(true))
         .addStringOption(pet)
         .addIntegerOption(o => o.setName('qty').setDescription('How many').setMinValue(1).setMaxValue(50)))
-      .addSubcommand(s => s.setName('clearpets').setDescription('Delete ALL pets of a player')
+      .addSubcommand(s => s.setName('clearpets').setDescription('Delete ALL items of a player')
         .addStringOption(o => o.setName('nickname').setDescription('Nickname or Roblox name').setRequired(true))),
     new SlashCommandBuilder().setName('match').setDescription('Coinflip tools').setDefaultMemberPermissions(ADMIN)
-      .addSubcommand(s => s.setName('cancel').setDescription('Cancel a coinflip (pets go back)').addStringOption(o => o.setName('id').setDescription('Match ID').setRequired(true))),
+      .addSubcommand(s => s.setName('cancel').setDescription('Cancel a coinflip (items go back)').addStringOption(o => o.setName('id').setDescription('Match ID').setRequired(true))),
     new SlashCommandBuilder().setName('event').setDescription('Start a site event').setDefaultMemberPermissions(ADMIN)
       .addSubcommand(s => s.setName('wheel').setDescription('Wheel event').addStringOption(pet)
         .addIntegerOption(o => o.setName('seconds').setDescription('Join time 15-600').setMinValue(15).setMaxValue(600)))
@@ -461,7 +461,7 @@ async function openTicket(interaction) {
 
   await ch.send({
     content: `${interaction.user} welcome! Describe your problem and a staff member will help you soon.`,
-    embeds: [embed('🎫 Ticket', 'For deposits and withdrawals: write your **site nickname**, the **pets** and add **screenshots** of the trade.')],
+    embeds: [embed('🎫 Ticket', 'For deposits and withdrawals: write your **site nickname**, the **items** and add **screenshots** of the trade.')],
     components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('ticket_close').setLabel('Close ticket').setEmoji('🔒').setStyle(ButtonStyle.Danger))]
   });
 
@@ -514,13 +514,13 @@ function playerEmbed(u, staffView) {
     { name: 'Profit', value: `${gem} ${u.profit > 0 ? '+' : ''}${fmt(u.profit)}`, inline: true },
     { name: 'Total won', value: `${gem} ${fmt(u.totalWon)}`, inline: true },
     { name: 'Total lost', value: `${gem} ${fmt(u.totalLost)}`, inline: true },
-    { name: 'Inventory', value: `${u.items} pets · ${gem} ${fmt(u.inventoryValue)}`, inline: true }
+    { name: 'Inventory', value: `${u.items} items · ${gem} ${fmt(u.inventoryValue)}`, inline: true }
   );
   if (staffView) {
     e.addFields({ name: 'Roblox name', value: u.robloxName || '-', inline: true }, { name: 'Site ID', value: u.id, inline: true });
     if (u.topPets && u.topPets.length) e.addFields({ name: 'Top pets', value: u.topPets.map(p => `${petLabel(p)} · ${gem} ${fmt(p.value)}`).join('\n') });
     if (u.pendingWithdrawals && u.pendingWithdrawals.length) {
-      e.addFields({ name: 'Pending withdrawals', value: u.pendingWithdrawals.map(w => `\`${w.id}\` · ${w.items} pets · ${gem} ${fmt(w.value)} · ${ago(w.ts)}`).join('\n') });
+      e.addFields({ name: 'Pending withdrawals', value: u.pendingWithdrawals.map(w => `\`${w.id}\` · ${w.items} items · ${gem} ${fmt(w.value)} · ${ago(w.ts)}`).join('\n') });
     }
   }
   return e;
@@ -555,7 +555,7 @@ async function handleCommand(i) {
   }
 
   if (name === 'website') {
-    return reply(i, { embeds: [embed('🌐 petduel.win', `Play Adopt Me PvP duels: **${SITE}**`)], components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setLabel('Open Pet Duel').setStyle(ButtonStyle.Link).setURL(SITE))] }, false);
+    return reply(i, { embeds: [embed('🌐 petduel.win', `Play MM2 PvP duels: **${SITE}**`)], components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setLabel('Open Pet Duel').setStyle(ButtonStyle.Link).setURL(SITE))] }, false);
   }
 
   if (name === 'coinflip') {
@@ -623,7 +623,7 @@ async function handleCommand(i) {
     await i.deferReply();
     const { list } = await site('GET', '/api/bot/games');
     return reply(i, { embeds: [embed('🪙 Open coinflips', list.length
-      ? list.map(m => `**${m.host}** · ${gem} ${short(m.value)} · ${m.pets} pet${m.pets === 1 ? '' : 's'}${m.maxJoin ? ` · max ${m.maxJoin} to join` : ''}`).join('\n') + `\n\nJoin on ${SITE}`
+      ? list.map(m => `**${m.host}** · ${gem} ${short(m.value)} · ${m.pets} item${m.pets === 1 ? '' : 's'}${m.maxJoin ? ` · max ${m.maxJoin} to join` : ''}`).join('\n') + `\n\nJoin on ${SITE}`
       : 'No open games right now. Create one on the site!')] });
   }
 
@@ -693,7 +693,7 @@ async function handleCommand(i) {
     for (const w of list.slice(0, 10)) {
       await i.followUp({
         flags: EPHEMERAL,
-        embeds: [embed(`📤 ${w.gameName ? `[${w.gameName}] ` : ''}${w.nickname}`, `**Game:** ${w.gameName || 'Adopt Me'}${w.bot ? `\n**Bot:** ${w.bot}` : ''}\n**Roblox:** ${w.robloxName}\n**Value:** ${gem} ${fmt(w.value)}\n**Requested:** ${ago(w.ts)}\n**${w.game === 'mm2' ? 'Items' : 'Pets'}:** ${w.items.join(', ').slice(0, 900)}`).setFooter({ text: `Withdraw ID ${w.id}` })],
+        embeds: [embed(`📤 ${w.gameName ? `[${w.gameName}] ` : ''}${w.nickname}`, `**Game:** ${w.gameName || 'MM2'}${w.bot ? `\n**Bot:** ${w.bot}` : ''}\n**Roblox:** ${w.robloxName}\n**Value:** ${gem} ${fmt(w.value)}\n**Requested:** ${ago(w.ts)}\n**${w.game === 'mm2' ? 'Items' : 'Pets'}:** ${w.items.join(', ').slice(0, 900)}`).setFooter({ text: `Withdraw ID ${w.id}` })],
         components: [withdrawButtons(w.id)]
       });
     }
@@ -750,13 +750,13 @@ async function handleCommand(i) {
     if (sub === 'give') {
       const qty = i.options.getInteger('qty') || 1;
       await site('POST', '/api/admin/grant', { username: user.nickname, catalogId: i.options.getString('pet'), qty }, actorOf(i));
-      log(i.guild, '🎁 Pets given', `${i.user} gave ${qty}x pet \`${i.options.getString('pet')}\` to **${user.nickname}**`, 0x00efa0);
+      log(i.guild, '🎁 Items given', `${i.user} gave ${qty}x item \`${i.options.getString('pet')}\` to **${user.nickname}**`, 0x00efa0);
       return reply(i, `✅ Gave ${qty} pet${qty === 1 ? '' : 's'} to ${user.nickname}.`);
     }
     if (sub === 'clearpets') {
       const r = await site('POST', '/api/admin/inventory/clear', { id: user.id }, actorOf(i));
-      log(i.guild, '🗑 Pets deleted', `${i.user} deleted all ${r.count} pets (${gem} ${fmt(r.value)}) of **${user.nickname}**`, 0xff5968);
-      return reply(i, `🗑 Deleted ${r.count} pets of ${user.nickname}.`);
+      log(i.guild, '🗑 Items deleted', `${i.user} deleted all ${r.count} items (${gem} ${fmt(r.value)}) of **${user.nickname}**`, 0xff5968);
+      return reply(i, `🗑 Deleted ${r.count} items of ${user.nickname}.`);
     }
   }
 
@@ -764,7 +764,7 @@ async function handleCommand(i) {
     await i.deferReply({ flags: EPHEMERAL });
     await site('POST', '/api/admin/match/cancel', { id: i.options.getString('id') }, actorOf(i));
     log(i.guild, '🪙 Coinflip cancelled', `${i.user} cancelled match \`${i.options.getString('id')}\``);
-    return reply(i, '✅ Match cancelled, pets returned.');
+    return reply(i, '✅ Match cancelled, items returned.');
   }
 
   if (name === 'event') {
@@ -823,7 +823,7 @@ async function handleButton(i) {
     e.setColor(done ? 0x00efa0 : 0xff5968).addFields({ name: done ? '✅ Sent' : '↩️ Refunded', value: `by ${i.user} · <t:${Math.floor(Date.now() / 1000)}:R>` });
     await i.message.edit({ embeds: [e], components: [] }).catch(() => {});
     log(i.guild, done ? '✅ Withdrawal sent' : '↩️ Withdrawal refunded', `${i.user} → \`${id}\``, done ? 0x00efa0 : 0xff5968);
-    return reply(i, done ? '✅ Marked as sent. The player sees it on the site.' : '↩️ Refunded: the pets are back in the player\'s inventory.');
+    return reply(i, done ? '✅ Marked as sent. The player sees it on the site.' : '↩️ Refunded: the items are back in the player\'s inventory.');
   }
 }
 
