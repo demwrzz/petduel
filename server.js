@@ -49,6 +49,7 @@ const S = {
   settings: { taxPercent: 0, taxReceiver: 'auto', taxIdx: 0, elveUrl: '' },
   updateNotes: [],
   jpHistory: [],
+  processedTrades: [],
   /* deposit bots, managed in the admin panel: { id, username, link, online } */
   bots: []
 };
@@ -383,7 +384,8 @@ function snapshot() {
     jpHistory: S.jpHistory.slice(0, 100),
     chat: S.chat.slice(-60),
     bots: S.bots.map(b => ({ id: b.id, username: b.username, link: b.link, online: b.online !== false, role: botRole(b), ...(b.game === 'mm2' ? { game: 'mm2' } : {}) })),
-    eventEscrow: S.eventEscrow || null
+    eventEscrow: S.eventEscrow || null,
+    processedTrades: (S.processedTrades || []).slice(0, 5000)
   };
 }
 
@@ -499,6 +501,7 @@ async function initDb() {
       S.chat = Array.isArray(d.chat) ? d.chat.slice(-60) : [];
       savedJackpots = d.jackpots || { adoptme: d.jackpot || null };
       S.jpHistory = Array.isArray(d.jpHistory) ? d.jpHistory : [];
+      S.processedTrades = Array.isArray(d.processedTrades) ? d.processedTrades : [];
       /* an event prize from an admin's inventory was in play when the server stopped: give it back */
       const esc = d.eventEscrow;
       if (esc && esc.item && S.users[esc.userId]) {
@@ -753,7 +756,7 @@ app.use(async (req, res, next) => {
     return res.redirect('/');
   }
   if (!blockList().length || req.path === '/health' || req.path === '/api/whereami') return next();
-  if (hasStaffCookie(req.headers.cookie) || reqHasBotKey(req)) return next();
+  if (hasStaffCookie(req.headers.cookie) || reqHasBotKey(req) || (req.headers['x-bot-secret'] && gameBotSecretOk(req))) return next();
   if (await blockedCountry(req.headers, req.ip)) {
     if (req.path.startsWith('/api/')) return res.status(451).json({ error: 'Pet Duel is not available in your country' });
     return res.status(451).type('html').send(BLOCKED_PAGE);
@@ -948,7 +951,7 @@ const maintenanceOn = () => Boolean(S.settings.maintenance);
 const MAINT_OPEN = ['/auth/', '/captcha', '/me'];
 
 app.use('/api', (req, res, next) => {
-  if (!maintenanceOn() || reqHasBotKey(req)) return next();
+  if (!maintenanceOn() || reqHasBotKey(req) || (req.headers['x-bot-secret'] && gameBotSecretOk(req))) return next();
   const user = userFromToken(tokenFromRequest(req));
   if (user && isAdmin(user)) return next();
 
@@ -2119,6 +2122,7 @@ const UPDATE_LOG = [
     'Stats and profit are kept per game (profile and player card have Adopt Me / MM2 tabs); the total still decides the rank',
     'Giveaways belong to one game and only that game\'s bets count for their requirements (MM2 bets do not unlock Adopt Me giveaways)',
     'Withdraw requests are per game: the admin list, the bell and the Discord bot show the game and the bot',
+    'MM2 automatic deposits: Deposit > MM2 opens a 15 minute session, the in-game bot (iemre547) accepts the trade and the items appear in the inventory by themselves',
     'Adopt Me and MM2 are both back after the short MM2-only time: Adopt Me pets, catalog, bots and stats come from the backup, MM2 items and the MM2 catalog are kept'
   ] },
   { version: '4.5', title: 'Support team and amvgg values', changes: [
@@ -5208,12 +5212,137 @@ app.use((err, req, res, next) => {
 process.on('unhandledRejection', err => console.error('Unhandled rejection:', err && err.message ? err.message : err));
 process.on('uncaughtException', err => console.error('Uncaught exception:', err && err.stack ? err.stack : err));
 
+/* ================= MM2 AUTO DEPOSIT (in-game bot) =================
+   1. The player presses Deposit (MM2): POST /api/deposit/init opens a 15 minute session for their Roblox name.
+   2. The in-game bot gets a trade request and asks GET /api/bot/verify-player/:robloxUsername (header x-bot-secret).
+   3. After the trade the bot sends POST /api/bot/confirm-deposit { tradeId, robloxUsername, items: [{ name, amount }] }.
+      Every item is matched by name with the MM2 catalog and added to the player's inventory (MongoDB, like every
+      other item). Each tradeId is handled only once (409 on repeats, also after a restart).
+   4. The deposit window polls GET /api/deposit/status every 2 seconds and shows the new items.
+   Railway variables: BOT_SECRET_KEY (required, same value in the bot), DEPOSIT_BOT_NAME (optional, default iemre547). */
+
+const DEPOSIT_BOT_NAME = String(E.DEPOSIT_BOT_NAME || 'iemre547').trim();
+const DEPOSIT_SESSION_MS = 15 * 60 * 1000;
+const DEPOSIT_GRACE_MS = 10 * 60 * 1000;   /* a trade started just before the end can still be confirmed */
+const activeSessions = new Map();          /* robloxUsername (trim, lower case) -> { robloxUsername, userId, verificationCode, expiresAt, startedAt } */
+const processedTrades = new Set();         /* filled from S.processedTrades at start */
+const sessionKey = name => String(name || '').trim().toLowerCase();
+const autoDepositOn = () => Boolean(E.BOT_SECRET_KEY);
+
+function gameBotSecretOk(req) {
+  const key = String(E.BOT_SECRET_KEY || '');
+  const got = String(req.headers['x-bot-secret'] || '');
+  if (!key || !got) return false;
+  return crypto.timingSafeEqual(crypto.createHash('sha256').update(got).digest(), crypto.createHash('sha256').update(key).digest());
+}
+
+function gameBotOnly(req, res, next) {
+  if (!autoDepositOn()) return bad(res, 'BOT_SECRET_KEY is not set on the server', 503);
+  if (!gameBotSecretOk(req)) return bad(res, 'Forbidden', 403);
+  next();
+}
+
+/* the player's MM2 items, newest deposits first */
+const mm2Inventory = user => user.inventory.filter(i => i.game === 'mm2').map(i => ({
+  id: i.uid, name: i.name, amount: 1, value: i.value, image: i.image, depositedAt: i.depositedAt || 0
+})).sort((a, b) => b.depositedAt - a.depositedAt);
+
+function sessionView(sess) {
+  return sess ? { botUsername: DEPOSIT_BOT_NAME, verificationCode: sess.verificationCode, expiresAt: sess.expiresAt, startedAt: sess.startedAt } : null;
+}
+
+setInterval(() => {
+  const t = now();
+  for (const [k, sess] of activeSessions) if (sess.expiresAt + DEPOSIT_GRACE_MS < t) activeSessions.delete(k);
+}, 60 * 1000);
+
+/* the player starts a deposit (always for the Roblox account they are logged in with) */
+app.post('/api/deposit/init', auth, actionLimit, (req, res) => {
+  if (!autoDepositOn()) return bad(res, 'Automatic deposits are not set up yet', 503);
+  const user = req.user;
+  const asked = String(req.body.robloxUsername || '').trim();
+  if (asked && sessionKey(asked) !== sessionKey(user.username)) return bad(res, `You can only deposit from your own Roblox account (${user.username})`);
+  const key = sessionKey(user.username);
+  const old = activeSessions.get(key);
+  const sess = {
+    robloxUsername: user.username, userId: user.id,
+    verificationCode: old && old.expiresAt > now() ? old.verificationCode : String(crypto.randomInt(100000, 1000000)),
+    startedAt: old && old.expiresAt > now() ? old.startedAt : now(),
+    expiresAt: now() + DEPOSIT_SESSION_MS
+  };
+  activeSessions.set(key, sess);
+  res.json({ status: 'ready', ...sessionView(sess) });
+});
+
+/* the deposit window asks every 2 seconds */
+app.get('/api/deposit/status', auth, (req, res) => {
+  const sess = activeSessions.get(sessionKey(req.user.username));
+  const live = sess && sess.expiresAt > now() ? sess : null;
+  res.json({ username: req.user.username, inventory: mm2Inventory(req.user), hasPendingSession: Boolean(live), session: sessionView(live) });
+});
+
+/* the in-game bot: may this player trade with me? */
+app.get('/api/bot/verify-player/:robloxUsername', gameBotOnly, (req, res) => {
+  const sess = activeSessions.get(sessionKey(req.params.robloxUsername));
+  const ok = Boolean(sess && sess.expiresAt > now() && S.users[sess.userId] && !S.users[sess.userId].banned);
+  res.json(ok ? { allowed: true, verificationCode: sess.verificationCode, expiresAt: sess.expiresAt } : { allowed: false });
+});
+
+/* the in-game bot: the trade is done, credit the items */
+app.post('/api/bot/confirm-deposit', gameBotOnly, (req, res) => {
+  const tradeId = String(req.body.tradeId || '').trim();
+  const name = String(req.body.robloxUsername || '').trim();
+  const rows = Array.isArray(req.body.items) ? req.body.items : null;
+  if (!/^[\w:.\-]{1,100}$/.test(tradeId)) return bad(res, 'tradeId is missing or invalid');
+  if (processedTrades.has(tradeId)) return res.status(409).json({ error: 'This trade was already processed', tradeId });
+  if (!name || !rows || !rows.length || rows.length > 100) return bad(res, 'robloxUsername and 1-100 items are required');
+
+  const items = [];
+  for (const r of rows) {
+    const itemName = String((r && r.name) || '').trim().slice(0, 80);
+    const amount = Math.floor(Number(r && r.amount === undefined ? 1 : r && r.amount));
+    if (!itemName || !(amount >= 1 && amount <= 500)) return bad(res, 'Every item needs a name and an amount of 1-500');
+    items.push({ name: itemName, amount });
+  }
+
+  const key = sessionKey(name);
+  const sess = activeSessions.get(key);
+  if (!sess || sess.expiresAt + DEPOSIT_GRACE_MS < now()) return res.status(403).json({ error: 'No active deposit session for this player' });
+  const user = S.users[sess.userId];
+  if (!user) return res.status(404).json({ error: 'Player not found on the site' });
+
+  /* match with the MM2 catalog: the value and the picture come from there */
+  const byName = new Map(S.catalog.filter(c => c.game === 'mm2').map(c => [normName(c.name), c]));
+  const credited = [], unmatched = [];
+  const at = now();
+  for (const it of items) {
+    const c = byName.get(normName(it.name));
+    if (!c) { unmatched.push(it); continue; }
+    for (let k = 0; k < it.amount; k++) user.inventory.push({ ...newItem(c), depositedAt: at, tradeId });
+    credited.push({ name: c.name, amount: it.amount, value: round2(c.value * it.amount) });
+  }
+
+  processedTrades.add(tradeId);
+  S.processedTrades = [tradeId, ...(S.processedTrades || []).filter(x => x !== tradeId)].slice(0, 5000);
+  activeSessions.delete(key);
+  const total = round2(credited.reduce((t, c) => t + c.value, 0));
+  if (credited.length) addTransaction(user, 'Deposit', tradeId, total, 'mm2');
+  markDirty();
+  emitMe(user);
+  io.to('u:' + user.id).emit('deposit:done', { credited, unmatched, total });
+  notifyAdmins('withdraw', `📥 MM2 deposit by ${nick(user)} (${user.username}): ${credited.map(c => `${c.amount}x ${c.name}`).join(', ') || 'nothing matched'} · ${total}` +
+    (unmatched.length ? ` · NOT IN CATALOG: ${unmatched.map(u => `${u.amount}x ${u.name}`).join(', ')} (add them to the MM2 catalog and give them by hand)` : ''));
+  console.log(`[DEPOSIT] ${user.username} trade ${tradeId}: ${credited.length} matched, ${unmatched.length} unmatched`);
+  res.json({ success: true, inventory: mm2Inventory(user), credited, unmatched });
+});
+
 /* ================= START ================= */
 
 (async () => {
   await initDb();
   ensureDefaultBot();
   scaleAllValues();
+  for (const t of S.processedTrades || []) processedTrades.add(t);
   resumeJackpot();
   auditItems();
   resumeMatches();

@@ -212,6 +212,28 @@
     .pf-gtabs button { flex: 1; height: 34px; border: 1px solid #2a2f3b; border-radius: 9px; color: #8d909a; background: #171a22; font: inherit; font-weight: 900; transition: .2s; }
     .pf-gtabs button.on { border-color: var(--green); color: #04120b; background: var(--green); }
 
+    /* ---------- MM2 automatic deposit window ---------- */
+    .ad-warn { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; padding: 12px 14px; border: 1px solid #8a6a2c; border-radius: 9px; color: #f3cf7a; background: #2a2418; font-size: 14px; font-weight: 600; line-height: 1.45; }
+    .ad-warn i { display: grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 50%; color: #2a2418; background: #f3a712; font-style: normal; font-weight: 900; }
+    .ad-warn b { color: #fff; }
+    .ad-card { padding: 14px 16px; border: 1px solid #2a2e39; border-radius: 10px; background: #161920; }
+    .ad-card small { color: var(--muted); font-weight: 700; }
+    .ad-bot { display: flex; align-items: center; gap: 10px; margin: 6px 0 10px; }
+    .ad-bot b { flex: 1; font-size: 26px; font-weight: 900; letter-spacing: .3px; }
+    .ad-meta { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 13px; font-weight: 700; }
+    .ad-meta b { color: #fff; letter-spacing: 2px; }
+    .ad-join { margin-top: 10px; }
+    .ad-join .btn { width: 100%; }
+    .ad-wait { display: flex; align-items: center; gap: 10px; margin-top: 12px; color: #cfd2db; font-size: 14px; font-weight: 600; }
+    .ad-spin { flex: none; width: 18px; height: 18px; border: 3px solid #323844; border-top-color: var(--green); border-radius: 50%; animation: spin 1s linear infinite; }
+    .ad-ok { display: grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 50%; color: #04120b; background: var(--green); font-weight: 900; }
+    .ad-got-h { margin: 14px 0 6px; color: var(--muted); font-size: 12px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; }
+    .ad-got { display: grid; gap: 6px; max-height: 220px; overflow-y: auto; }
+    .ad-item { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border: 1px solid #1f5a45; border-radius: 9px; background: #14231e; animation: enter .35s both; }
+    .ad-item img { width: 34px; height: 34px; object-fit: contain; }
+    .ad-item b { flex: 1; font-size: 14px; }
+    .ad-item span { display: flex; align-items: center; color: var(--green); font-weight: 800; }
+
     /* ---------- typing hero ---------- */
     .hero {
       position: relative; overflow: hidden; margin-bottom: 14px; padding: 22px 24px; border: 1px solid #22503f; border-radius: 12px;
@@ -4015,6 +4037,64 @@
     }
 
     /* Deposit: 1. accept the risk  2. read the trade rules  3. see the bot and the private server */
+    /* ---------- MM2 automatic deposit: trade the in-game bot, the items appear by themselves ---------- */
+    let adTimer = null, adStart = 0, adSeen = null, adSession = null;
+    const adStop = () => { clearInterval(adTimer); adTimer = null; };
+
+    async function openMm2Deposit() {
+      adStop();
+      let r;
+      try { r = await api("/api/deposit/init", { body: { robloxUsername: ME && ME.robloxName } }); }
+      catch (error) {
+        if (error.status === 503) return openBotsModal(1); /* not set up yet: the bot list as before */
+        return fail(error);
+      }
+      adSession = r;
+      adStart = Number(r.startedAt) || Date.now();
+      adSeen = null;
+      openModal2(`
+        ${modalHeader("Murder Mystery 2", "close2")}
+        <div class="ad" id="adBox">
+          <div class="ad-warn"><i>!</i><span>Always check that the username of your trading partner matches exactly: <b>${esc(r.botUsername)}</b>. Users often copy bot names.</span></div>
+          <div class="ad-card">
+            <small>Send a trade request in Murder Mystery 2 to</small>
+            <div class="ad-bot"><b>${esc(r.botUsername)}</b><button class="btn sm" data-action="copy-text" data-text="${esc(r.botUsername)}">Copy</button></div>
+            <div class="ad-meta"><span>Code <b>${esc(r.verificationCode)}</b></span><span id="adLeft"></span></div>
+          </div>
+          ${asArray(STATE.bots).some(b => gameOf(b) === "mm2" && b.role !== "withdraw") ? `<div class="ad-join">${asArray(STATE.bots).filter(b => gameOf(b) === "mm2" && b.role !== "withdraw" && b.online !== false && (b.link || b.joinLink)).slice(0, 1).map(b => `<button class="btn gray" data-action="bot-join" data-link="${esc(b.link || b.joinLink)}">Join the bot's server</button>`).join("")}</div>` : ""}
+          <div class="ad-wait" id="adWait"><span class="ad-spin"></span>Waiting for your trade… Add your items, accept, and the bot accepts too.</div>
+          <div id="adGot"></div>
+        </div>`);
+      adTick();
+      adTimer = setInterval(adTick, 2000);
+    }
+
+    async function adTick() {
+      if (!$("#adBox")) return adStop();
+      const left = Math.max(0, (adSession ? Number(adSession.expiresAt) : 0) - (Date.now() - clockSkew));
+      const el = $("#adLeft");
+      if (el) el.textContent = left > 0 ? `Session ends in ${Math.floor(left / 60000)}:${String(Math.floor(left / 1000) % 60).padStart(2, "0")}` : "Session ended";
+      let st;
+      try { st = await api("/api/deposit/status"); } catch { return; }
+      if (!$("#adBox")) return adStop();
+      const fresh = asArray(st.inventory).filter(i => Number(i.depositedAt) >= adStart - 1000);
+      const sig = fresh.map(i => i.id).join(",");
+      if (adSeen !== null && sig !== adSeen && fresh.length) {
+        toast(`Deposit received: ${fresh.length} item${fresh.length === 1 ? "" : "s"}!`, "ok");
+        refresh();
+      }
+      adSeen = sig;
+      $("#adGot").innerHTML = fresh.length ? `
+        <div class="ad-got-h">Received</div>
+        <div class="ad-got">${fresh.map(i => `<div class="ad-item"><img src="${esc(i.image || "")}" alt=""><b>${esc(i.name)}</b><span>${GEM}${fmt(i.value)}</span></div>`).join("")}</div>` : "";
+      if (!st.hasPendingSession) {
+        adStop();
+        $("#adWait").innerHTML = fresh.length
+          ? '<span class="ad-ok">✔</span>Deposit complete. Your items are in your MM2 inventory.'
+          : 'The session ended. <button class="btn sm" data-action="ad-restart">Start again</button>';
+      }
+    }
+
     function openBotsModal(step = 0) {
       const steps = `<div class="dep-steps">${[1, 2, 3].map(n => `<i class="${n <= step ? "on" : ""}"></i>`).join("")}</div>`;
       const mm2 = depGame === "mm2";
@@ -5775,7 +5855,8 @@
       "support-panel"() { showSupportPanel(); },
       game(el) { setGame(el.dataset.game); renderGameSw(); },
       "game-toggle"(el) { el.closest(".game-dd").classList.toggle("open"); },
-      "dep-game"(el) { depGame = el.dataset.game === "mm2" ? "mm2" : "adoptme"; openBotsModal(1); },
+      "dep-game"(el) { depGame = el.dataset.game === "mm2" ? "mm2" : "adoptme"; if (depGame === "mm2") openMm2Deposit(); else openBotsModal(1); },
+      "ad-restart"() { openMm2Deposit(); },
       "pf-game"(el) { pfGame = el.dataset.game === "mm2" ? "mm2" : "adoptme"; showProfile(1, true); },
       "uc-game"(el) { ucGame = el.dataset.game === "mm2" ? "mm2" : "adoptme"; ucRender(); },
       async "sp-mute"() {
