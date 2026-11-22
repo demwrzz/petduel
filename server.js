@@ -50,7 +50,10 @@ const S = {
   updateNotes: [],
   jpHistory: [],
   /* deposit bots, managed in the admin panel: { id, username, link, online } */
-  bots: []
+  bots: [],
+  /* crypto wallet: next address index, deposits, withdraw requests, marketplace sales, collects */
+  cw: { nextIndex: 1, fp: '', deposits: [], withdrawals: [], sales: [], collects: [] },
+  market: { listings: Object.create(null) }
 };
 
 const pending = new Map();
@@ -271,7 +274,8 @@ function meView(user) {
     gstats: user.gstats,
     rank: rankOf(user.totalBet),
     mutedUntil: user.mutedUntil || 0,
-    inventory: user.inventory.map(inventoryView)
+    inventory: user.inventory.map(inventoryView),
+    usd: Math.round(Number(user.usdCents || 0)) / 100
   };
 }
 
@@ -383,7 +387,9 @@ function snapshot() {
     jpHistory: S.jpHistory.slice(0, 100),
     chat: S.chat.slice(-60),
     bots: S.bots.map(b => ({ id: b.id, username: b.username, link: b.link, online: b.online !== false, role: botRole(b), game: 'mm2' })),
-    eventEscrow: S.eventEscrow || null
+    eventEscrow: S.eventEscrow || null,
+    cw: S.cw,
+    market: S.market
   };
 }
 
@@ -431,6 +437,8 @@ async function initDb() {
         } catch (error) { console.error('Backup before removing Adopt Me failed:', error.message); backupFailed = true; }
       }
       S.jpHistory = Array.isArray(d.jpHistory) ? d.jpHistory : [];
+      S.cw = { nextIndex: 1, fp: '', deposits: [], withdrawals: [], sales: [], collects: [], ...(d.cw || {}) };
+      S.market = { listings: Object.assign(Object.create(null), (d.market && d.market.listings) || {}) };
       /* an event prize from an admin's inventory was in play when the server stopped: give it back */
       const esc = d.eventEscrow;
       if (esc && esc.item && S.users[esc.userId]) {
@@ -2076,6 +2084,12 @@ const UPDATE_LOG = [
     'Events: pick the prize from your own inventory (it comes back to you if nobody wins, the event is cancelled or the server restarts) or from the catalog',
     'A Christmas dog walks to the end of the typing text at the top of the site',
     'Separate withdraw bots: the admin panel has Deposit bots and Withdraw bots; each withdraw request gets an online withdraw bot that players see in their wallet'
+  ] },
+  { version: '6.0', title: 'Crypto balance and Marketplace', changes: [
+    'Every player gets their own permanent USDT (BEP20), Solana and Litecoin deposit address; deposits are credited in USD automatically after the network confirms them (checked every minute)',
+    'Marketplace instead of the jackpot: list items for a USD price, buy items with the balance; the seller gets the price minus the market fee',
+    'Withdraw balance in USDT / SOL / LTC (minimum $5): the admin sends it and marks it as sent, or refunds it',
+    'Admin Crypto section: wallet setup, own collect addresses, Collect buttons, gas wallet, deposits, withdraw requests, sales, market fee, manual balance changes'
   ] },
   { version: '5.2', title: 'Green again, no jackpot', changes: [
     'Back to the green theme; logo: green ring, white inside, MM2 knife in the middle; coins are blue and red with the knife',
@@ -4154,6 +4168,41 @@ function adminUI() {
         <p class="hint">My inventory: the pet leaves your inventory when the event starts and goes to the winner. If nobody wins, the event is cancelled or the server restarts, it comes back to you. Catalog: a new pet is created for the winner. Starting an event posts an announcement in chat and a banner on the home page.</p>
       </div>
 
+      <h4 style="margin:16px 0 8px">💵 Crypto &amp; Marketplace</h4>
+      <div style="background:#f5faff;padding:14px;border-radius:12px" id="cw-box">
+        <div id="cw-status" class="hint" style="margin:0 0 10px">Loading…</div>
+        <div id="cw-setup" style="display:none;margin-bottom:12px;padding:12px;border:1px solid #ffb52e;border-radius:10px">
+          <b>First setup</b>
+          <p class="hint" style="margin:6px 0">1. Press the button: the site makes a new 12-word secret phrase (it is <b>not</b> saved anywhere). 2. Copy it and keep it safe (paper / password manager): whoever has it owns all deposit money. 3. In Railway &gt; Variables add <b>WALLET_MNEMONIC</b> with the 12 words, then redeploy.</p>
+          <button id="cw-gen" class="btn sm">🔑 Make a new secret phrase</button>
+          <div id="cw-phrase" style="display:none;margin-top:8px;padding:10px;border-radius:8px;background:#0e1016;font-family:monospace;font-size:15px;word-spacing:6px;user-select:all"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:110px 1fr;gap:6px;align-items:center;margin-bottom:8px">
+          <b>USDT (BEP20)</b><input id="cw-d-usdt" class="in" placeholder="Your own USDT BEP20 address (0x...) for Collect">
+          <b>Solana</b><input id="cw-d-sol" class="in" placeholder="Your own Solana address for Collect">
+          <b>Litecoin</b><input id="cw-d-ltc" class="in" placeholder="Your own Litecoin address (ltc1... / L... / M...) for Collect">
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+          <button id="cw-d-save" class="btn gray sm">Save my addresses</button>
+          <button class="btn sm" data-cw-collect="usdt">🏦 Collect USDT</button>
+          <button class="btn sm" data-cw-collect="sol">🏦 Collect SOL</button>
+          <button class="btn sm" data-cw-collect="ltc">🏦 Collect LTC</button>
+        </div>
+        <p class="hint" style="margin:0 0 10px">Collect moves the money from every player address to your own address above. USDT needs a little BNB in the <b>gas wallet</b> (shown above) to pay the fees: send ~0.01 BNB (BEP20) to it once.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+          <span>Market fee %</span><input id="cw-fee" class="in" type="number" min="0" max="30" step="0.5" style="width:90px">
+          <button id="cw-fee-save" class="btn gray sm">Save fee</button>
+          <span style="flex:1"></span>
+          <input id="cw-adj-user" list="g-users" class="in" placeholder="Player" style="width:150px">
+          <input id="cw-adj-amt" class="in" type="number" step="0.01" placeholder="$ +/-" style="width:90px">
+          <button id="cw-adj" class="btn gray sm">Change balance</button>
+        </div>
+        <h5 style="margin:6px 0">Withdraw requests</h5><div id="cw-wd"></div>
+        <h5 style="margin:10px 0 6px">Last deposits</h5><div id="cw-dep" style="max-height:220px;overflow:auto"></div>
+        <h5 style="margin:10px 0 6px">Last sales</h5><div id="cw-sales" style="max-height:180px;overflow:auto"></div>
+        <h5 style="margin:10px 0 6px">Collects</h5><div id="cw-col"></div>
+      </div>
+
       <h4 style="margin:16px 0 8px">📢 Announcement (shown in the top banner)</h4>
       <div style="background:#f5faff;padding:14px;border-radius:12px">
         <input id="an-title" class="in" maxlength="60" style="width:100%;margin-bottom:8px" placeholder="Title (e.g. Maintenance tonight)">
@@ -5025,6 +5074,76 @@ function adminUI() {
       toast(bannerOff ? 'Banner removed' : 'Banner shown again', 'ok');
     } catch (err) { toast(err.message, 'err'); }
   };
+  /* ---------- crypto & marketplace ---------- */
+  const money = v => '$' + Number(v || 0).toFixed(2);
+  const short = a => a ? esc(String(a).slice(0, 10)) + '…' + esc(String(a).slice(-6)) : '';
+  async function cwLoad() {
+    try {
+      const w = await api('/api/admin/wallet');
+      $('cw-status').innerHTML = w.enabled
+        ? `<b style="color:#00efa0">● Wallet ON</b> · ${w.addresses} player wallets · player balances total <b>${money(w.balances)}</b> · ${w.listings} listings<br>Gas wallet (BEP20): <b style="user-select:all">${esc(w.gas)}</b> · ${esc(w.gasBnb)} BNB`
+        : `<b style="color:#ff5968">● Wallet OFF</b> · ${esc(w.error || 'WALLET_MNEMONIC is not set')}. Deposits are closed until it is set.`;
+      $('cw-setup').style.display = w.enabled ? 'none' : '';
+      for (const c of ['usdt', 'sol', 'ltc']) if (document.activeElement !== $('cw-d-' + c)) $('cw-d-' + c).value = (w.dest || {})[c] || '';
+      if (document.activeElement !== $('cw-fee')) $('cw-fee').value = w.fee;
+      $('cw-wd').innerHTML = w.withdrawals.length ? w.withdrawals.map(x => `
+        <div style="border:1px solid #343842;border-radius:8px;padding:8px;margin-bottom:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <b>${esc(x.nickname)}</b><span><b>${money(x.usd)}</b> in ${esc(x.coin.toUpperCase())} (${esc(x.network)})</span>
+          <code style="user-select:all;font-size:12px;word-break:break-all">${esc(x.address)}</code>
+          <span style="flex:1"></span>
+          <button class="btn mint sm" data-cw-wd="sent" data-id="${esc(x.id)}">Mark sent</button>
+          <button class="btn red sm" data-cw-wd="refund" data-id="${esc(x.id)}">Refund</button>
+        </div>`).join('') : '<p class="hint">No pending withdraw requests</p>';
+      $('cw-dep').innerHTML = w.deposits.length ? w.deposits.map(d => `<div style="font-size:13px;padding:4px 0;border-bottom:1px solid #2a2e39">${new Date(d.ts).toLocaleString()} · <b>${esc(d.nickname)}</b> · ${d.coin === 'manual' ? 'manual change by ' + esc(d.by || '') : esc(d.amount) + ' ' + esc(d.coin.toUpperCase())} · <b>${money(d.usd)}</b></div>`).join('') : '<p class="hint">No deposits yet</p>';
+      $('cw-sales').innerHTML = w.sales.length ? w.sales.map(x => `<div style="font-size:13px;padding:4px 0;border-bottom:1px solid #2a2e39">${new Date(x.ts).toLocaleString()} · <b>${esc(x.item)}</b> · ${esc(x.seller)} → ${esc(x.buyer)} · ${money(x.usd)} (seller got ${money(x.payout)})</div>`).join('') : '<p class="hint">No sales yet</p>';
+      $('cw-col').innerHTML = w.collects.length ? w.collects.map(x => `<div style="font-size:13px;padding:4px 0;border-bottom:1px solid #2a2e39">${new Date(x.ts).toLocaleString()} · ${esc(x.coin.toUpperCase())} · ${esc(x.total)} → ${short(x.to)} · ${x.txs.length} tx${x.errors.length ? ` · <span style="color:#ff5968">${esc(x.errors.join(' | '))}</span>` : ''}</div>`).join('') : '<p class="hint">No collects yet</p>';
+    } catch (err) { $('cw-status').textContent = err.message; }
+  }
+  cwLoad();
+  $('cw-gen').onclick = async () => {
+    try {
+      const r = await api('/api/admin/wallet/new-phrase', { method: 'POST', body: {} });
+      $('cw-phrase').textContent = r.phrase;
+      $('cw-phrase').style.display = '';
+    } catch (err) { toast(err.message, 'err'); }
+  };
+  $('cw-d-save').onclick = async () => {
+    try {
+      await api('/api/admin/wallet/dest', { method: 'POST', body: { usdt: $('cw-d-usdt').value, sol: $('cw-d-sol').value, ltc: $('cw-d-ltc').value } });
+      toast('Addresses saved', 'ok');
+    } catch (err) { toast(err.message, 'err'); }
+  };
+  $('cw-fee-save').onclick = async () => {
+    try { await api('/api/admin/market/fee', { method: 'POST', body: { fee: $('cw-fee').value } }); toast('Market fee saved', 'ok'); }
+    catch (err) { toast(err.message, 'err'); }
+  };
+  $('cw-adj').onclick = async () => {
+    try {
+      const r = await api('/api/admin/wallet/adjust', { method: 'POST', body: { username: $('cw-adj-user').value, amount: $('cw-adj-amt').value } });
+      toast('New balance: ' + money(r.balance), 'ok');
+      $('cw-adj-amt').value = '';
+      cwLoad();
+    } catch (err) { toast(err.message, 'err'); }
+  };
+  $('cw-box').addEventListener('click', async e => {
+    const c = e.target.closest('[data-cw-collect]');
+    const w = e.target.closest('[data-cw-wd]');
+    try {
+      if (c) {
+        const coin = c.dataset.cwCollect;
+        if (!(await confirmBox({ title: 'Collect ' + coin.toUpperCase(), text: 'Move every player deposit of this coin to your own address? It runs in the background; you get a bell notification when it is done.', ok: 'Collect' }))) return;
+        await api('/api/admin/wallet/collect', { method: 'POST', body: { coin } });
+        toast('Collect started', 'ok');
+      }
+      if (w) {
+        if (w.dataset.cwWd === 'refund' && !(await confirmBox({ title: 'Refund', text: 'Give the money back to the player balance?', ok: 'Refund', danger: true }))) return;
+        await api('/api/admin/wallet/withdraw', { method: 'POST', body: { id: w.dataset.id, action: w.dataset.cwWd } });
+        toast(w.dataset.cwWd === 'refund' ? 'Refunded' : 'Marked as sent', 'ok');
+        cwLoad();
+      }
+    } catch (err) { toast(err.message, 'err'); }
+  });
+
   $('an-send').onclick = async () => { await announce(false); bannerOff = false; renderBannerBtn(); };
   api('/api/admin/data').then(d => { bannerOff = Boolean(d.settings && d.settings.bannerOff); renderBannerBtn(); }).catch(() => {});
   $('an-clear').onclick = () => announce(true);
@@ -5167,6 +5286,7 @@ function auditItems() {
     if (m.state === 'finished') continue;
     [...m.hostItems, ...m.oppItems].forEach(i => add(i.uid, `match ${m.id}`, false));
   }
+  for (const l of Object.values(S.market.listings)) add(l.item.uid, `market listing ${l.id}`, false);
 
   for (const J of Object.values(JPS)) if (J && J.state !== 'finished') J.entries.forEach(e => e.items.forEach(i => add(i.uid, `jackpot ${J.id}`, false)));
 
@@ -5221,6 +5341,311 @@ app.use((err, req, res, next) => {
 process.on('unhandledRejection', err => console.error('Unhandled rejection:', err && err.message ? err.message : err));
 process.on('uncaughtException', err => console.error('Uncaught exception:', err && err.stack ? err.stack : err));
 
+/* ================= CRYPTO BALANCE + MARKETPLACE =================
+   Every player has a USD balance (S.users[id].usdCents, whole cents) that is topped up by crypto deposits to
+   their own addresses (see crypto-wallet.js) and spent / earned on the marketplace.
+   Deposits: a scan every minute compares each address with what was already credited (u.cw.seen) and credits
+   the difference in USD at the current price. Collect moves the money to the owner's addresses (admin panel). */
+
+const CW = require('./crypto-wallet');
+const CW_COINS = Object.keys(CW.COINS);
+const cents = usd => Math.round(Number(usd) * 100);
+const usdOf = c => Math.round(Number(c || 0)) / 100;
+const big = v => { try { return BigInt(String(v || '0')); } catch { return 0n; } };
+
+/* if the secret phrase changed, the old addresses are not ours any more: start the address list again */
+function cwCheckPhrase() {
+  if (!CW.enabled()) return;
+  const fp = CW.gasWalletAddress();
+  if (S.cw.fp && S.cw.fp !== fp) {
+    console.warn('[WALLET] WALLET_MNEMONIC changed: every player gets new deposit addresses');
+    for (const u of Object.values(S.users)) delete u.cw;
+    S.cw.nextIndex = 1;
+  }
+  S.cw.fp = fp;
+  markDirty();
+}
+
+/* a player's three addresses (created the first time they open Deposit) */
+function cwAddresses(user) {
+  if (!user.cw) {
+    user.cw = { index: S.cw.nextIndex++, seen: { usdt: '0', sol: '0', ltc: '0' }, at: now() };
+    markDirty();
+  }
+  if (!user.cw.addr) { user.cw.addr = CW.addressesFor(user.cw.index); markDirty(); }
+  return user.cw.addr;
+}
+
+function cwRecord(list, item, max) { list.unshift(item); if (list.length > max) list.length = max; }
+
+function cwView(user) {
+  return {
+    enabled: CW.enabled(),
+    balance: usdOf(user.usdCents),
+    coins: CW_COINS.map(k => ({ key: k, name: CW.COINS[k].name, label: CW.COINS[k].label, network: CW.COINS[k].network, min: CW.COINS[k].min })),
+    deposits: S.cw.deposits.filter(d => d.userId === user.id).slice(0, 15),
+    withdrawals: S.cw.withdrawals.filter(w => w.userId === user.id).slice(0, 15)
+  };
+}
+
+/* ---- the deposit scan ---- */
+let cwScanning = false;
+async function cwScanUser(user, price) {
+  const addr = cwAddresses(user);
+  for (const coin of CW_COINS) {
+    let value;
+    try { value = big(await CW.readAddress(coin, addr[coin])); } catch (e) { continue; }
+    const seen = big(user.cw.seen[coin]);
+    const delta = value - seen;
+    if (delta <= 0n) {
+      /* lower than before (only after a collect that already lowered "seen", or a reorg): follow it down */
+      if (delta < 0n && coin !== 'ltc') { user.cw.seen[coin] = value.toString(); markDirty(); }
+      continue;
+    }
+    if (delta < CW.toUnits(CW.COINS[coin].min, coin)) continue; /* dust waits until more arrives */
+    const amount = CW.fromUnits(delta, coin);
+    const add = cents(amount * price[coin]);
+    user.cw.seen[coin] = value.toString();
+    user.usdCents = (user.usdCents || 0) + add;
+    const dep = { id: rid(8), userId: user.id, nickname: nick(user), coin, amount, usd: usdOf(add), price: price[coin], ts: now() };
+    cwRecord(S.cw.deposits, dep, 1000);
+    markDirty();
+    emitMe(user);
+    io.to('u:' + user.id).emit('wallet:deposit', { coin, amount, usd: dep.usd });
+    notifyAdmins('deposit', `💵 ${nick(user)} deposited ${amount} ${CW.COINS[coin].label} ($${dep.usd.toFixed(2)})`);
+    console.log(`[WALLET] ${user.username} +${amount} ${coin} = $${dep.usd}`);
+  }
+}
+
+async function cwScan() {
+  if (cwScanning || !CW.enabled()) return;
+  cwScanning = true;
+  try {
+    const price = await CW.prices();
+    for (const user of Object.values(S.users)) {
+      if (!user.cw) continue;
+      await cwScanUser(user, price);
+    }
+  } catch (e) {
+    console.error('[WALLET] scan failed:', e.message);
+  } finally {
+    cwScanning = false;
+  }
+}
+setInterval(cwScan, 60 * 1000);
+
+/* ---- player API ---- */
+app.get('/api/wallet', auth, (req, res) => res.json(cwView(req.user)));
+
+app.post('/api/wallet/address', auth, actionLimit, async (req, res) => {
+  const coin = String(req.body.coin || '');
+  if (!CW.COINS[coin]) return bad(res, 'Unknown coin');
+  if (!CW.enabled()) return bad(res, 'Crypto deposits are not open yet');
+  const address = cwAddresses(req.user)[coin];
+  let qr = '';
+  try { qr = await require('qrcode').toDataURL(address, { margin: 1, width: 240 }); } catch { /* no picture */ }
+  res.json({ coin, address, qr, ...CW.COINS[coin] });
+});
+
+app.post('/api/wallet/check', auth, actionLimit, async (req, res) => {
+  if (!CW.enabled() || !req.user.cw) return res.json(cwView(req.user));
+  try { await cwScanUser(req.user, await CW.prices()); } catch { /* the minute scan tries again */ }
+  res.json(cwView(req.user));
+});
+
+const CW_MIN_WITHDRAW = 5;
+app.post('/api/wallet/withdraw', auth, actionLimit, (req, res) => {
+  const user = req.user;
+  const coin = String(req.body.coin || '');
+  const address = String(req.body.address || '').trim();
+  const amount = Math.floor(Number(req.body.amount) * 100);
+  if (!CW.COINS[coin]) return bad(res, 'Pick a coin');
+  if (!CW.validAddress(coin, address)) return bad(res, `That is not a valid ${CW.COINS[coin].name} address`);
+  if (!Number.isFinite(amount) || amount < CW_MIN_WITHDRAW * 100) return bad(res, `Minimum withdrawal is $${CW_MIN_WITHDRAW}`);
+  if ((user.usdCents || 0) < amount) return bad(res, 'Not enough balance');
+  if (S.cw.withdrawals.filter(w => w.userId === user.id && w.status === 'pending').length >= 3) return bad(res, 'You already have 3 pending withdrawals');
+  user.usdCents -= amount;
+  const w = { id: rid(8), userId: user.id, nickname: nick(user), coin, network: CW.COINS[coin].network, address, usd: usdOf(amount), status: 'pending', ts: now() };
+  cwRecord(S.cw.withdrawals, w, 1000);
+  markDirty();
+  emitMe(user);
+  notifyAdmins('withdraw', `💸 ${nick(user)} wants to withdraw $${w.usd.toFixed(2)} in ${CW.COINS[coin].label} to ${address}`);
+  res.json({ ok: true, wallet: cwView(user) });
+});
+
+/* ---- marketplace ---- */
+const marketFee = () => Math.min(30, Math.max(0, Number(S.settings.marketFee) || 0));
+const publicListing = l => ({ id: l.id, seller: l.seller, item: publicItem(l.item), price: usdOf(l.priceCents), ts: l.ts });
+
+app.get('/api/market', (req, res) => {
+  res.json({ fee: marketFee(), listings: Object.values(S.market.listings).sort((a, b) => b.priceCents - a.priceCents).slice(0, 500).map(publicListing) });
+});
+
+app.post('/api/market/list', auth, actionLimit, (req, res) => {
+  const user = req.user;
+  const rows = Array.isArray(req.body.items) ? req.body.items.slice(0, 20) : [];
+  if (!rows.length) return bad(res, 'Pick items to list');
+  if (Object.values(S.market.listings).filter(l => l.seller.id === user.id).length + rows.length > 50) return bad(res, 'You can have at most 50 listings');
+  const uids = rows.map(r => String(r.uid || ''));
+  const prices = rows.map(r => Math.round(Number(r.price) * 100));
+  if (prices.some(p => !Number.isFinite(p) || p < 1 || p > 10000000)) return bad(res, 'Every price must be between $0.01 and $100,000');
+  if (!pickItems(user, uids, 20)) return bad(res, 'Invalid item selection');
+  const items = takeItems(user, uids, 20);
+  const made = items.map(item => {
+    const l = { id: rid(8), seller: publicUser(user), item, priceCents: prices[uids.indexOf(item.uid)], ts: now() };
+    S.market.listings[l.id] = l;
+    return publicListing(l);
+  });
+  markDirty();
+  emitMe(user);
+  io.emit('market:update');
+  res.json({ ok: true, listed: made.length });
+});
+
+app.post('/api/market/cancel', auth, actionLimit, (req, res) => {
+  const l = S.market.listings[String(req.body.id || '')];
+  if (!l) return bad(res, 'Listing not found', 404);
+  if (l.seller.id !== req.user.id && !isAdmin(req.user)) return bad(res, 'Not your listing', 403);
+  delete S.market.listings[l.id];
+  const seller = S.users[l.seller.id];
+  if (seller) { seller.inventory.push(l.item); emitMe(seller); }
+  markDirty();
+  io.emit('market:update');
+  res.json({ ok: true });
+});
+
+app.post('/api/market/buy', auth, actionLimit, (req, res) => {
+  const buyer = req.user;
+  const l = S.market.listings[String(req.body.id || '')];
+  if (!l) return bad(res, 'This item was already sold');
+  if (l.seller.id === buyer.id) return bad(res, 'This is your own listing');
+  if ((buyer.usdCents || 0) < l.priceCents) return bad(res, 'Not enough balance. Deposit crypto first.');
+  /* everything below happens in one step: the listing can never be bought twice */
+  delete S.market.listings[l.id];
+  buyer.usdCents -= l.priceCents;
+  buyer.inventory.push(l.item);
+  const seller = S.users[l.seller.id];
+  const payout = Math.floor(l.priceCents * (100 - marketFee()) / 100);
+  if (seller) { seller.usdCents = (seller.usdCents || 0) + payout; emitMe(seller); }
+  cwRecord(S.cw.sales, { id: l.id, item: l.item.name, sellerId: l.seller.id, seller: nick(l.seller), buyerId: buyer.id, buyer: nick(buyer), usd: usdOf(l.priceCents), payout: usdOf(payout), ts: now() }, 1000);
+  markDirty();
+  emitMe(buyer);
+  io.emit('market:update');
+  if (seller) io.to('u:' + seller.id).emit('market:sold', { item: l.item.name, payout: usdOf(payout) });
+  res.json({ ok: true, item: publicItem(l.item) });
+});
+
+/* ---- admin ---- */
+app.get('/api/admin/wallet', auth, adminOnly, async (req, res) => {
+  const out = {
+    enabled: CW.enabled(), error: CW.setupError(), dest: S.settings.cwDest || {}, fee: marketFee(),
+    addresses: Object.values(S.users).filter(u => u.cw).length,
+    balances: round2(Object.values(S.users).reduce((t, u) => t + usdOf(u.usdCents), 0)),
+    deposits: S.cw.deposits.slice(0, 50), withdrawals: S.cw.withdrawals.filter(w => w.status === 'pending'),
+    sales: S.cw.sales.slice(0, 30), collects: S.cw.collects.slice(0, 10), listings: Object.keys(S.market.listings).length
+  };
+  if (out.enabled) {
+    out.gas = CW.gasWalletAddress();
+    try { out.gasBnb = await CW.gasWalletBalance(); } catch { out.gasBnb = '?'; }
+  }
+  res.json(out);
+});
+
+/* a fresh secret phrase for the first setup: shown once, never stored by the site */
+app.post('/api/admin/wallet/new-phrase', auth, adminOnly, (req, res) => {
+  if (CW.enabled()) return bad(res, 'A wallet phrase is already set. Changing it gives everyone new addresses.');
+  res.json({ phrase: CW.newMnemonic() });
+});
+
+app.post('/api/admin/wallet/dest', auth, adminOnly, (req, res) => {
+  const dest = {};
+  for (const coin of CW_COINS) {
+    const a = String((req.body || {})[coin] || '').trim();
+    if (a && !CW.validAddress(coin, a)) return bad(res, `The ${CW.COINS[coin].name} address is not valid`);
+    if (a) dest[coin] = a;
+  }
+  S.settings.cwDest = dest;
+  markDirty();
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/market/fee', auth, adminOnly, (req, res) => {
+  const fee = Number(req.body.fee);
+  if (!(fee >= 0 && fee <= 30)) return bad(res, 'Fee must be 0-30%');
+  S.settings.marketFee = round2(fee);
+  markDirty();
+  res.json({ ok: true });
+});
+
+/* move every player address of one coin to the owner's address (runs in the background) */
+let cwCollecting = false;
+app.post('/api/admin/wallet/collect', auth, adminOnly, async (req, res) => {
+  const coin = String(req.body.coin || '');
+  if (!CW.COINS[coin]) return bad(res, 'Unknown coin');
+  if (!CW.enabled()) return bad(res, 'Set WALLET_MNEMONIC first');
+  const to = (S.settings.cwDest || {})[coin];
+  if (!to) return bad(res, `Save your own ${CW.COINS[coin].name} address first`);
+  if (cwCollecting) return bad(res, 'A collect is already running');
+  cwCollecting = true;
+  res.json({ ok: true, started: true });
+  const by = req.user.username;
+  try {
+    await cwScan(); /* credit everything that arrived before moving it */
+    const owners = Object.values(S.users).filter(u => u.cw);
+    const result = await CW.collect[coin](owners.map(u => ({ index: u.cw.index })), to);
+    /* the moved amount is no longer on the address: lower "seen" by it, so nothing is credited twice or lost */
+    for (const r of result) {
+      if (r.error || r.index === undefined || coin === 'ltc') continue;
+      const u = owners.find(x => x.cw.index === r.index);
+      if (u) u.cw.seen[coin] = (big(u.cw.seen[coin]) - big(r.amount) - big(r.fee || 0)).toString();
+    }
+    const ok = result.filter(r => !r.error);
+    const total = ok.reduce((t, r) => t + CW.fromUnits(r.amount, coin), 0);
+    cwRecord(S.cw.collects, { coin, by, to, total, txs: ok.map(r => r.tx), errors: result.filter(r => r.error).map(r => r.error).slice(0, 5), ts: now() }, 50);
+    markDirty();
+    notifyAdmins('deposit', `🏦 Collect ${CW.COINS[coin].label}: ${total} sent to your address (${ok.length} tx${result.length > ok.length ? `, ${result.length - ok.length} failed` : ''})`);
+  } catch (e) {
+    notifyAdmins('security', `Collect ${coin} failed: ${e.message}`);
+    cwRecord(S.cw.collects, { coin, by, to, total: 0, txs: [], errors: [e.message], ts: now() }, 50);
+    markDirty();
+  } finally {
+    cwCollecting = false;
+  }
+});
+
+app.post('/api/admin/wallet/withdraw', auth, adminOnly, (req, res) => {
+  const w = S.cw.withdrawals.find(x => x.id === String(req.body.id || ''));
+  if (!w || w.status !== 'pending') return bad(res, 'Request not found');
+  const user = S.users[w.userId];
+  if (req.body.action === 'refund') {
+    w.status = 'refunded';
+    if (user) { user.usdCents = (user.usdCents || 0) + cents(w.usd); emitMe(user); }
+  } else {
+    w.status = 'sent';
+    w.tx = String(req.body.tx || '').slice(0, 120);
+  }
+  w.doneAt = now();
+  w.doneBy = req.user.username;
+  markDirty();
+  if (user) emitMe(user);
+  res.json({ ok: true });
+});
+
+/* add or remove balance by hand (for example a deposit that was sent to a wrong network) */
+app.post('/api/admin/wallet/adjust', auth, adminOnly, (req, res) => {
+  const user = findUserByName(req.body.username);
+  const amount = Math.round(Number(req.body.amount) * 100);
+  if (!user) return bad(res, 'Player not found');
+  if (!Number.isFinite(amount) || amount === 0 || Math.abs(amount) > 10000000) return bad(res, 'Enter an amount like 10 or -10');
+  if ((user.usdCents || 0) + amount < 0) return bad(res, 'The balance cannot go below $0');
+  user.usdCents = (user.usdCents || 0) + amount;
+  cwRecord(S.cw.deposits, { id: rid(8), userId: user.id, nickname: nick(user), coin: 'manual', amount: 0, usd: usdOf(amount), by: req.user.username, ts: now() }, 1000);
+  markDirty();
+  emitMe(user);
+  console.log(`[ADMIN] ${req.user.username} changed the balance of ${user.username} by $${usdOf(amount)}`);
+  res.json({ ok: true, balance: usdOf(user.usdCents) });
+});
+
 /* ================= START ================= */
 
 (async () => {
@@ -5228,6 +5653,7 @@ process.on('uncaughtException', err => console.error('Uncaught exception:', err 
   ensureDefaultBot();
   scaleAllValues();
   removeAdoptMe();
+  cwCheckPhrase();
   resumeJackpot();
   auditItems();
   resumeMatches();

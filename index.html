@@ -142,6 +142,7 @@
       border-radius: 50%; object-fit: cover; color: #fff; background: #3a4050; font-weight: 800;
       box-shadow: 0 0 0 2px #2c313c;
     }
+    .av.xs { width: 20px; height: 20px; font-size: 9px; }
     .av.sm { width: 29px; height: 29px; font-size: 11px; }
     .av.md { width: 44px; height: 44px; font-size: 16px; }
     .av.lg { width: 72px; height: 72px; font-size: 24px; }
@@ -225,6 +226,59 @@
     .pf-gtabs { display: flex; gap: 6px; margin: 0 0 12px; }
     .pf-gtabs button { flex: 1; height: 34px; border: 1px solid #2a2f3b; border-radius: 9px; color: #8d909a; background: #171a22; font: inherit; font-weight: 900; transition: .2s; }
     .pf-gtabs button.on { border-color: var(--green); color: #04120b; background: var(--green); }
+
+    /* ---------- USD balance, crypto wallet, marketplace ---------- */
+    .usd-pill { height: 44px; padding: 0 14px; border: 1px solid var(--border); border-radius: 10px; color: #7dffcf; background: #191c25; font-size: 15px; font-weight: 900; transition: border-color .15s; }
+    .usd-pill:hover { border-color: var(--green); }
+    .cw-bal { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; padding: 16px 18px; border-radius: 10px; background: #20232d; }
+    .cw-bal span { color: #bfc1c9; font-weight: 700; }
+    .cw-bal b { font-size: 24px; }
+    .cw-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+    .cw-tabs button { height: 44px; border: 0; border-radius: 9px; color: #8d909a; background: transparent; font-size: 15px; font-weight: 800; }
+    .cw-tabs button.on { color: #04120b; background: var(--green); }
+    .cw-coin { display: flex; align-items: center; gap: 12px; width: 100%; margin-bottom: 8px; padding: 12px 14px; border: 1px solid #2a2e39; border-radius: 10px; color: #fff; background: #191c25; text-align: left; transition: border-color .15s, transform .15s; }
+    .cw-coin:hover { border-color: var(--green); transform: translateY(-1px); }
+    .cw-coin b { display: block; font-size: 15px; }
+    .cw-coin small { color: var(--muted); font-size: 12px; }
+    .cw-coin .arr { margin-left: auto; color: var(--muted); font-size: 20px; }
+    .coin-ico { display: grid; place-items: center; flex: none; width: 36px; height: 36px; border-radius: 50%; color: #fff; font-weight: 900; font-size: 15px; }
+    .coin-ico.usdt { background: #26a17b; } .coin-ico.sol { background: linear-gradient(135deg, #9945ff, #14f195); } .coin-ico.ltc { background: #345d9d; }
+    .cw-back { margin-bottom: 8px; color: var(--green); background: none; border: 0; font-weight: 800; }
+    .cw-addr-title { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; font-size: 18px; font-weight: 900; }
+    .cw-qr { display: grid; place-items: center; width: 200px; height: 200px; margin: 0 auto 14px; padding: 10px; border-radius: 14px; background: #fff; }
+    .cw-qr img { width: 100%; height: 100%; image-rendering: pixelated; }
+    .cw-addr { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid #2a2e39; border-radius: 10px; background: #14161e; }
+    .cw-addr code { flex: 1; min-width: 0; overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+    .cw-note { margin: 10px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+    .cw-hist { margin-top: 12px; }
+    .cw-hist div { display: flex; justify-content: space-between; gap: 8px; padding: 7px 0; border-top: 1px solid #22262f; font-size: 13px; }
+    .cw-hist .st { font-weight: 800; } .cw-hist .st.pending { color: var(--orange); } .cw-hist .st.sent { color: var(--green); } .cw-hist .st.refunded { color: var(--muted); }
+    .mk-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+    .mk-head h1 { margin: 0 0 6px; font-size: 32px; }
+    .mk-head p { margin: 0; max-width: 460px; color: var(--muted); }
+    .mk-side { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+    .mk-bal { display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 14px; border: 1px solid var(--border); border-radius: 10px; background: #191c25; }
+    .mk-bal small { display: block; color: var(--muted); font-size: 10px; font-weight: 800; letter-spacing: .5px; }
+    .mk-bal b { font-size: 18px; }
+    .mk-tools { display: grid; grid-template-columns: 1fr 200px; gap: 10px; margin-bottom: 14px; }
+    .mk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+    .mk-card { overflow: hidden; border: 1px solid #262a35; border-radius: 12px; background: #161920; animation: enter .35s both; }
+    .mk-img { position: relative; display: grid; place-items: center; height: 135px; background: radial-gradient(circle at 50% 40%, #232836, #151820 75%); }
+    .mk-img img { width: 100px; height: 100px; object-fit: contain; }
+    .mk-seller { position: absolute; left: 8px; bottom: 8px; display: flex; align-items: center; gap: 5px; max-width: 80%; padding: 2px 8px 2px 2px; border-radius: 99px; background: #0e1016cc; font-size: 11px; font-weight: 800; }
+    .mk-seller span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mk-body { padding: 12px; border-top: 1px solid #22262f; }
+    .mk-body h4 { overflow: hidden; margin: 0 0 4px; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+    .mk-val { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 12px; font-weight: 700; }
+    .mk-price { margin: 6px 0 10px; color: #4ade80; font-size: 20px; font-weight: 900; }
+    .mk-card .btn { width: 100%; }
+    .mk-list-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; max-height: 52vh; overflow-y: auto; padding: 2px; }
+    .mk-li { padding: 8px; border: 2px solid #2a2e39; border-radius: 10px; background: #191c25; text-align: center; cursor: pointer; }
+    .mk-li.on { border-color: var(--green); background: #15372d; }
+    .mk-li img { width: 64px; height: 64px; object-fit: contain; }
+    .mk-li b { display: block; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+    .mk-li input { width: 100%; margin-top: 6px; }
+    @media (max-width: 650px) { .mk-tools { grid-template-columns: 1fr; } .mk-side { align-items: stretch; width: 100%; } .usd-pill { height: 38px; padding: 0 10px; font-size: 13px; } }
 
     /* ---------- typing hero ---------- */
     .hero {
@@ -1660,6 +1714,10 @@
           <svg class="nav-ico" viewBox="0 0 24 24"><ellipse cx="9" cy="16" rx="7" ry="3.5" fill="currentColor" opacity=".7"/><ellipse cx="9" cy="12" rx="7" ry="3.5" fill="currentColor" opacity=".85"/><ellipse cx="15" cy="8" rx="7" ry="3.5" fill="currentColor"/></svg>
           <span class="nav-text">Coinflip<span class="nav-sub" id="navCf"></span></span>
         </div>
+        <div class="nav-item" data-action="market" data-nav="market">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16l1.5 5.2a3 3 0 0 1-5.5 2 3 3 0 0 1-4 .9 3 3 0 0 1-4-.9 3 3 0 0 1-5.5-2zM5 13.6a4.6 4.6 0 0 0 2.6.3V19h3.2v-4h2.4v4h3.2v-5.1a4.6 4.6 0 0 0 2.6-.3V21H5z"/></svg>
+          <span class="nav-text">Market</span>
+        </div>
         <div class="nav-item alt" data-action="leaderboard">Leaderboard</div>
         <button class="nav-link" data-action="info" data-page="updates">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 9.5 8.5 3 9.3l4.9 4.5L6.6 21 12 17.6 17.4 21l-1.3-7.2L21 9.3l-6.5-.8z"/></svg>
@@ -1767,11 +1825,12 @@
       <section class="content" id="profileContent" style="display:none"><div id="profile"></div></section>
       <section class="content" id="eventContent" style="display:none"><div id="eventView"></div></section>
       <section class="content" id="jackpotContent" style="display:none"><div id="jackpotView"></div></section>
+      <section class="content" id="marketContent" style="display:none"><div id="marketView"></div></section>
     </main>
 
     <footer class="site-footer">
       <div class="foot-brand">PET<span>DUEL</span></div>
-      <p class="foot-fun"><b>For entertainment only.</b> Gems and values on Pet Duel have no monetary value. Nothing is sold for real money and nothing can be cashed out or exchanged for real money.</p>
+      <p class="foot-fun"><b>18+ only.</b> Gems show item values only. The store balance (USD) comes from crypto deposits and is used on the Marketplace. Crypto deposits and purchases are final.</p>
       <p class="foot-warn"><b>18+ only.</b> Deposits are at your own risk: bot accounts can be banned and items can be lost. You are responsible for following the laws of your country; do not use Pet Duel where it is not allowed. Not available in Turkey.</p>
       <p>Pet Duel is an independent project. It is not affiliated with, endorsed by, sponsored by, or in any way associated with Murder Mystery 2, Nikilis or Roblox Corporation. All game names, logos, item images and trademarks belong to their respective owners.</p>
       <p class="foot-links"><a data-action="info" data-page="tos">Terms of Service</a> · <a data-action="info" data-page="privacy">Privacy Policy</a> · <a data-action="info" data-page="fair">Provably Fair</a> · <a data-action="info" data-page="faq">FAQ</a></p>
@@ -2253,7 +2312,7 @@
         ci.placeholder = !ME ? "Login to chat" : locked ? "Place a bet to chat" : "Write something..";
       }
 
-      const sig = JSON.stringify(ME ? [ME.id, ME.username, ME.avatar, ME.isAdmin, inv.length, value, NOTIFS.unread, NOTIFS.list.length, GAME] : null);
+      const sig = JSON.stringify(ME ? [ME.id, ME.username, ME.avatar, ME.isAdmin, inv.length, value, NOTIFS.unread, NOTIFS.list.length, GAME, ME.usd] : null);
       if (sig === headerSig) return;
       headerSig = sig;
 
@@ -2283,6 +2342,8 @@
 
       target.innerHTML = `
         ${bell}
+
+        <button class="usd-pill" data-action="cwallet" title="Balance: deposit or withdraw crypto">$${Number(ME.usd || 0).toFixed(2)}</button>
 
         <div class="wallet">
           <div class="wallet-bal" data-action="wallet">${GEM}<span>${fmt(walletShown !== null ? walletShown : value)}</span></div>
@@ -3221,6 +3282,9 @@
       socket.on("bounty:claimed", showBountyPopup);
 
       socket.on("banner:update", d => { STATE.bannerOff = Boolean(d && d.off); renderBanner(); });
+      socket.on("market:update", () => { if (currentPage === "market") loadMarket(); });
+      socket.on("wallet:deposit", d => { toast(`Deposit credited: ${d.amount} ${String(d.coin).toUpperCase()} = ${usd(d.usd)}`, "ok"); scheduleRefresh(); if ($("#cwBody")) api("/api/wallet").then(r => { cwData = r; }).catch(() => {}); });
+      socket.on("market:sold", d => { toast(`Sold ${d.item} for ${usd(d.payout)}!`, "ok"); scheduleRefresh(); });
 
       socket.on("jackpot:update", j => {
         if (!j) return;
@@ -3468,7 +3532,7 @@
         ${LOGIN_DECO}
         <div class="lg-body">
           <h2>Welcome to Pet<span>Duel</span></h2>
-          <p class="lg-sub">By logging in, you confirm that you are <b>18 or older</b>, that using Pet Duel is allowed where you live, that any items you wager are not stolen, and that you agree to our Terms of Service and Privacy Policy. Pet Duel is for entertainment only: gems have no monetary value.</p>
+          <p class="lg-sub">By logging in, you confirm that you are <b>18 or older</b>, that using Pet Duel is allowed where you live, that any items you wager are not stolen, and that you agree to our Terms of Service and Privacy Policy. Crypto deposits and Marketplace purchases are final.</p>
 
           <label class="lg-check">
             <input type="checkbox" id="loginTos">
@@ -4146,7 +4210,7 @@
       currentPage = page;
       document.querySelectorAll(".nav-item[data-nav]").forEach(n => n.classList.toggle("active", n.dataset.nav === page));
 
-      const sections = { home: "#homeContent", profile: "#profileContent", event: "#eventContent", jackpot: "#jackpotContent" };
+      const sections = { home: "#homeContent", profile: "#profileContent", event: "#eventContent", jackpot: "#jackpotContent", market: "#marketContent" };
       for (const [name, selector] of Object.entries(sections)) {
         $(selector).style.display = name === page ? "block" : "none";
       }
@@ -4473,7 +4537,7 @@
           <div class="info">
             <p class="muted" style="font-size:12px">Last updated: November 2026. By creating an account or using Pet Duel in any way you agree to these Terms. If you do not agree, do not use the site.</p>
 
-            <div class="fun-note"><b>Entertainment only, no monetary value</b>Pet Duel is made for fun. The gems and values shown on the site <b>have no monetary value</b>: they are only used to compare items with each other. Nothing on Pet Duel is sold for real money, nothing can be bought with real money and nothing can be cashed out or exchanged for real money, crypto or any other currency. Do not buy items or Robux with real money to use them on Pet Duel.</div>
+            <div class="fun-note"><b>Gems, store balance and the Marketplace</b>Gems only show the value of items and are used to compare them. The <b>store balance</b> is in USD: it is topped up by your crypto deposits (USDT BEP20, Solana, Litecoin) and used to buy items on the Marketplace; sales add to it and it can be withdrawn in crypto. <b>Deposits sent to a wrong address or network cannot be recovered.</b> Crypto deposits, purchases and game results are final. Only use money you can afford to lose.</div>
 
             <h4>1. About Pet Duel</h4>
             <p>Pet Duel ("we", "us", "the site") is an independent, fan-made entertainment site where players play coinflip and giveaway games with Murder Mystery 2 items. Pet Duel is <b>not affiliated with, endorsed by, sponsored by or connected to</b> Roblox Corporation, Nikilis or Murder Mystery 2. All game names, logos, item images and trademarks belong to their owners.</p>
@@ -4493,7 +4557,7 @@
               <li>Deposits are confirmed by hand and are only credited after an admin confirms them. Every deposit trade must follow the instructions shown in the Deposit window.</li>
               <li>Only trade with the bot shown in the Deposit window. Staff will never ask you for items in direct messages. <b>We are not responsible for trades with anyone else</b>, including impostors.</li>
               <li>Withdrawals are sent by hand and can take time. We may delay, refuse or reverse a withdrawal if we suspect abuse, a bug, fraud or a breach of these Terms.</li>
-              <li>Items and gems on your Pet Duel balance are a <b>limited, revocable permission</b> to use them on the site, not your property, and have no monetary value.</li>
+              <li>Items and gems on your Pet Duel balance are a <b>limited, revocable permission</b> to use them on the site, not your property.</li>
             </ul>
 
             <h4>4. Games</h4>
@@ -4569,7 +4633,7 @@
 
       return `
         <div class="info">
-          <details open><summary>Do gems have real value?</summary>No. Pet Duel is for entertainment only. Gems and values have no monetary value, nothing is sold for real money and nothing can be cashed out for real money.</details>
+          <details open><summary>What is the store balance?</summary>Your store balance is in USD. Deposit USDT (BEP20), Solana or Litecoin to your own deposit address in the Wallet and it is credited automatically after the network confirms. Use it to buy items on the Marketplace; selling items adds to it, and you can withdraw it in crypto (minimum $5). Gems only show item values.</details>
           <details><summary>How do I deposit items?</summary>Log in, open your Wallet and press Deposit. Join one of the online bots and send it a trade with your items. They appear in your inventory once an admin confirms the trade.</details>
           <details><summary>How do I withdraw?</summary>Open your Wallet, select the items you want and press Withdraw. An admin sends them to you in game.</details>
           <details><summary>How does a coinflip work?</summary>Bet up to ${maxItems} items and pick a side. Another player joins with items worth about the same (within ${range}%). After a 3 second countdown the coin flips and the winner takes every item in the game.</details>
@@ -5294,6 +5358,181 @@
       document.body.classList.remove("chat-open");
     }
 
+    /* ---------- Crypto wallet (USD balance) ---------- */
+    const COIN_ICO = { usdt: '<span class="coin-ico usdt">₮</span>', sol: '<span class="coin-ico sol">◎</span>', ltc: '<span class="coin-ico ltc">Ł</span>' };
+    let cwData = null, cwTab = "deposit";
+    const usd = v => "$" + Number(v || 0).toFixed(2);
+
+    async function openCWallet(tab = "deposit") {
+      if (!requireLogin()) return;
+      cwTab = tab;
+      openModal2(`${modalHeader("Wallet", "close2")}<div id="cwBody"><div class="empty">Loading…</div></div>`);
+      try { cwData = await api("/api/wallet"); renderCWallet(); } catch (error) { fail(error); }
+    }
+
+    function cwHistHTML() {
+      const d = asArray(cwData.deposits), w = asArray(cwData.withdrawals);
+      if (cwTab === "deposit") return d.length ? `<div class="cw-hist"><small class="muted">Your deposits</small>${d.slice(0, 6).map(x => `<div><span>${x.coin === "manual" ? "Balance change" : `${esc(x.amount)} ${esc(x.coin.toUpperCase())}`}</span><b>${usd(x.usd)}</b><small>${esc(ago(x.ts))}</small></div>`).join("")}</div>` : "";
+      return w.length ? `<div class="cw-hist"><small class="muted">Your withdrawals</small>${w.slice(0, 6).map(x => `<div><span>${usd(x.usd)} · ${esc(x.coin.toUpperCase())}</span><span class="st ${esc(x.status)}">${x.status === "pending" ? "Pending" : x.status === "sent" ? "Sent" : "Refunded"}</span><small>${esc(ago(x.ts))}</small></div>`).join("")}</div>` : "";
+    }
+
+    function renderCWallet() {
+      const box = $("#cwBody");
+      if (!box || !cwData) return;
+      const coins = asArray(cwData.coins);
+      const top = `
+        <div class="cw-bal"><span>Balance</span><b>${usd(cwData.balance)}</b></div>
+        <div class="cw-tabs">
+          <button class="${cwTab === "deposit" ? "on" : ""}" data-action="cw-tab" data-tab="deposit">Deposit</button>
+          <button class="${cwTab === "withdraw" ? "on" : ""}" data-action="cw-tab" data-tab="withdraw">Withdraw</button>
+        </div>`;
+      if (cwTab === "deposit") {
+        box.innerHTML = top + (cwData.enabled
+          ? `<p class="hint" style="margin:0 0 10px">Deposit crypto and buy items on the Marketplace.</p>` + coins.map(c => `
+            <button class="cw-coin" data-action="cw-coin" data-coin="${c.key}">${COIN_ICO[c.key]}<span><b>${esc(c.name)}</b><small>${esc(c.key === "usdt" ? "BEP20 (BNB Smart Chain)" : c.network)}</small></span><span class="arr">›</span></button>`).join("")
+          : '<div class="empty">Crypto deposits are not open yet.</div>') + cwHistHTML();
+      } else {
+        box.innerHTML = top + `
+          <div style="display:grid;gap:8px">
+            <select class="control" id="cwwCoin">${coins.map(c => `<option value="${c.key}">${esc(c.label)} · ${esc(c.key === "usdt" ? "BEP20" : c.network)}</option>`).join("")}</select>
+            <input class="control" id="cwwAddr" placeholder="Your address" autocomplete="off">
+            <input class="control" id="cwwAmt" type="number" min="5" step="0.01" placeholder="Amount in USD (min $5)">
+            <button class="btn" data-action="cw-withdraw">Request withdrawal</button>
+          </div>
+          <p class="cw-note">The amount leaves your balance now and is sent to your address by our team (usually within 24 hours). Check the network: a wrong network or address cannot be undone.</p>` + cwHistHTML();
+      }
+    }
+
+    async function cwShowCoin(coin) {
+      const box = $("#cwBody");
+      box.innerHTML = '<div class="empty">Loading…</div>';
+      try {
+        const a = await api("/api/wallet/address", { body: { coin } });
+        const net = coin === "usdt" ? "USDT on BNB Smart Chain (BEP20)" : a.label;
+        box.innerHTML = `
+          <button class="cw-back" data-action="cw-tab" data-tab="deposit">← Back</button>
+          <div class="cw-addr-title">${COIN_ICO[coin]}Deposit ${esc(a.label)}${coin === "usdt" ? " (BEP20)" : ""}</div>
+          ${a.qr ? `<div class="cw-qr"><img src="${esc(a.qr)}" alt="QR code"></div>` : ""}
+          <small class="muted">Your ${esc(a.label)} deposit address</small>
+          <div class="cw-addr"><code>${esc(a.address)}</code><button class="btn sm" data-action="copy-text" data-text="${esc(a.address)}">Copy</button></div>
+          <p class="cw-note">Send <b>any amount of ${esc(net)}</b> (at least ${esc(a.min)} ${esc(a.label)}) to this address. It's credited to your balance automatically after the network confirms. Only send ${esc(net)} here.</p>
+          <button class="btn gray sm" style="margin-top:10px" data-action="cw-check">I sent it, check now</button>`;
+      } catch (error) { fail(error); renderCWallet(); }
+    }
+
+    async function cwWithdraw() {
+      const body = { coin: $("#cwwCoin").value, address: $("#cwwAddr").value.trim(), amount: $("#cwwAmt").value };
+      const ok = await confirmBox({ title: "Withdraw", text: `Send ${usd(body.amount)} in ${body.coin.toUpperCase()} to ${body.address}?`, ok: "Request" });
+      if (!ok) return;
+      try {
+        const r = await api("/api/wallet/withdraw", { body });
+        cwData = r.wallet;
+        toast("Withdrawal requested", "ok");
+        renderCWallet();
+        refresh();
+      } catch (error) { fail(error); }
+    }
+
+    /* ---------- Marketplace ---------- */
+    let mkData = { listings: [], fee: 0 }, mkSort = "high", mkQ = "";
+    async function openMarket() {
+      closeModal();
+      closeModal2();
+      showPage("market");
+      renderMarket();
+      await loadMarket();
+    }
+    async function loadMarket() {
+      try { mkData = await api("/api/market"); renderMarket(); } catch (error) { fail(error); }
+    }
+    function renderMarket() {
+      const box = $("#marketView");
+      if (!box) return;
+      const q = mkQ.toLowerCase();
+      const list = asArray(mkData.listings).filter(l => !q || l.item.name.toLowerCase().includes(q))
+        .sort((a, b) => mkSort === "low" ? a.price - b.price : mkSort === "new" ? b.ts - a.ts : b.price - a.price);
+      const head = `
+        <div class="mk-head">
+          <div><h1>Marketplace</h1><p>Deposit crypto and buy items outright: they land straight in your inventory, ready to flip or withdraw.</p></div>
+          <div class="mk-side">
+            <div class="mk-bal"><div><small>STORE BALANCE</small><b>${usd(ME ? ME.usd : 0)}</b></div>
+              <button class="btn sm" data-action="cwallet">Deposit</button><button class="btn gray sm" data-action="cwallet-w">Withdraw</button></div>
+            <button class="btn" data-action="mk-list">List items</button>
+          </div>
+        </div>
+        <div class="mk-tools">
+          <input class="control" id="mkQ" placeholder="Search items..." value="${esc(mkQ)}" autocomplete="off">
+          <select class="control" id="mkSort">
+            <option value="high" ${mkSort === "high" ? "selected" : ""}>Price: High to Low</option>
+            <option value="low" ${mkSort === "low" ? "selected" : ""}>Price: Low to High</option>
+            <option value="new" ${mkSort === "new" ? "selected" : ""}>Newest first</option>
+          </select>
+        </div>`;
+      const grid = list.length ? `<div class="mk-grid">${list.map((l, i) => {
+        const mine = ME && l.seller.id === ME.id;
+        return `
+          <div class="mk-card" style="animation-delay:${Math.min(i, 20) * 25}ms">
+            <div class="mk-img"><img src="${esc(itemImage(l.item))}" alt="" loading="lazy"><div class="mk-seller">${avatar(l.seller, "xs")}<span>${esc(getUsername(l.seller))}</span></div></div>
+            <div class="mk-body">
+              <h4 title="${esc(l.item.name)}">${esc(l.item.name)}</h4>
+              <div class="mk-val">${GEM}${fmt(l.item.value)}</div>
+              <div class="mk-price">${usd(l.price)}</div>
+              ${mine || (ME && ME.isAdmin)
+                ? `<button class="btn ${mine ? "gray" : "red"}" data-action="mk-cancel" data-id="${esc(l.id)}">${mine ? "Remove listing" : "Remove (admin)"}</button>`
+                : `<button class="btn" data-action="mk-buy" data-id="${esc(l.id)}" data-name="${esc(l.item.name)}" data-price="${l.price}">Buy</button>`}
+            </div>
+          </div>`;
+      }).join("")}</div>` : `<div class="card empty">No items listed${mkQ ? " for this search" : " yet"}. Be the first: press <b>List items</b>.</div>`;
+      const focus = document.activeElement && document.activeElement.id === "mkQ";
+      box.innerHTML = head + grid;
+      $("#mkQ").addEventListener("input", e => { mkQ = e.target.value; renderMarket(); });
+      $("#mkSort").addEventListener("change", e => { mkSort = e.target.value; renderMarket(); });
+      if (focus) { const i = $("#mkQ"); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
+    }
+
+    let mkPick = new Map();
+    function showMarketList() {
+      if (!requireLogin()) return;
+      mkPick = new Map();
+      const inv = inventory().slice().sort((a, b) => Number(b.value || 0) - Number(a.value || 0));
+      openModal(`
+        ${modalHeader("List items")}
+        <p class="hint">Click the items you want to sell and set a price in USD for each. Listed items leave your inventory until they are sold or you remove the listing.${Number(mkData.fee) > 0 ? ` A ${Number(mkData.fee)}% market fee is taken from each sale.` : ""}</p>
+        ${inv.length ? `<div class="mk-list-grid">${inv.map(i => `
+          <div class="mk-li" data-action="mk-pick" data-uid="${esc(itemId(i))}">
+            <img src="${esc(itemImage(i))}" alt=""><b>${esc(i.name)}</b><small class="muted">${GEM}${fmt(i.value)}</small>
+          </div>`).join("")}</div>` : '<div class="empty">Your inventory is empty. Deposit items first.</div>'}
+        <div class="modal-footer"><span id="mkInfo" style="margin-right:auto;align-self:center">0 selected</span><button class="btn" data-action="mk-submit">List for sale</button></div>`, "wide");
+    }
+    function mkTogglePick(el) {
+      const uid = el.dataset.uid;
+      if (mkPick.has(uid)) { mkPick.delete(uid); el.classList.remove("on"); el.querySelector("input")?.remove(); }
+      else {
+        if (mkPick.size >= 20) return toast("Up to 20 items at once", "err");
+        mkPick.set(uid, "");
+        el.classList.add("on");
+        const input = document.createElement("input");
+        input.className = "control"; input.type = "number"; input.min = "0.01"; input.step = "0.01"; input.placeholder = "Price $";
+        input.addEventListener("click", e => e.stopPropagation());
+        input.addEventListener("input", () => mkPick.set(uid, input.value));
+        el.appendChild(input);
+        input.focus();
+      }
+      $("#mkInfo").textContent = `${mkPick.size} selected`;
+    }
+    async function mkSubmit() {
+      const items = [...mkPick].map(([uid, price]) => ({ uid, price: Number(price) }));
+      if (!items.length) return toast("Select items first", "err");
+      if (items.some(i => !(i.price >= 0.01))) return toast("Set a price for every selected item", "err");
+      try {
+        const r = await api("/api/market/list", { body: { items } });
+        closeModal();
+        toast(`${r.listed} item(s) listed`, "ok");
+        await refresh();
+        loadMarket();
+      } catch (error) { fail(error); }
+    }
+
     /* ---------- Jackpot ---------- */
     const JP_COLORS = ["#0dfb99", "#f08a00", "#3b82f6", "#a855f7", "#ef4444", "#14b8a6", "#eab308", "#ec4899", "#6366f1", "#84cc16"];
     let jpSig = "";
@@ -5706,6 +5945,30 @@
       "profile-page"(el) { showProfile(Number(el.dataset.page)); },
       "discord-link"() { discordLink(); },
       "support-panel"() { showSupportPanel(); },
+      market: openMarket,
+      cwallet() { openCWallet("deposit"); },
+      "cwallet-w"() { openCWallet("withdraw"); },
+      "cw-tab"(el) { cwTab = el.dataset.tab; renderCWallet(); },
+      "cw-coin"(el) { cwShowCoin(el.dataset.coin); },
+      async "cw-check"() {
+        try { const before = cwData ? cwData.balance : 0; cwData = await api("/api/wallet/check", { body: {} }); toast(cwData.balance > before ? "Deposit credited!" : "Nothing new yet. Confirmations can take a few minutes.", cwData.balance > before ? "ok" : ""); await refresh(); }
+        catch (error) { fail(error); }
+      },
+      "cw-withdraw"() { cwWithdraw(); },
+      "mk-list"() { showMarketList(); },
+      "mk-pick"(el) { mkTogglePick(el); },
+      "mk-submit"() { mkSubmit(); },
+      async "mk-buy"(el) {
+        if (!requireLogin()) return;
+        if (!(await confirmBox({ title: "Buy item", text: `Buy ${el.dataset.name} for ${usd(el.dataset.price)}?`, ok: "Buy" }))) return;
+        try { await api("/api/market/buy", { body: { id: el.dataset.id } }); toast("Bought! It is in your inventory.", "ok"); await refresh(); loadMarket(); }
+        catch (error) { fail(error); }
+      },
+      async "mk-cancel"(el) {
+        if (!(await confirmBox({ title: "Remove listing", text: "Take this item off the market? It goes back to the seller's inventory.", ok: "Remove", danger: true }))) return;
+        try { await api("/api/market/cancel", { body: { id: el.dataset.id } }); toast("Listing removed", "ok"); await refresh(); loadMarket(); }
+        catch (error) { fail(error); }
+      },
       game(el) { setGame(el.dataset.game); renderGameSw(); },
       "game-toggle"(el) { el.closest(".game-dd").classList.toggle("open"); },
       "dep-game"(el) { depGame = el.dataset.game === "mm2" ? "mm2" : "adoptme"; openBotsModal(1); },
