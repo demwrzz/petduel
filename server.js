@@ -1111,7 +1111,8 @@ function loginUser(id, username, displayName, avatar) {
    redirect URL: SITE_URL + /api/auth/roblox/callback. Then set ROBLOX_CLIENT_ID and ROBLOX_CLIENT_SECRET. */
 const ROBLOX_CLIENT_ID = E.ROBLOX_CLIENT_ID || '';
 const ROBLOX_CLIENT_SECRET = E.ROBLOX_CLIENT_SECRET || '';
-const oauthOn = () => Boolean(ROBLOX_CLIENT_ID && ROBLOX_CLIENT_SECRET);
+/* Sign in with Roblox (OAuth) is turned off: players log in with the code in their Roblox bio */
+const oauthOn = () => false;
 const oauthRedirect = () => SITE_URL.replace(/\/+$/, '') + '/api/auth/roblox/callback';
 const oauthStates = new Map();   /* state -> { verifier, exp } */
 const oauthTickets = new Map();  /* one-time ticket -> { token, user, exp }: the session token never goes in a URL */
@@ -1794,7 +1795,7 @@ app.post('/api/admin/match/cancel', auth, adminOnly, (req, res) => {
 const systemChat = (text, extra = {}) => pushChat({ id: rid(4), user: { username: 'PetDuel', avatar: null }, system: true, text, ts: now(), ...extra });
 
 /* every 30 minutes: the deposit risk reminder */
-const RISK_TEXT = 'PetDuel is not responsible for any item losses due to rollbacks, bans, or trade restrictions applied by Adopt Me moderators or Roblox. Deposit and play at your own risk.';
+const RISK_TEXT = 'PetDuel is not responsible for any item losses due to rollbacks, bans, or trade restrictions applied by Murder Mystery 2 moderators or Roblox. Deposit and play at your own risk.';
 setInterval(() => {
   if (maintenanceOn()) return;
   const last = S.chat[S.chat.length - 1];
@@ -4168,8 +4169,8 @@ function adminUI() {
         <p class="hint">My inventory: the pet leaves your inventory when the event starts and goes to the winner. If nobody wins, the event is cancelled or the server restarts, it comes back to you. Catalog: a new pet is created for the winner. Starting an event posts an announcement in chat and a banner on the home page.</p>
       </div>
 
-      <h4 style="margin:16px 0 8px">💵 Crypto &amp; Marketplace</h4>
-      <div style="background:#f5faff;padding:14px;border-radius:12px" id="cw-box">
+      <h4 style="display:none">💵 Crypto &amp; Marketplace</h4>
+      <div style="display:none" id="cw-box">
         <div id="cw-status" class="hint" style="margin:0 0 10px">Loading…</div>
         <div id="cw-setup" style="display:none;margin-bottom:12px;padding:12px;border:1px solid #ffb52e;border-radius:10px">
           <b>First setup</b>
@@ -5440,7 +5441,11 @@ async function cwScan() {
     cwScanning = false;
   }
 }
-setInterval(cwScan, 60 * 1000);
+setInterval(() => { if (MARKET_OPEN) cwScan(); }, 60 * 1000);
+
+/* the crypto store and the marketplace are closed for now: their routes answer "closed" */
+const MARKET_OPEN = false;
+app.use(['/api/market', '/api/wallet'], (req, res, next) => (MARKET_OPEN ? next() : bad(res, 'The marketplace is closed for now', 404)));
 
 /* ---- player API ---- */
 app.get('/api/wallet', auth, (req, res) => res.json(cwView(req.user)));

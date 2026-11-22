@@ -227,6 +227,11 @@
     .pf-gtabs button { flex: 1; height: 34px; border: 1px solid #2a2f3b; border-radius: 9px; color: #8d909a; background: #171a22; font: inherit; font-weight: 900; transition: .2s; }
     .pf-gtabs button.on { border-color: var(--green); color: #04120b; background: var(--green); }
 
+    .foot-risk { display: flex; gap: 12px; max-width: 640px; margin: 4px auto 14px; padding: 12px 16px; border: 1px solid #6b5420; border-radius: 10px; color: #e8dcc0; background: #2a2416; text-align: left; }
+    .foot-risk span { flex: none; font-size: 18px; line-height: 1.3; }
+    .foot-risk p { margin: 0; font-size: 14px; line-height: 1.5; }
+    .foot-risk b { color: #fff; }
+    .nav-item[hidden] { display: none !important; }
     /* ---------- USD balance, crypto wallet, marketplace ---------- */
     .usd-pill { height: 44px; padding: 0 14px; border: 1px solid var(--border); border-radius: 10px; color: #7dffcf; background: #191c25; font-size: 15px; font-weight: 900; transition: border-color .15s; }
     .usd-pill:hover { border-color: var(--green); }
@@ -1670,9 +1675,18 @@
       </symbol>
 
       <symbol id="logo-mark" viewBox="0 0 100 100">
+        <defs>
+          <linearGradient id="lmBlade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset=".55" stop-color="#e6ebf2"/><stop offset="1" stop-color="#aeb7c4"/></linearGradient>
+        </defs>
         <circle cx="50" cy="50" r="48" fill="#00efa0"/>
-        <circle cx="50" cy="50" r="38" fill="#ffffff"/>
-        <image href="/assets/mm2-knife.png" x="21" y="21" width="58" height="58" preserveAspectRatio="xMidYMid meet"/>
+        <circle cx="50" cy="50" r="40" fill="#101218"/>
+        <g transform="rotate(-45 50 50)">
+          <path d="M47 43.5H73C80 43.5 85 46.5 87 50C85 53 79 56.5 71 56.5H47Z" fill="url(#lmBlade)"/>
+          <path d="M50 47.6H76" stroke="#b9c2ce" stroke-width="1.4" stroke-linecap="round"/>
+          <rect x="43" y="38.5" width="5" height="23" rx="2.5" fill="#00efa0"/>
+          <rect x="18" y="45" width="26" height="10" rx="5" fill="#00efa0"/>
+          <rect x="22" y="48.6" width="18" height="2.8" rx="1.4" fill="#0a8f63"/>
+        </g>
       </symbol>
     </defs>
   </svg>
@@ -1714,7 +1728,7 @@
           <svg class="nav-ico" viewBox="0 0 24 24"><ellipse cx="9" cy="16" rx="7" ry="3.5" fill="currentColor" opacity=".7"/><ellipse cx="9" cy="12" rx="7" ry="3.5" fill="currentColor" opacity=".85"/><ellipse cx="15" cy="8" rx="7" ry="3.5" fill="currentColor"/></svg>
           <span class="nav-text">Coinflip<span class="nav-sub" id="navCf"></span></span>
         </div>
-        <div class="nav-item" data-action="market" data-nav="market">
+        <div class="nav-item" data-action="market" data-nav="market" hidden>
           <svg class="nav-ico" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16l1.5 5.2a3 3 0 0 1-5.5 2 3 3 0 0 1-4 .9 3 3 0 0 1-4-.9 3 3 0 0 1-5.5-2zM5 13.6a4.6 4.6 0 0 0 2.6.3V19h3.2v-4h2.4v4h3.2v-5.1a4.6 4.6 0 0 0 2.6-.3V21H5z"/></svg>
           <span class="nav-text">Market</span>
         </div>
@@ -1830,7 +1844,8 @@
 
     <footer class="site-footer">
       <div class="foot-brand">PET<span>DUEL</span></div>
-      <p class="foot-fun"><b>18+ only.</b> Gems show item values only. The store balance (USD) comes from crypto deposits and is used on the Marketplace. Crypto deposits and purchases are final.</p>
+      <div class="foot-risk"><span>⚠️</span><p>PetDuel is not responsible for any item losses due to rollbacks, bans, or trade restrictions applied by Murder Mystery 2 moderators or Roblox. <b>Deposit and play at your own risk.</b></p></div>
+      <p class="foot-fun"><b>For entertainment only.</b> Gems and values on Pet Duel have no monetary value. Nothing is sold for real money and nothing can be cashed out or exchanged for real money.</p>
       <p class="foot-warn"><b>18+ only.</b> Deposits are at your own risk: bot accounts can be banned and items can be lost. You are responsible for following the laws of your country; do not use Pet Duel where it is not allowed. Not available in Turkey.</p>
       <p>Pet Duel is an independent project. It is not affiliated with, endorsed by, sponsored by, or in any way associated with Murder Mystery 2, Nikilis or Roblox Corporation. All game names, logos, item images and trademarks belong to their respective owners.</p>
       <p class="foot-links"><a data-action="info" data-page="tos">Terms of Service</a> · <a data-action="info" data-page="privacy">Privacy Policy</a> · <a data-action="info" data-page="fair">Provably Fair</a> · <a data-action="info" data-page="faq">FAQ</a></p>
@@ -2343,7 +2358,6 @@
       target.innerHTML = `
         ${bell}
 
-        <button class="usd-pill" data-action="cwallet" title="Balance: deposit or withdraw crypto">$${Number(ME.usd || 0).toFixed(2)}</button>
 
         <div class="wallet">
           <div class="wallet-bal" data-action="wallet">${GEM}<span>${fmt(walletShown !== null ? walletShown : value)}</span></div>
@@ -3532,7 +3546,7 @@
         ${LOGIN_DECO}
         <div class="lg-body">
           <h2>Welcome to Pet<span>Duel</span></h2>
-          <p class="lg-sub">By logging in, you confirm that you are <b>18 or older</b>, that using Pet Duel is allowed where you live, that any items you wager are not stolen, and that you agree to our Terms of Service and Privacy Policy. Crypto deposits and Marketplace purchases are final.</p>
+          <p class="lg-sub">By logging in, you confirm that you are <b>18 or older</b>, that using Pet Duel is allowed where you live, that any items you wager are not stolen, and that you agree to our Terms of Service and Privacy Policy. Pet Duel is for entertainment only: gems have no monetary value.</p>
 
           <label class="lg-check">
             <input type="checkbox" id="loginTos">
@@ -4537,7 +4551,7 @@
           <div class="info">
             <p class="muted" style="font-size:12px">Last updated: November 2026. By creating an account or using Pet Duel in any way you agree to these Terms. If you do not agree, do not use the site.</p>
 
-            <div class="fun-note"><b>Gems, store balance and the Marketplace</b>Gems only show the value of items and are used to compare them. The <b>store balance</b> is in USD: it is topped up by your crypto deposits (USDT BEP20, Solana, Litecoin) and used to buy items on the Marketplace; sales add to it and it can be withdrawn in crypto. <b>Deposits sent to a wrong address or network cannot be recovered.</b> Crypto deposits, purchases and game results are final. Only use money you can afford to lose.</div>
+            <div class="fun-note"><b>Entertainment only, no monetary value</b>Pet Duel is made for fun. The gems and values shown on the site <b>have no monetary value</b>: they are only used to compare items with each other. Nothing on Pet Duel is sold for real money, nothing can be bought with real money and nothing can be cashed out or exchanged for real money, crypto or any other currency. Do not buy items or Robux with real money to use them on Pet Duel.</div>
 
             <h4>1. About Pet Duel</h4>
             <p>Pet Duel ("we", "us", "the site") is an independent, fan-made entertainment site where players play coinflip and giveaway games with Murder Mystery 2 items. Pet Duel is <b>not affiliated with, endorsed by, sponsored by or connected to</b> Roblox Corporation, Nikilis or Murder Mystery 2. All game names, logos, item images and trademarks belong to their owners.</p>
@@ -4557,7 +4571,7 @@
               <li>Deposits are confirmed by hand and are only credited after an admin confirms them. Every deposit trade must follow the instructions shown in the Deposit window.</li>
               <li>Only trade with the bot shown in the Deposit window. Staff will never ask you for items in direct messages. <b>We are not responsible for trades with anyone else</b>, including impostors.</li>
               <li>Withdrawals are sent by hand and can take time. We may delay, refuse or reverse a withdrawal if we suspect abuse, a bug, fraud or a breach of these Terms.</li>
-              <li>Items and gems on your Pet Duel balance are a <b>limited, revocable permission</b> to use them on the site, not your property.</li>
+              <li>Items and gems on your Pet Duel balance are a <b>limited, revocable permission</b> to use them on the site, not your property, and have no monetary value.</li>
             </ul>
 
             <h4>4. Games</h4>
@@ -4633,7 +4647,7 @@
 
       return `
         <div class="info">
-          <details open><summary>What is the store balance?</summary>Your store balance is in USD. Deposit USDT (BEP20), Solana or Litecoin to your own deposit address in the Wallet and it is credited automatically after the network confirms. Use it to buy items on the Marketplace; selling items adds to it, and you can withdraw it in crypto (minimum $5). Gems only show item values.</details>
+          <details open><summary>Do gems have real value?</summary>No. Pet Duel is for entertainment only. Gems and values have no monetary value, nothing is sold for real money and nothing can be cashed out for real money.</details>
           <details><summary>How do I deposit items?</summary>Log in, open your Wallet and press Deposit. Join one of the online bots and send it a trade with your items. They appear in your inventory once an admin confirms the trade.</details>
           <details><summary>How do I withdraw?</summary>Open your Wallet, select the items you want and press Withdraw. An admin sends them to you in game.</details>
           <details><summary>How does a coinflip work?</summary>Bet up to ${maxItems} items and pick a side. Another player joins with items worth about the same (within ${range}%). After a 3 second countdown the coin flips and the winner takes every item in the game.</details>
