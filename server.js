@@ -78,7 +78,11 @@ const GAMES = ['adoptme', 'mm2'];
 const GAME_NAMES = { adoptme: 'Adopt Me', mm2: 'MM2' };
 const cleanGame = v => (v === 'mm2' ? 'mm2' : 'adoptme');
 /* Adopt Me can be switched off in the admin panel: nothing new can be played, deposited or withdrawn with it */
-const adoptMeOff = () => S.settings.adoptMeOff !== false;
+const adoptMeOff = () => S.settings.adoptMeOff === true;
+/* MM2 switched off: it disappears from the site; MM2 items stay saved in the inventories (nothing is deleted) */
+const mm2Off = () => S.settings.mm2Off === true;
+const gameOff = g => (cleanGame(g) === 'mm2' ? mm2Off() : adoptMeOff());
+const offMsg = g => `${GAME_NAMES[cleanGame(g)]} is currently disabled`;
 const AM_OFF_MSG = 'Adopt Me is currently disabled';
 const gameOf = x => cleanGame(x && x.game);
 /* the one game of a list of items, or null when it mixes games */
@@ -1321,7 +1325,8 @@ function buildState() {
       autoBot: autoDepositOn() ? DEPOSIT_BOT_NAME : '',
       autoBotLink: autoDepositOn() ? autoBotLink() : '',
       autoBotOnline: autoDepositOn() && autoBotOnline(),
-      adoptMeOff: adoptMeOff()
+      adoptMeOff: adoptMeOff(),
+      mm2Off: mm2Off()
     }
   };
 }
@@ -1714,7 +1719,7 @@ app.post('/api/match/create', auth, actionLimit, (req, res) => {
   if (!selected) return bad(res, 'Invalid item selection');
   if (valueOf(selected) <= 0) return bad(res, 'Value too low');
   const game = gameOfItems(selected);
-  if (game === 'adoptme' && adoptMeOff()) return bad(res, AM_OFF_MSG);
+  if (gameOff(game)) return bad(res, offMsg(game));
   if (!game) return bad(res, 'Use items of one game only (Adopt Me or MM2)');
 
   /* optional limit: how many pets the opponent may join with (empty = no limit) */
@@ -1761,7 +1766,7 @@ app.post('/api/match/join', auth, actionLimit, (req, res) => {
 
   if (!match || match.state !== 'waiting') return bad(res, 'This match is no longer available');
   if (match.host.id === user.id) return bad(res, 'You cannot join your own match');
-  if (gameOf(match) === 'adoptme' && adoptMeOff()) return bad(res, AM_OFF_MSG);
+  if (gameOff(gameOf(match))) return bad(res, offMsg(gameOf(match)));
 
   const joinLimit = match.maxJoin || MAX_ITEMS;
   if (Array.isArray(uids) && uids.length > joinLimit) return bad(res, `This game allows at most ${joinLimit} pet${joinLimit === 1 ? '' : 's'}`);
@@ -1935,7 +1940,7 @@ app.post('/api/giveaway/create', auth, actionLimit, (req, res) => {
   if (!picked) return bad(res, 'Select up to 5 valid items');
   const game = gameOfItems(picked);
   if (!game) return bad(res, 'A giveaway can only have items of one game');
-  if (game === 'adoptme' && adoptMeOff()) return bad(res, AM_OFF_MSG);
+  if (gameOff(game)) return bad(res, offMsg(game));
 
   const items = takeItems(user, uids, 5);
 
@@ -2136,6 +2141,7 @@ const UPDATE_LOG = [
     'Stats and profit are kept per game (profile and player card have Adopt Me / MM2 tabs); the total still decides the rank',
     'Giveaways belong to one game and only that game\'s bets count for their requirements (MM2 bets do not unlock Adopt Me giveaways)',
     'Withdraw requests are per game: the admin list, the bell and the Discord bot show the game and the bot',
+    'Adopt Me is back on; MM2 is switched off and removed from the site (MM2 items stay saved). Admins can switch each game on or off',
     'MM2 bot: one deposit session lasts an hour and stays open after a trade (trade again in the same server); no codes shown; the bot is set offline automatically when it stops sending its heartbeat; catalog items can be edited (✏️)',
     'MM2 automatic deposits: Deposit > MM2 opens a 15 minute session, the in-game bot (iemre547) accepts the trade and the items appear in the inventory by themselves',
     'Adopt Me and MM2 are both back after the short MM2-only time: Adopt Me pets, catalog, bots and stats come from the backup, MM2 items and the MM2 catalog are kept'
@@ -2575,7 +2581,7 @@ app.get('/api/jackpot/history', (req, res) => {
 app.post('/api/jackpot/join', auth, actionLimit, (req, res) => {
   const user = req.user;
   const j = JPS[cleanGame(req.body.game)];
-  if (cleanGame(req.body.game) === 'adoptme' && adoptMeOff()) return bad(res, AM_OFF_MSG);
+  if (gameOff(req.body.game)) return bad(res, offMsg(req.body.game));
 
   if (!j || (j.state !== 'waiting' && j.state !== 'countdown')) {
     return bad(res, 'This round is already rolling. Join the next round.');
@@ -2677,7 +2683,7 @@ app.post('/api/withdraw', auth, actionLimit, (req, res) => {
   if (!chosen) return bad(res, 'Invalid item selection');
   const game = gameOfItems(chosen);
   if (!game) return bad(res, 'Withdraw items of one game at a time (Adopt Me or MM2)');
-  if (game === 'adoptme' && adoptMeOff()) return bad(res, AM_OFF_MSG);
+  if (gameOff(game)) return bad(res, offMsg(game));
   const wdBot = pickWithdrawBot(game);
   if (!wdBot) {
     return bad(res, `${GAME_NAMES[game]} withdrawals are paused while our ${GAME_NAMES[game]} withdraw bots are offline. Please try again when a bot is back online.`);
@@ -3904,6 +3910,15 @@ app.post('/api/admin/ban', auth, adminOnly, (req, res) => {
   res.json({ ok: true });
 });
 
+app.post('/api/admin/mm2', auth, adminOnly, (req, res) => {
+  S.settings.mm2Off = req.body.off !== false;
+  markDirty();
+  stateCache.t = 0;
+  io.emit('adoptme:update', {});
+  console.log(`[ADMIN] ${req.user.username} turned MM2 ${S.settings.mm2Off ? 'off' : 'on'}`);
+  res.json({ ok: true, off: S.settings.mm2Off });
+});
+
 app.post('/api/admin/adoptme', auth, adminOnly, (req, res) => {
   S.settings.adoptMeOff = req.body.off !== false;
   markDirty();
@@ -4071,6 +4086,14 @@ function adminUI() {
         <span style="flex:1"></span>
         <button id="am-toggle" class="btn sm"></button>
         <p class="hint" style="margin:0;width:100%">While Adopt Me is disabled the site opens on MM2, Adopt Me shows "Currently disabled" and no Adopt Me coinflip, jackpot, giveaway or withdraw can be started.</p>
+      </div>
+      <div style="margin-bottom:16px;padding:14px;border-radius:12px;border:1px solid #343842;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <img src="/assets/mm2-knife.png" alt="" style="width:28px;height:28px;object-fit:contain">
+        <b style="font-size:15px">MM2</b>
+        <span id="mm-state" style="font-weight:800"></span>
+        <span style="flex:1"></span>
+        <button id="mm-toggle" class="btn sm"></button>
+        <p class="hint" style="margin:0;width:100%">While MM2 is off it is removed from the site: no MM2 menu, deposit, withdraw, coinflip, jackpot or giveaway, and the MM2 bot is told not to trade. MM2 items stay saved in the players' inventories and come back when MM2 is turned on again.</p>
       </div>
 
       <div id="mt-box" style="margin-bottom:16px;padding:14px;border-radius:12px;border:1px solid #343842">
@@ -4437,7 +4460,9 @@ function adminUI() {
     if (document.activeElement !== $('cb-list')) $('cb-list').value = data.blockCountries || '';
     renderBlock(data.blockCountries || '', data.blockEnv || '', data.staffLink || '');
     mtOn = Boolean(data.maintenance);
-    amOff = !data.settings || data.settings.adoptMeOff !== false;
+    amOff = Boolean(data.settings && data.settings.adoptMeOff === true);
+    mmOff = Boolean(data.settings && data.settings.mm2Off === true);
+    renderMm();
     if (document.activeElement !== $('mt-text')) $('mt-text').value = data.maintenanceText || '';
     renderMaint();
     $('e-src').value = data.elveUrl || '';
@@ -4503,7 +4528,21 @@ function adminUI() {
   $('cb-off').onclick = () => saveBlock('');
 
   let mtOn = false;
-  let amOff = true;
+  let amOff = true, mmOff = false;
+  function renderMm() {
+    $('mm-state').textContent = mmOff ? '● Off (removed from the site)' : '● On';
+    $('mm-state').style.color = mmOff ? '#ff5968' : '#00efa0';
+    $('mm-toggle').textContent = mmOff ? 'Turn MM2 on' : 'Turn MM2 off';
+    $('mm-toggle').className = mmOff ? 'btn sm' : 'btn red sm';
+  }
+  $('mm-toggle').onclick = async () => {
+    try {
+      const r = await api('/api/admin/mm2', { method: 'POST', body: { off: !mmOff } });
+      mmOff = r.off;
+      renderMm();
+      toast(mmOff ? 'MM2 turned off' : 'MM2 turned on', 'ok');
+    } catch (err) { toast(err.message, 'err'); }
+  };
   function renderAm() {
     $('am-state').textContent = amOff ? '● Currently disabled' : '● Enabled';
     $('am-state').style.color = amOff ? '#ff5968' : '#00efa0';
@@ -5433,6 +5472,7 @@ setInterval(() => {
 
 /* the player starts a deposit (always for the Roblox account they are logged in with) */
 app.post('/api/deposit/init', auth, actionLimit, (req, res) => {
+  if (mm2Off()) return bad(res, offMsg('mm2'));
   if (!autoDepositOn()) return bad(res, 'Automatic deposits are not set up yet', 503);
   if (!autoBotOnline()) return bad(res, 'The MM2 bot is offline right now. Please try again in a few minutes.', 409);
   const user = req.user;
@@ -5461,6 +5501,7 @@ app.get('/api/deposit/status', auth, (req, res) => {
 
 /* the in-game bot: may this player trade with me? */
 app.get('/api/bot/verify-player/:robloxUsername', gameBotOnly, (req, res) => {
+  if (mm2Off()) return res.json({ allowed: false });
   const sess = activeSessions.get(sessionKey(req.params.robloxUsername));
   const ok = Boolean(sess && sess.expiresAt > now() && S.users[sess.userId] && !S.users[sess.userId].banned);
   if (!ok) return res.json({ allowed: false });
@@ -5589,6 +5630,7 @@ setInterval(() => {
 }, 30 * 1000);
 
 app.post('/api/withdraw/init', auth, actionLimit, (req, res) => {
+  if (mm2Off()) return bad(res, offMsg('mm2'));
   if (!autoDepositOn()) return bad(res, 'Automatic withdrawals are not set up yet', 503);
   if (!autoBotOnline()) return bad(res, 'The MM2 bot is offline right now. Please try again in a few minutes.', 409);
   const user = req.user;
@@ -5689,6 +5731,13 @@ app.post('/api/bot/confirm-withdraw', gameBotOnly, (req, res) => {
   scaleAllValues();
   for (const t of S.processedTrades || []) processedTrades.add(t);
   resumeBotWithdrawals();
+  if (!S.settings.gamesV2) {
+    S.settings.adoptMeOff = false;
+    S.settings.mm2Off = true;
+    S.settings.gamesV2 = true;
+    markDirty();
+    console.log('[GAMES] Adopt Me on, MM2 off');
+  }
   if (!S.settings.botAutoStatusOffFix) {
     for (const b of S.bots) if (b.game === 'mm2' && b.username.toLowerCase() === DEPOSIT_BOT_NAME.toLowerCase()) b.online = true;
     S.settings.botAutoStatusOffFix = true;

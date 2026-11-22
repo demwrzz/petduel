@@ -199,6 +199,8 @@
     .gd-off { display: none; margin-left: auto; padding: 1px 6px; border-radius: 5px; color: #ff8a94; background: rgba(255, 89, 104, .12); font-size: 10px; font-weight: 800; }
     body.am-off .gd-am { opacity: .55; cursor: not-allowed; }
     body.am-off .gd-off { display: inline-block; }
+    /* MM2 switched off: the game menu and every MM2 choice disappear */
+    body.mm-off .game-dd { display: none !important; }
     .dep-off { position: relative; opacity: .5; cursor: not-allowed; filter: grayscale(.6); }
     .dep-off small { display: block; margin-top: 4px; color: #ffb3ba; font-size: 12px; font-weight: 800; }
     .jp-gbar { margin-bottom: 12px; }
@@ -2053,11 +2055,13 @@
     /* the game the player is looking at: lobby, jackpot, inventory, deposit and withdraw follow it */
     const GAME_NAMES = { adoptme: "Adopt Me", mm2: "MM2" };
     const gameOf = x => (x && x.game === "mm2" ? "mm2" : "adoptme");
-    /* the site opens on MM2 while Adopt Me is disabled (the server says so in config.adoptMeOff) */
-    let GAME = "mm2";
-    try { if (localStorage.getItem("pd_game") === "adoptme") GAME = "adoptme"; } catch {}
-    const amOff = () => !STATE.config || STATE.config.adoptMeOff !== false;
-    if (GAME === "adoptme") GAME = "mm2";
+    /* a game can be switched off by the admins (config.adoptMeOff / config.mm2Off): the site then uses the other one,
+       and a switched-off MM2 is not shown at all */
+    let GAME = "adoptme";
+    try { if (localStorage.getItem("pd_game") === "mm2") GAME = "mm2"; } catch {}
+    const amOff = () => Boolean(STATE.config && STATE.config.adoptMeOff === true);
+    const mmOff = () => !STATE.config || STATE.config.mm2Off === true;
+    if (GAME === "mm2") GAME = "adoptme";
     const gameTag = g => `<span class="gtag ${g}">${g === "mm2" ? "MM2" : "ADOPT ME"}</span>`;
     const inventory = () => ME ? asArray(ME.inventory).filter(i => gameOf(i) === GAME) : [];
     function renderGameSw() {
@@ -2073,6 +2077,7 @@
     function setGame(g) {
       g = g === "mm2" ? "mm2" : "adoptme";
       if (g === "adoptme" && amOff()) { toast("Adopt Me is currently disabled", "err"); renderGameSw(); return; }
+      if (g === "mm2" && mmOff()) { renderGameSw(); return; }
       if (g === GAME) return;
       GAME = g;
       try { localStorage.setItem("pd_game", g); } catch {}
@@ -3324,8 +3329,10 @@
         if (state.now) clockSkew = Date.now() - state.now;
         STATE = { ...STATE, ...state };
         setTimeout(updateWithdrawGate, 0);
-        if (GAME === "adoptme" && amOff()) { GAME = "mm2"; lobbySig = ""; headerSig = ""; jpSig = ""; }
+        if (GAME === "adoptme" && amOff() && !mmOff()) { GAME = "mm2"; lobbySig = ""; headerSig = ""; jpSig = ""; }
+        if (GAME === "mm2" && mmOff()) { GAME = "adoptme"; lobbySig = ""; headerSig = ""; jpSig = ""; }
         document.body.classList.toggle("am-off", amOff());
+        document.body.classList.toggle("mm-off", mmOff());
         renderGameSw();
         if (state.jackpots) STATE.jackpot = state.jackpots[GAME] || null;
         if (!state.maintenance) STATE.maintenance = false;
@@ -3484,7 +3491,7 @@
 
     /* ---------- typing hero: types a phrase, waits, deletes it, types the next ---------- */
     (function heroTyping() {
-      const phrases = ["MM2 PvP Duels", "Murder Mystery 2", "Lowest Tax", "petduel.win", "Coinflip & Jackpot", "Provably Fair"];
+      const phrases = ["Adopt Me PvP Duels", "Lowest Tax", "petduel.win", "Coinflip & Jackpot", "Provably Fair"];
       const el = document.getElementById("heroText");
       const caret = document.querySelector(".hero-caret");
       if (!el) return;
@@ -3750,7 +3757,7 @@
             <option value="name">Name</option>
           </select>
 
-          <select class="control" id="gridGame">${["adoptme", "mm2"].map(g => `<option value="${g}" ${g === GAME ? "selected" : ""} ${g === "adoptme" && amOff() ? "disabled" : ""}>${GAME_NAMES[g]}${g === "adoptme" && amOff() ? " (currently disabled)" : ""}</option>`).join("")}</select>
+          <select class="control" id="gridGame">${["adoptme", "mm2"].filter(g => !(g === "mm2" && mmOff())).map(g => `<option value="${g}" ${g === GAME ? "selected" : ""} ${g === "adoptme" && amOff() ? "disabled" : ""}>${GAME_NAMES[g]}${g === "adoptme" && amOff() ? " (currently disabled)" : ""}</option>`).join("")}</select>
         </div>
 
         <div class="inventory-box">
@@ -4221,6 +4228,7 @@
       const steps = `<div class="dep-steps">${[1, 2, 3].map(n => `<i class="${n <= step ? "on" : ""}"></i>`).join("")}</div>`;
       const mm2 = depGame === "mm2";
 
+      if (step === 0 && mmOff()) { depGame = "adoptme"; return openBotsModal(1); }
       if (step === 0) {
         openModal2(`
           ${modalHeader("Deposit", "close2")}
