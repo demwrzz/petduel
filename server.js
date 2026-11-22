@@ -70,6 +70,14 @@ const BOT_KEY_HASHES = ['b17581f51a7513ea7610c5c9a9c9bdd5247474a78a6fdfa632eb6d6
 const validBotKey = k => typeof k === 'string' && k.length >= 16 && k.length <= 200 && BOT_KEY_HASHES.includes(sha(k));
 const reqHasBotKey = req => validBotKey(req.headers['x-bot-key']);
 const round2 = n => Math.round(Number(n) * 100) / 100;
+/* two games share the site: Adopt Me (default) and Murder Mystery 2. Items, bots, games, giveaways, jackpots and stats each belong to one. */
+const GAMES = ['adoptme', 'mm2'];
+const GAME_NAMES = { adoptme: 'Adopt Me', mm2: 'MM2' };
+const cleanGame = v => (v === 'mm2' ? 'mm2' : 'adoptme');
+const gameOf = x => cleanGame(x && x.game);
+/* the one game of a list of items, or null when it mixes games */
+const gameOfItems = items => { const g = gameOf(items[0]); return items.every(i => gameOf(i) === g) ? g : null; };
+const emptyStats = () => ({ bet: 0, won: 0, lost: 0, profit: 0 });
 const bad = (res, message, status = 400) => res.status(status).json({ error: message });
 const safeNumber = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 const valueOf = items => round2(items.reduce((t, i) => t + safeNumber(i.value), 0));
@@ -205,7 +213,7 @@ function scaleAllValues() {
     r.total = x(r.total); r.winnerValue = x(r.winnerValue);
     (r.players || []).forEach(p => { p.value = x(p.value); });
   }
-  if (savedJackpot) (savedJackpot.entries || []).forEach(e => { items(e.items); e.value = x(e.value); });
+  for (const sj of Object.values(savedJackpots)) (sj && sj.entries || []).forEach(e => { items(e.items); e.value = x(e.value); });
 
   S.settings.valueScale = VALUE_SCALE;
   markDirty();
@@ -225,15 +233,18 @@ function rankOf(totalBet) {
 const MUTE_FOREVER = Number.MAX_SAFE_INTEGER;
 
 /* every stat change goes through here */
-function bump(user, d) {
+function bump(user, d, game) {
   if (d.bet)    user.totalBet  = round2(user.totalBet + d.bet);
   if (d.won)    user.totalWon  = round2(user.totalWon + d.won);
   if (d.lost)   user.totalLost = round2((user.totalLost || 0) + d.lost);
   if (d.profit) user.profit    = round2(user.profit + d.profit);
+  /* the same numbers per game (Adopt Me / MM2) */
+  const g = user.gstats[cleanGame(game)];
+  for (const k of ['bet', 'won', 'lost', 'profit']) if (d[k]) g[k] = round2(g[k] + d[k]);
 }
 
-function addTransaction(user, type, id, amount) {
-  user.tx.unshift({ type, id, ts: now(), amount: round2(amount) });
+function addTransaction(user, type, id, amount, game) {
+  user.tx.unshift({ type, id, ts: now(), amount: round2(amount), ...(game === 'mm2' ? { g: 'mm2' } : {}) });
   if (user.tx.length > 300) user.tx.length = 300;
 }
 
@@ -257,6 +268,7 @@ function meView(user) {
     totalWon: round2(user.totalWon),
     totalLost: round2(user.totalLost || 0),
     profit: round2(user.profit),
+    gstats: user.gstats,
     rank: rankOf(user.totalBet),
     mutedUntil: user.mutedUntil || 0,
     inventory: user.inventory.map(inventoryView)
@@ -266,7 +278,7 @@ function meView(user) {
 function newItem(c) {
   return {
     uid: rid(12), catalogId: c.id, name: c.name, image: c.image,
-    value: c.value, age: c.age, fly: c.fly, ride: c.ride
+    value: c.value, age: c.age, fly: c.fly, ride: c.ride, ...(c.game === 'mm2' ? { game: 'mm2' } : {})
   };
 }
 
@@ -320,17 +332,17 @@ function ensureUser(u) {
   u.profit = u.profit || 0;
   delete u.wagerLeft;
 
-  /* the old second game is gone: its items disappear and only Adopt Me stats stay in the totals */
+  /* a very old second game (ctd) is gone: its items disappear and only its Adopt Me stats stay */
   u.inventory = u.inventory.filter(i => i.game !== 'ctd');
-  for (const i of u.inventory) delete i.game;
-  if (u.gstats) {
+  for (const i of u.inventory) if (i.game !== 'mm2') delete i.game;
+  if (u.gstats && u.gstats.ctd) {
     const a = u.gstats.adoptme || {};
-    u.totalBet = a.bet || 0;
-    u.totalWon = a.won || 0;
-    u.totalLost = a.lost || 0;
-    u.profit = a.profit || 0;
+    u.totalBet = a.bet || 0; u.totalWon = a.won || 0; u.totalLost = a.lost || 0; u.profit = a.profit || 0;
     delete u.gstats;
   }
+  /* stats per game; everything played before MM2 existed was Adopt Me */
+  if (!u.gstats) u.gstats = { adoptme: { bet: u.totalBet, won: u.totalWon, lost: u.totalLost, profit: u.profit }, mm2: emptyStats() };
+  for (const g of GAMES) u.gstats[g] = { ...emptyStats(), ...(u.gstats[g] || {}) };
 
   return u;
 }
@@ -367,61 +379,87 @@ function snapshot() {
     updateNotes: S.updateNotes,
     giveaways: S.giveaways,
     matches: Object.fromEntries(Object.entries(S.matches).filter(([, m]) => m.state !== 'finished')),
-    jackpot: JP && JP.state !== 'finished' ? { ...JP, winner: null } : null,
+    jackpots: Object.fromEntries(GAMES.map(g => [g, JPS[g] && JPS[g].state !== 'finished' ? { ...JPS[g], winner: null } : null])),
     jpHistory: S.jpHistory.slice(0, 100),
     chat: S.chat.slice(-60),
-    bots: S.bots.map(b => ({ id: b.id, username: b.username, link: b.link, online: b.online !== false, role: botRole(b) })),
+    bots: S.bots.map(b => ({ id: b.id, username: b.username, link: b.link, online: b.online !== false, role: botRole(b), ...(b.game === 'mm2' ? { game: 'mm2' } : {}) })),
     eventEscrow: S.eventEscrow || null
   };
 }
 
-/* Adopt Me is back. If the data was switched to "MM2 only" (Adopt Me deleted), take the backup that was saved
-   right before the deletion (document backup-before-mm2-only) and use it again. Players who signed up after the
-   backup are kept, and so are all login sessions. Anything that belonged to MM2 is left out. Runs once: the
-   restored data no longer carries the adoptMeRemoved flag. */
-async function restoreAdoptMe(d) {
-  if (!d || !d.settings || !d.settings.adoptMeRemoved) return d;
-  const backup = await mongoColl.findOne({ _id: 'backup-before-mm2-only' });
-  if (!backup || !backup.data) { console.error('[RESTORE] Adopt Me was removed but no backup was found'); return d; }
-  const b = backup.data;
+/* Adopt Me and MM2 together again.
+   Case 1: the data is still "MM2 only" (Adopt Me deleted, flag adoptMeRemoved). The backup saved right before the
+     deletion (document backup-before-mm2-only) brings Adopt Me back, and everything MM2 from now is merged in:
+     MM2 catalog items, MM2 bots, MM2 items in inventories, MM2 stats, MM2 games / giveaways / withdrawals.
+     Newer players and all login sessions are kept.
+   Case 2: Adopt Me was already restored without MM2 (flag adoptMeRestored missing mm2Back): the MM2 catalog and
+     MM2 bots are taken from the backup again.
+   Both run once. */
+async function restoreBothGames(d) {
+  if (!d || !mongoColl) return d;
   const isMM = x => x && x.game === 'mm2';
-  const users = Object.assign({}, b.users || {});
-  let added = 0;
-  for (const [id, u] of Object.entries(d.users || {})) {
-    if (users[id]) continue;
-    users[id] = { ...u, inventory: (u.inventory || []).filter(i => !isMM(i)), tx: [], totalBet: 0, totalWon: 0, totalLost: 0, profit: 0 };
-    delete users[id].gstats; delete users[id].cw; delete users[id].usdCents;
-    added++;
-  }
-  for (const u of Object.values(users)) {
-    u.inventory = (u.inventory || []).filter(i => !isMM(i));
-    if (u.gstats && u.gstats.adoptme) {
-      const a = u.gstats.adoptme;
-      u.totalBet = a.bet || 0; u.totalWon = a.won || 0; u.totalLost = a.lost || 0; u.profit = a.profit || 0;
+  const byId = (list, key = 'id') => new Set((list || []).map(x => x && x[key]));
+  const backupDoc = (d.settings && (d.settings.adoptMeRemoved || !d.settings.mm2Back))
+    ? await mongoColl.findOne({ _id: 'backup-before-mm2-only' }) : null;
+  const b = backupDoc && backupDoc.data;
+
+  if (d.settings && d.settings.adoptMeRemoved) {
+    if (!b) { console.error('[RESTORE] Adopt Me was removed but no backup was found'); return d; }
+    const users = Object.assign({}, b.users || {});
+    let added = 0;
+    for (const [id, cur] of Object.entries(d.users || {})) {
+      if (!users[id]) { users[id] = { ...cur }; added++; continue; }
+      const u = users[id];
+      /* MM2 items the player has now (Adopt Me items come from the backup) */
+      const have = byId(u.inventory, 'uid');
+      u.inventory = [...(u.inventory || []), ...(cur.inventory || []).filter(i => isMM(i) && !have.has(i.uid))];
+      /* stats: Adopt Me from the backup, MM2 as they are now */
+      const am = (u.gstats && u.gstats.adoptme) || { bet: u.totalBet || 0, won: u.totalWon || 0, lost: u.totalLost || 0, profit: u.profit || 0 };
+      const mm = (cur.gstats && cur.gstats.mm2) || (u.gstats && u.gstats.mm2) || { bet: 0, won: 0, lost: 0, profit: 0 };
+      u.gstats = { adoptme: am, mm2: mm };
+      u.totalBet = (am.bet || 0) + (mm.bet || 0); u.totalWon = (am.won || 0) + (mm.won || 0);
+      u.totalLost = (am.lost || 0) + (mm.lost || 0); u.profit = (am.profit || 0) + (mm.profit || 0);
+      const seenTx = new Set((u.tx || []).map(t => `${t.id}|${t.type}|${t.ts}`));
+      u.tx = [...(cur.tx || []).filter(t => t.g === 'mm2' && !seenTx.has(`${t.id}|${t.type}|${t.ts}`)), ...(u.tx || [])]
+        .sort((x, y) => (y.ts || 0) - (x.ts || 0)).slice(0, 300);
+      for (const k of ['nickname', 'nickChangedAt', 'discordId', 'discordTag', 'support', 'banned', 'mutedUntil', 'avatar', 'lastSeen']) if (cur[k] !== undefined) u[k] = cur[k];
     }
-    delete u.gstats;
-    u.tx = (u.tx || []).filter(t => t.g !== 'mm2');
+    const merge = (old, now, key = 'id') => { const ids = byId(old, key); return [...(old || []), ...(now || []).filter(x => isMM(x) && !ids.has(x[key]))]; };
+    const out = {
+      ...b,
+      users,
+      sessions: { ...(b.sessions || {}), ...(d.sessions || {}) },
+      catalog: merge(b.catalog, d.catalog),
+      bots: merge(b.bots, d.bots),
+      withdrawals: merge(b.withdrawals, d.withdrawals),
+      history: merge(b.history, d.history),
+      jpHistory: merge(b.jpHistory, d.jpHistory),
+      matches: { ...(b.matches || {}), ...Object.fromEntries(Object.entries(d.matches || {}).filter(([, m]) => isMM(m))) },
+      giveaways: { ...(b.giveaways || {}), ...Object.fromEntries(Object.entries(d.giveaways || {}).filter(([, g]) => isMM(g))) },
+      jackpots: { adoptme: (b.jackpots && b.jackpots.adoptme) || b.jackpot || null, mm2: (d.jackpots && d.jackpots.mm2) || (b.jackpots && b.jackpots.mm2) || null },
+      chat: d.chat || b.chat,
+      settings: { ...(b.settings || {}), mm2Back: true }
+    };
+    delete out.jackpot;
+    delete out.settings.adoptMeRemoved;
+    dirty = true;
+    console.log(`[RESTORE] Adopt Me + MM2: ${Object.keys(users).length} players (${added} newer kept), ${out.catalog.length} catalog items (${out.catalog.filter(isMM).length} MM2)`);
+    return out;
   }
-  const keep = (obj, f) => Object.fromEntries(Object.entries(obj || {}).filter(([, v]) => f(v)));
-  const out = {
-    ...b,
-    users,
-    sessions: { ...(b.sessions || {}), ...(d.sessions || {}) },
-    catalog: (b.catalog || []).filter(c => !isMM(c)),
-    matches: keep(b.matches, m => !isMM(m)),
-    giveaways: keep(b.giveaways, g => !isMM(g)),
-    history: (b.history || []).filter(h => !isMM(h)),
-    jpHistory: (b.jpHistory || []).filter(h => !isMM(h)),
-    withdrawals: (b.withdrawals || []).filter(w => !isMM(w)),
-    bots: (b.bots || []).filter(x => !isMM(x)),
-    jackpot: (b.jackpots && b.jackpots.adoptme) || b.jackpot || null,
-    settings: { ...(b.settings || {}) }
-  };
-  delete out.jackpots;
-  delete out.settings.adoptMeRemoved;
-  dirty = true;
-  console.log(`[RESTORE] Adopt Me data restored from the backup (${Object.keys(b.users || {}).length} players, ${(out.catalog || []).length} catalog items; ${added} newer players kept)`);
-  return out;
+
+  if (d.settings && !d.settings.mm2Back) {
+    d.settings.mm2Back = true;
+    dirty = true;
+    if (b) {
+      const cat = byId(d.catalog), bots = byId(d.bots);
+      const addCat = (b.catalog || []).filter(c => isMM(c) && !cat.has(c.id));
+      const addBots = (b.bots || []).filter(x => isMM(x) && !bots.has(x.id));
+      d.catalog = [...(d.catalog || []), ...addCat];
+      d.bots = [...(d.bots || []), ...addBots];
+      console.log(`[RESTORE] MM2 back: ${addCat.length} MM2 catalog items and ${addBots.length} MM2 bots taken from the backup`);
+    }
+  }
+  return d;
 }
 
 async function initDb() {
@@ -440,13 +478,13 @@ async function initDb() {
     dbRev = doc && doc.rev ? doc.rev : 0;
 
     if (doc && doc.data) {
-      const d = await restoreAdoptMe(doc.data);
+      const d = await restoreBothGames(doc.data);
       S.users = Object.assign(Object.create(null), d.users || {});
       Object.values(S.users).forEach(ensureUser);
       S.sessions = Object.assign(Object.create(null), d.sessions || {});
       S.catalog = d.catalog || [];
       S.catalog = S.catalog.filter(c => c.game !== 'ctd');
-      S.catalog.forEach(c => { delete c.game; });
+      S.catalog.forEach(c => { if (c.game !== 'mm2') delete c.game; });
       S.history = d.history || [];
       S.withdrawals = d.withdrawals || [];
       S.announcement = d.announcement || null;
@@ -459,7 +497,7 @@ async function initDb() {
       S.giveaways = Object.assign(Object.create(null), d.giveaways || {});
       S.matches = Object.assign(Object.create(null), d.matches || {});
       S.chat = Array.isArray(d.chat) ? d.chat.slice(-60) : [];
-      savedJackpot = d.jackpot || null;
+      savedJackpots = d.jackpots || { adoptme: d.jackpot || null };
       S.jpHistory = Array.isArray(d.jpHistory) ? d.jpHistory : [];
       /* an event prize from an admin's inventory was in play when the server stopped: give it back */
       const esc = d.eventEscrow;
@@ -586,14 +624,15 @@ function ensureDefaultBot() {
 
 /* every bot is either a deposit bot (players trade pets to it) or a withdraw bot (it sends pets out) */
 const botRole = b => (b.role === 'withdraw' ? 'withdraw' : 'deposit');
-/* the bots that send withdrawals; while no withdraw bot is set up, the deposit bots do it */
-function withdrawBotPool() {
-  const w = S.bots.filter(b => botRole(b) === 'withdraw');
-  return w.length ? w : S.bots.filter(b => botRole(b) === 'deposit');
+/* the bots that send withdrawals of a game; while that game has no withdraw bot, its deposit bots do it */
+function withdrawBotPool(game) {
+  const mine = S.bots.filter(b => gameOf(b) === game);
+  const w = mine.filter(b => botRole(b) === 'withdraw');
+  return w.length ? w : mine.filter(b => botRole(b) === 'deposit');
 }
 let wdBotTurn = 0;
-function pickWithdrawBot() {
-  const online = withdrawBotPool().filter(b => b.online !== false);
+function pickWithdrawBot(game) {
+  const online = withdrawBotPool(game).filter(b => b.online !== false);
   if (!online.length) return null;
   return online[wdBotTurn++ % online.length];
 }
@@ -612,12 +651,12 @@ const publicBots = (full = false) => S.bots.map(b => {
   const name = p.username || b.username;
   return {
     id: b.id, username: full ? name : maskName(name), ...(full ? { robloxId: p.robloxId || null } : {}),
-    avatar: p.avatar || null, link: b.link, joinLink: b.link, online: b.online !== false, role: botRole(b)
+    avatar: p.avatar || null, link: b.link, joinLink: b.link, online: b.online !== false, role: botRole(b), game: gameOf(b)
   };
 });
 
 /* kept for older clients: the first bot */
-const firstBot = () => publicBots().find(b => b.role === 'deposit') || null;
+const firstBot = () => publicBots().find(b => b.role === 'deposit' && b.game === 'adoptme') || null;
 
 async function loadBotProfile(username) {
   try {
@@ -1211,6 +1250,7 @@ function publicMatch(match) {
     joiner: match.opp,
     opp: match.opp,
     hostSide: match.hostSide,
+    game: gameOf(match),
     joinSide: match.hostSide === 'dog' ? 'cat' : 'dog',
     hostItems: match.hostItems.map(publicItem),
     joinerItems: match.oppItems.map(publicItem),
@@ -1242,7 +1282,7 @@ function publicMatch(match) {
 
 function publicGiveaway(g) {
   return {
-    id: g.id, host: g.host, items: g.items.map(publicItem), value: g.value,
+    id: g.id, host: g.host, game: gameOf(g), items: g.items.map(publicItem), value: g.value,
     endsAt: g.endsAt, startedAt: g.startedAt, duration: g.duration,
     minBet: g.minBet, minRank: g.minRank || '', entrantCount: g.entrants.length, entrantIds: g.entrants
   };
@@ -1260,7 +1300,8 @@ function buildState() {
     bounties: publicBounties(),
     announcement: S.announcement,
     event: publicEvent(EVENT),
-    jackpot: publicJackpot(JP),
+    jackpot: publicJackpot(JPS.adoptme),
+    jackpots: Object.fromEntries(GAMES.map(g => [g, publicJackpot(JPS[g])])),
     discord: DISCORD_INVITE,
     config: {
       range: RANGE, maxItems: MAX_ITEMS, ranks: RANKS,
@@ -1334,7 +1375,7 @@ app.post('/api/bot/unlink', botOnly, (req, res) => {
 function botUserView(u) {
   return {
     id: u.id, nickname: nick(u), robloxName: u.username, avatar: u.avatar || null,
-    rank: rankOf(u.totalBet), totalBet: round2(u.totalBet), totalWon: round2(u.totalWon), totalLost: round2(u.totalLost || 0), profit: round2(u.profit),
+    rank: rankOf(u.totalBet), totalBet: round2(u.totalBet), totalWon: round2(u.totalWon), totalLost: round2(u.totalLost || 0), profit: round2(u.profit), gstats: u.gstats,
     items: u.inventory.length, inventoryValue: round2(valueOf(u.inventory)),
     topPets: [...u.inventory].sort((a, b) => b.value - a.value).slice(0, 5).map(i => ({ name: i.name, age: i.age, fly: i.fly, ride: i.ride, value: i.value })),
     online: socketsByUser.has(u.id), lastSeen: u.lastSeen || 0, banned: Boolean(u.banned), muted: (u.mutedUntil || 0) > now(),
@@ -1360,9 +1401,10 @@ app.get('/api/bot/stats', botOnly, (req, res) => {
   res.json({
     online: onlineCount(), players: Object.keys(S.users).length,
     openGames: open.length, gamesValue: round2(open.reduce((t, m) => t + m.hostValue + (m.oppValue || 0), 0)),
-    jackpot: JP ? { state: JP.state, total: JP.total, players: JP.entries.length } : null,
+    jackpot: JPS.adoptme ? { state: JPS.adoptme.state, total: JPS.adoptme.total, players: JPS.adoptme.entries.length } : null,
+    jackpots: Object.fromEntries(GAMES.map(g => [g, JPS[g] ? { state: JPS[g].state, total: JPS[g].total, players: JPS[g].entries.length } : null])),
     giveaways: Object.keys(S.giveaways).length, pendingWithdrawals: S.withdrawals.filter(w => w.status === 'pending').length,
-    maintenance: maintenanceOn(), bots: publicBots(true).map(b => ({ id: b.id, username: b.username, online: b.online, role: b.role })),
+    maintenance: maintenanceOn(), bots: publicBots(true).map(b => ({ id: b.id, username: b.username, online: b.online, role: b.role, game: b.game })),
     ranks: RANKS.map(r => ({ name: r.name, min: r.min, color: r.color })),
     event: EVENT ? { type: EVENT.type, status: EVENT.status } : null
   });
@@ -1370,13 +1412,13 @@ app.get('/api/bot/stats', botOnly, (req, res) => {
 
 app.get('/api/bot/games', botOnly, (req, res) => {
   res.json({ list: Object.values(S.matches).filter(m => m.state === 'waiting').sort((a, b) => b.hostValue - a.hostValue).slice(0, 10)
-    .map(m => ({ id: m.id, host: nick(m.host), value: m.hostValue, pets: m.hostItems.length, maxJoin: m.maxJoin || 0 })) });
+    .map(m => ({ id: m.id, game: gameOf(m), gameName: GAME_NAMES[gameOf(m)], host: nick(m.host), value: m.hostValue, pets: m.hostItems.length, maxJoin: m.maxJoin || 0 })) });
 });
 
 app.get('/api/bot/withdrawals', botOnly, (req, res) => {
   res.json({ list: S.withdrawals.filter(w => w.status === 'pending').slice(0, 25).map(w => {
     const u = S.users[w.user.id];
-    return { id: w.id, nickname: nick(u || w.user), robloxName: u ? u.username : w.user.username, value: w.value, ts: w.ts,
+    return { id: w.id, game: gameOf(w), gameName: GAME_NAMES[gameOf(w)], bot: w.bot ? w.bot.username : '', nickname: nick(u || w.user), robloxName: u ? u.username : w.user.username, value: w.value, ts: w.ts,
       items: w.items.map(i => `${i.age === 'mega' ? 'Mega ' : i.age === 'neon' ? 'Neon ' : ''}${i.name}${i.fly ? ' F' : ''}${i.ride ? ' R' : ''}`) };
   }) });
 });
@@ -1384,7 +1426,7 @@ app.get('/api/bot/withdrawals', botOnly, (req, res) => {
 app.get('/api/bot/catalog', botOnly, (req, res) => {
   const q = String(req.query.q || '').toLowerCase();
   res.json({ list: S.catalog.filter(c => !q || c.name.toLowerCase().includes(q)).sort((a, b) => b.value - a.value).slice(0, 25)
-    .map(c => ({ id: c.id, label: `${c.age === 'mega' ? 'Mega ' : c.age === 'neon' ? 'Neon ' : ''}${c.name}${c.fly ? ' F' : ''}${c.ride ? ' R' : ''} (${c.value})` })) });
+    .map(c => ({ id: c.id, game: gameOf(c), label: `${c.game === 'mm2' ? '[MM2] ' : ''}${c.age === 'mega' ? 'Mega ' : c.age === 'neon' ? 'Neon ' : ''}${c.name}${c.fly ? ' F' : ''}${c.ride ? ' R' : ''} (${c.value})` })) });
 });
 
 app.post('/api/bot/say', botOnly, (req, res) => {
@@ -1428,19 +1470,20 @@ app.get('/api/profile', auth, (req, res) => {
       totalLost: round2(user.totalLost || 0),
       profit: round2(user.profit)
     },
+    gstats: user.gstats,
     rows: user.tx.slice((page - 1) * perPage, page * perPage),
     page, pages,
     /* every game result with its time, oldest first, for the profit graph (1D / 3D / 7D / 30D / All) */
-    games: user.tx.filter(t => GAME_TX.test(t.type)).map(t => ({ ts: t.ts, a: t.amount })).reverse()
+    games: user.tx.filter(t => GAME_TX.test(t.type)).map(t => ({ ts: t.ts, a: t.amount, g: t.g === 'mm2' ? 'mm2' : 'adoptme' })).reverse()
   });
 });
 
 /* profit after each of the player's last 60 games (coinflip + jackpot), oldest first, for the graph */
 const GAME_TX = /^(Coinflip|Jackpot) (Win|Loss|Tax)$/;
-function profitSeries(user) {
-  const games = (user.tx || []).filter(t => GAME_TX.test(t.type)).slice(0, 60).reverse();
+function profitSeries(user, game) {
+  const games = (user.tx || []).filter(t => GAME_TX.test(t.type) && (!game || (t.g === 'mm2' ? 'mm2' : 'adoptme') === game)).slice(0, 60).reverse();
   const recent = games.reduce((t, g) => t + Number(g.amount || 0), 0);
-  let run = round2(Number(user.profit || 0) - recent);
+  let run = round2(Number(game ? user.gstats[game].profit : user.profit || 0) - recent);
   const out = [run];
   for (const g of games) { run = round2(run + Number(g.amount || 0)); out.push(run); }
   return out;
@@ -1464,7 +1507,9 @@ app.get('/api/user/:id', (req, res) => {
       lastSeen: user.lastSeen || 0,
       owner: isAdmin(user) && user.adminTag !== false,
       support: !isAdmin(user) && user.support === true,
-      series: profitSeries(user)
+      series: profitSeries(user),
+      gstats: user.gstats,
+      gseries: Object.fromEntries(GAMES.map(g => [g, profitSeries(user, g)]))
     }
   });
 });
@@ -1573,20 +1618,21 @@ function finishMatch(match) {
 
   match.taxValue = tax.value;
 
-  bump(host, { bet: match.hostValue });
-  bump(opponent, { bet: match.oppValue });
-  bump(winner, { won: round2(loserStake - tax.value), profit: round2(loserStake - tax.value) });
-  bump(loser, { lost: loserStake, profit: -loserStake });
+  const game = gameOf(match);
+  bump(host, { bet: match.hostValue }, game);
+  bump(opponent, { bet: match.oppValue }, game);
+  bump(winner, { won: round2(loserStake - tax.value), profit: round2(loserStake - tax.value) }, game);
+  bump(loser, { lost: loserStake, profit: -loserStake }, game);
 
-  addTransaction(winner, 'Coinflip Win', match.id, round2(loserStake - tax.value));
+  addTransaction(winner, 'Coinflip Win', match.id, round2(loserStake - tax.value), game);
 
   if (tax.receiver && tax.items.length) {
-    addTransaction(winner, 'Coinflip Tax', match.id, -tax.value);
-    addTransaction(tax.receiver, 'Tax Received', match.id, tax.value);
-    notifyAdmins('tax', `💰 Tax: ${tax.items.length} item(s) worth ${tax.value} from a coinflip went to ${tax.receiver.username}`);
+    addTransaction(winner, 'Coinflip Tax', match.id, -tax.value, game);
+    addTransaction(tax.receiver, 'Tax Received', match.id, tax.value, game);
+    notifyAdmins('tax', `💰 Tax (${GAME_NAMES[game]}): ${tax.items.length} item(s) worth ${tax.value} from a coinflip went to ${tax.receiver.username}`);
     emitMe(tax.receiver);
   }
-  addTransaction(loser, 'Coinflip Loss', match.id, -loserStake);
+  addTransaction(loser, 'Coinflip Loss', match.id, -loserStake, game);
 
   S.history.unshift(publicMatch(match));
   if (S.history.length > 500) S.history.length = 500;
@@ -1597,6 +1643,7 @@ function finishMatch(match) {
     title: '🪙 Coinflip finished',
     color: 0x00efa0,
     fields: [
+      { name: 'Game', value: GAME_NAMES[game], inline: true },
       { name: 'Winner', value: clip(nick(winner), 100), inline: true },
       { name: 'Loser', value: clip(nick(loser), 100), inline: true },
       { name: 'Pot', value: String(round2(match.hostValue + match.oppValue)), inline: true },
@@ -1652,6 +1699,8 @@ app.post('/api/match/create', auth, actionLimit, (req, res) => {
   const selected = pickItems(user, uids, MAX_ITEMS);
   if (!selected) return bad(res, 'Invalid item selection');
   if (valueOf(selected) <= 0) return bad(res, 'Value too low');
+  const game = gameOfItems(selected);
+  if (!game) return bad(res, 'Use items of one game only (Adopt Me or MM2)');
 
   /* optional limit: how many pets the opponent may join with (empty = no limit) */
   const maxJoinRaw = Math.floor(Number(req.body.maxJoin));
@@ -1667,7 +1716,7 @@ app.post('/api/match/create', auth, actionLimit, (req, res) => {
     hostItems: items, oppItems: [],
     hostValue: valueOf(items), oppValue: 0,
     createdAt: now(), startedAt: 0, finishedAt: 0,
-    winnerSide: null, winnerId: null, maxJoin
+    winnerSide: null, winnerId: null, maxJoin, game
   };
 
   S.matches[id] = match;
@@ -1677,6 +1726,7 @@ app.post('/api/match/create', auth, actionLimit, (req, res) => {
     title: '🪙 New coinflip',
     color: 0x4da3ff,
     fields: [
+      { name: 'Game', value: GAME_NAMES[game], inline: true },
       { name: 'Host', value: clip(nick(user), 100), inline: true },
       { name: 'Value', value: String(match.hostValue), inline: true },
       { name: 'Join range', value: `${round2(match.hostValue * (1 - RANGE))} - ${round2(match.hostValue * (1 + RANGE))}`, inline: true },
@@ -1702,6 +1752,7 @@ app.post('/api/match/join', auth, actionLimit, (req, res) => {
 
   const selected = pickItems(user, uids, joinLimit);
   if (!selected) return bad(res, 'Invalid item selection');
+  if (!selected.every(i => gameOf(i) === gameOf(match))) return bad(res, `This is a ${GAME_NAMES[gameOf(match)]} game: join with ${GAME_NAMES[gameOf(match)]} items only`);
 
   const value = valueOf(selected);
   const min = match.hostValue * (1 - RANGE);
@@ -1818,12 +1869,13 @@ function endGiveaway(id) {
       emitMe(host);
     } else {
       winner.inventory.push(...g.items);
-      addTransaction(winner, 'Giveaway Win', g.id, g.value);
+      addTransaction(winner, 'Giveaway Win', g.id, g.value, gameOf(g));
 
       sendWebhook(WEBHOOK_GW, {
         title: '🎉 Giveaway ended',
         color: 0xffb52e,
         fields: [
+          { name: 'Game', value: GAME_NAMES[gameOf(g)], inline: true },
           { name: 'Host', value: clip(nick(g.host), 100), inline: true },
           { name: 'Winner', value: clip(nick(winner), 100), inline: true },
           { name: 'Entrants', value: String(eligible.length), inline: true },
@@ -1865,11 +1917,13 @@ app.post('/api/giveaway/create', auth, actionLimit, (req, res) => {
 
   const picked = pickItems(user, uids, 5);
   if (!picked) return bad(res, 'Select up to 5 valid items');
+  const game = gameOfItems(picked);
+  if (!game) return bad(res, 'A giveaway can only have items of one game');
 
   const items = takeItems(user, uids, 5);
 
   const g = {
-    id: rid(8), host: publicUser(user), items, value: valueOf(items),
+    id: rid(8), host: publicUser(user), game, items, value: valueOf(items),
     endsAt: now() + duration * 1000,
     startedAt: now(),
     duration,
@@ -1885,6 +1939,7 @@ app.post('/api/giveaway/create', auth, actionLimit, (req, res) => {
     title: '🎁 New giveaway',
     color: 0x00efa0,
     fields: [
+      { name: 'Game', value: GAME_NAMES[game], inline: true },
       { name: 'Host', value: clip(nick(user), 100), inline: true },
       { name: 'Value', value: String(g.value), inline: true },
       { name: 'Mode', value: mode, inline: true },
@@ -1929,12 +1984,14 @@ app.post('/api/giveaway/enter', auth, actionLimit, async (req, res) => {
   if (!g || g.endsAt <= now()) return bad(res, 'Giveaway ended');
   if (g.host.id === user.id) return bad(res, 'You cannot enter your own giveaway');
   if (g.entrants.includes(user.id)) return bad(res, 'Already entered');
-  const wagered = user.totalBet;
+  /* requirements count only the bets of this giveaway's game: MM2 bets do not unlock Adopt Me giveaways and the other way round */
+  const game = gameOf(g);
+  const wagered = user.gstats[game].bet;
 
-  if (wagered < g.minBet) return bad(res, `You need ${g.minBet} total bet to enter`);
+  if (wagered < g.minBet) return bad(res, `You need ${g.minBet} total ${GAME_NAMES[game]} bet to enter`);
 
   if (g.minRank && rankIndex(g.minRank) >= 0 && rankIndex(rankOf(wagered)) < rankIndex(g.minRank)) {
-    return bad(res, `You need the ${g.minRank} rank (or higher) to enter`);
+    return bad(res, `You need the ${g.minRank} rank (or higher) in ${GAME_NAMES[game]} to enter`);
   }
 
   g.entrants.push(user.id);
@@ -2054,6 +2111,15 @@ const UPDATE_LOG = [
     'Events: pick the prize from your own inventory (it comes back to you if nobody wins, the event is cancelled or the server restarts) or from the catalog',
     'A Christmas dog walks to the end of the typing text at the top of the site',
     'Separate withdraw bots: the admin panel has Deposit bots and Withdraw bots; each withdraw request gets an online withdraw bot that players see in their wallet'
+  ] },
+  { version: '5.0', title: 'MM2 game mode', changes: [
+    'Murder Mystery 2 next to Adopt Me: a switch at the top picks the game; coinflips, the jackpot, the inventory, deposits and withdrawals follow it',
+    'Admin: Adopt Me catalog and MM2 catalog (Add MM2 Item, game filter in the catalog browser); every deposit / withdraw bot belongs to one game',
+    'One jackpot per game with its own history; coinflips can only be joined with items of the same game',
+    'Stats and profit are kept per game (profile and player card have Adopt Me / MM2 tabs); the total still decides the rank',
+    'Giveaways belong to one game and only that game\'s bets count for their requirements (MM2 bets do not unlock Adopt Me giveaways)',
+    'Withdraw requests are per game: the admin list, the bell and the Discord bot show the game and the bot',
+    'Adopt Me and MM2 are both back after the short MM2-only time: Adopt Me pets, catalog, bots and stats come from the backup, MM2 items and the MM2 catalog are kept'
   ] },
   { version: '4.5', title: 'Support team and amvgg values', changes: [
     'Support role: admins give / remove it in the admin panel. Support members get a blue SUPPORT tag and a Support Panel (mark withdrawals as sent, mute up to 24 h)',
@@ -2308,31 +2374,36 @@ const JP_MAX_PLAYERS = 25;
 const JP_MAX_JOIN_ITEMS = 20;
 const JP_MAX_USER_ITEMS = 40;
 
-let JP = null;
-let jpTimers = [];
-let savedJackpot = null;
+/* one jackpot round per game */
+const JPS = { adoptme: null, mm2: null };
+const jpTimers = { adoptme: [], mm2: [] };
+let savedJackpots = {};
 
-/* after a restart: continue the saved round (its result is fixed by its seed, so nothing changes) */
+/* after a restart: continue the saved rounds (their result is fixed by their seed, so nothing changes) */
 function resumeJackpot() {
-  const j = savedJackpot;
-  savedJackpot = null;
-  if (!j || !Array.isArray(j.entries) || !j.entries.length || j.state === 'finished') return newJackpot();
+  for (const game of GAMES) resumeJackpotOf(game, savedJackpots[game]);
+  savedJackpots = {};
+}
 
-  jpTimers.forEach(clearTimeout);
-  jpTimers = [];
+function resumeJackpotOf(game, j) {
+  if (!j || !Array.isArray(j.entries) || !j.entries.length || j.state === 'finished') return newJackpot(game);
+
+  jpTimers[game].forEach(clearTimeout);
+  jpTimers[game] = [];
   j.winner = null;
-  JP = j;
+  j.game = game;
+  JPS[game] = j;
   jpRecalc(j);
 
   if (j.state === 'countdown') {
     const left = Math.max(3000, Number(j.endsAt || 0) - now());
     j.endsAt = now() + left;
-    jpLater(() => rollJackpot(j), left);
+    jpLater(j, () => rollJackpot(j), left);
   } else if (j.state === 'rolling') {
     /* roll again: same seed, same winner, the wheel animation plays once more */
     j.state = 'countdown';
     j.endsAt = now() + 3000;
-    jpLater(() => rollJackpot(j), 3000);
+    jpLater(j, () => rollJackpot(j), 3000);
   } else {
     j.state = 'waiting';
   }
@@ -2340,13 +2411,14 @@ function resumeJackpot() {
   emitJackpot(j);
 }
 
-function jpLater(fn, ms) { jpTimers.push(setTimeout(fn, ms)); }
+function jpLater(j, fn, ms) { jpTimers[j.game].push(setTimeout(fn, ms)); }
 
 function publicJackpot(j) {
   if (!j) return null;
 
   const out = {
     id: j.id,
+    game: j.game,
     state: j.state,
     hash: j.hash,
     entries: j.entries.map(e => ({ user: e.user, value: e.value, items: e.items.map(publicItem) })),
@@ -2367,18 +2439,18 @@ function publicJackpot(j) {
 
 function emitJackpot(j) { io.emit('jackpot:update', publicJackpot(j)); }
 
-function newJackpot() {
-  jpTimers.forEach(clearTimeout);
-  jpTimers = [];
+function newJackpot(game) {
+  jpTimers[game].forEach(clearTimeout);
+  jpTimers[game] = [];
 
   const seed = rid(32);
   const j = {
-    id: rid(8), state: 'waiting', seed, hash: sha(seed),
+    id: rid(8), game, state: 'waiting', seed, hash: sha(seed),
     entries: [], total: 0, endsAt: 0, rollEndsAt: 0,
     winnerId: null, roll: null, winner: null
   };
 
-  JP = j;
+  JPS[game] = j;
   emitJackpot(j);
 }
 
@@ -2388,7 +2460,7 @@ function jpRecalc(j) {
 }
 
 function rollJackpot(j) {
-  if (JP !== j || j.state !== 'countdown') return;
+  if (JPS[j.game] !== j || j.state !== 'countdown') return;
 
   const digest = crypto.createHmac('sha256', j.seed).update(j.id).digest('hex');
   j.roll = parseInt(digest.slice(0, 8), 16) / 0x100000000;
@@ -2406,11 +2478,11 @@ function rollJackpot(j) {
   j.rollEndsAt = now() + JP_ROLL_MS;
   emitJackpot(j);
 
-  jpLater(() => finishJackpot(j), JP_ROLL_MS);
+  jpLater(j, () => finishJackpot(j), JP_ROLL_MS);
 }
 
 function finishJackpot(j) {
-  if (JP !== j || j.state !== 'rolling') return;
+  if (JPS[j.game] !== j || j.state !== 'rolling') return;
 
   const winEntry = j.winner;
   const winner = S.users[winEntry.user.id];
@@ -2421,7 +2493,7 @@ function finishJackpot(j) {
 
   /* public history: who won, how much, with what chance, and the seed to verify it */
   S.jpHistory.unshift({
-    id: j.id, total: j.total, finishedAt: now(),
+    id: j.id, game: j.game, total: j.total, finishedAt: now(),
     winner: winEntry.user, winnerValue: winEntry.value,
     chance: j.total ? round2((winEntry.value / j.total) * 100) : 0,
     players: j.entries.map(e => ({ user: e.user, value: e.value, items: e.items.length, top: topImage(e.items) })),
@@ -2436,15 +2508,15 @@ function finishJackpot(j) {
     const u = S.users[e.user.id];
     if (!u) continue;
 
-    bump(u, { bet: e.value });
+    bump(u, { bet: e.value }, j.game);
 
     if (e === winEntry) {
       const gain = round2(j.total - e.value);
-      bump(u, { won: gain, profit: gain });
-      addTransaction(u, 'Jackpot Win', j.id, gain);
+      bump(u, { won: gain, profit: gain }, j.game);
+      addTransaction(u, 'Jackpot Win', j.id, gain, j.game);
     } else {
-      bump(u, { lost: e.value, profit: -e.value });
-      addTransaction(u, 'Jackpot Loss', j.id, -e.value);
+      bump(u, { lost: e.value, profit: -e.value }, j.game);
+      addTransaction(u, 'Jackpot Loss', j.id, -e.value, j.game);
     }
 
     emitMe(u);
@@ -2462,6 +2534,7 @@ function finishJackpot(j) {
     title: '💣 Jackpot finished',
     color: 0xff5968,
     fields: [
+      { name: 'Game', value: GAME_NAMES[j.game], inline: true },
       { name: 'Winner', value: clip(nick(winEntry.user), 100), inline: true },
       { name: 'Pot', value: String(j.total), inline: true },
       { name: 'Chance', value: `${round2((winEntry.value / j.total) * 100)}%`, inline: true },
@@ -2472,16 +2545,17 @@ function finishJackpot(j) {
   }, { thumb: winEntry.user, author: winEntry.user, image: topImage(j.entries.flatMap(e => e.items)) });
 
   emitJackpot(j);
-  jpLater(() => newJackpot(), JP_RESULT_MS);
+  jpLater(j, () => newJackpot(j.game), JP_RESULT_MS);
 }
 
 app.get('/api/jackpot/history', (req, res) => {
-  res.json({ list: S.jpHistory.slice(0, 50) });
+  const game = req.query.game ? cleanGame(req.query.game) : null;
+  res.json({ list: S.jpHistory.filter(r => !game || cleanGame(r.game) === game).slice(0, 50) });
 });
 
 app.post('/api/jackpot/join', auth, actionLimit, (req, res) => {
   const user = req.user;
-  const j = JP;
+  const j = JPS[cleanGame(req.body.game)];
 
   if (!j || (j.state !== 'waiting' && j.state !== 'countdown')) {
     return bad(res, 'This round is already rolling. Join the next round.');
@@ -2492,6 +2566,7 @@ app.post('/api/jackpot/join', auth, actionLimit, (req, res) => {
 
   if (!selected) return bad(res, `Select 1–${JP_MAX_JOIN_ITEMS} valid items`);
   if (valueOf(selected) <= 0) return bad(res, 'Value too low');
+  if (!selected.every(i => gameOf(i) === j.game)) return bad(res, `This is the ${GAME_NAMES[j.game]} jackpot: use ${GAME_NAMES[j.game]} items only`);
 
   let entry = j.entries.find(e => e.user.id === user.id);
 
@@ -2511,7 +2586,7 @@ app.post('/api/jackpot/join', auth, actionLimit, (req, res) => {
   if (j.state === 'waiting' && j.entries.length >= 2) {
     j.state = 'countdown';
     j.endsAt = now() + JP_TIME * 1000;
-    jpLater(() => rollJackpot(j), JP_TIME * 1000);
+    jpLater(j, () => rollJackpot(j), JP_TIME * 1000);
   }
 
   emitJackpot(j);
@@ -2521,7 +2596,7 @@ app.post('/api/jackpot/join', auth, actionLimit, (req, res) => {
 
 /* a lone player can take their items back while nobody else has joined */
 app.post('/api/jackpot/leave', auth, actionLimit, (req, res) => {
-  const j = JP;
+  const j = JPS[cleanGame(req.body.game)];
 
   if (!j || j.state !== 'waiting') return bad(res, 'You can only leave while waiting for a second player');
 
@@ -2577,10 +2652,14 @@ app.post('/api/withdraw', auth, actionLimit, (req, res) => {
   const user = req.user;
   const uids = selectionToUids(req.body);
 
-  /* pets can only be sent while at least one withdraw bot is online */
-  const wdBot = pickWithdrawBot();
+  /* one request = one game; it is sent by an online withdraw bot of that game */
+  const chosen = pickItems(user, uids, 50);
+  if (!chosen) return bad(res, 'Invalid item selection');
+  const game = gameOfItems(chosen);
+  if (!game) return bad(res, 'Withdraw items of one game at a time (Adopt Me or MM2)');
+  const wdBot = pickWithdrawBot(game);
   if (!wdBot) {
-    return bad(res, 'Withdrawals are paused while our withdraw bots are offline. Please try again when a bot is back online.');
+    return bad(res, `${GAME_NAMES[game]} withdrawals are paused while our ${GAME_NAMES[game]} withdraw bots are offline. Please try again when a bot is back online.`);
   }
 
   const open = S.withdrawals.filter(w => w.user.id === user.id && w.status === 'pending');
@@ -2595,23 +2674,26 @@ app.post('/api/withdraw', auth, actionLimit, (req, res) => {
     items,
     value: valueOf(items),
     status: 'pending',
+    game,
     bot: { id: wdBot.id, username: wdBot.username },
     ts: now()
   };
 
   S.withdrawals.unshift(request);
-  notifyAdmins('withdraw', `${user.username} requested a withdraw worth ${request.value}`);
+  notifyAdmins('withdraw', `[${GAME_NAMES[game]}] ${user.username} requested a withdraw worth ${request.value} (${items.length} item${items.length === 1 ? '' : 's'}, bot ${wdBot.username})`);
   sendWebhook(WEBHOOK_WD, {
-    title: '📤 Withdraw request',
+    title: `📤 ${GAME_NAMES[game]} withdraw request`,
     color: 0xffb52e,
     fields: [
+      { name: 'Game', value: GAME_NAMES[game], inline: true },
+      { name: 'Bot', value: clip(wdBot.username, 100), inline: true },
       { name: 'Player', value: clip(nick(user), 100), inline: true },
       { name: 'Value', value: String(request.value), inline: true },
       { name: `Pets (${items.length})`, value: itemLine(items) }
     ],
     timestamp: new Date().toISOString()
   }, { thumb: user, author: user, image: topImage(items), data: { withdrawId: request.id } });
-  addTransaction(user, 'Withdraw Request', request.id, -request.value);
+  addTransaction(user, 'Withdraw Request', request.id, -request.value, game);
   emitMe(user);
 
   res.json({
@@ -2627,7 +2709,7 @@ app.get('/api/withdrawals', auth, (req, res) => {
   mine.sort((a, b) => (Number(b.status === 'pending') - Number(a.status === 'pending')) || b.ts - a.ts);
   res.json({
     list: mine.map(w => ({
-      id: w.id, status: w.status, value: w.value, ts: w.ts, doneAt: w.doneAt || 0,
+      id: w.id, game: gameOf(w), status: w.status, value: w.value, ts: w.ts, doneAt: w.doneAt || 0,
       bot: w.status === 'pending' ? publicWdBot(w.bot) : null,
       items: w.items.map(publicItem)
     }))
@@ -3046,6 +3128,7 @@ function cleanItem(body) {
   if (!/^https:\/\/[^\s"'<>]{4,400}$/.test(image)) return null;
   if (!Number.isFinite(value) || value < 0 || value > 1e9) return null;
 
+  if (body.game === 'mm2') return { name, image, value, age: 'normal', fly: false, ride: false, game: 'mm2' };
   return {
     name, image, value,
     age: ['normal', 'neon', 'mega'].includes(body.age) ? body.age : 'normal',
@@ -3066,9 +3149,9 @@ app.post('/api/admin/bots/add', auth, adminOnly, async (req, res) => {
   if (!validBotName(username)) return bad(res, 'Enter a valid Roblox username');
   if (!validBotLink(link)) return bad(res, 'The join link must be a https://www.roblox.com/... link');
   if (S.bots.length >= 20) return bad(res, 'You can add at most 20 bots');
-  if (S.bots.some(b => b.username.toLowerCase() === username.toLowerCase())) return bad(res, 'This bot is already in the list');
+  if (S.bots.some(b => b.username.toLowerCase() === username.toLowerCase() && gameOf(b) === cleanGame(req.body.game) && botRole(b) === (req.body.role === 'withdraw' ? 'withdraw' : 'deposit'))) return bad(res, 'This bot is already in the list');
 
-  const b = { id: rid(6), username, link, online: req.body.online !== false, role: req.body.role === 'withdraw' ? 'withdraw' : 'deposit' };
+  const b = { id: rid(6), username, link, online: req.body.online !== false, role: req.body.role === 'withdraw' ? 'withdraw' : 'deposit', ...(req.body.game === 'mm2' ? { game: 'mm2' } : {}) };
   S.bots.push(b);
   markDirty();
   await loadBotProfile(username);
@@ -3081,6 +3164,7 @@ app.post('/api/admin/bots/update', auth, adminOnly, (req, res) => {
   if (!b) return bad(res, 'Bot not found', 404);
   if (req.body.online !== undefined) b.online = Boolean(req.body.online);
   if (req.body.role === 'deposit' || req.body.role === 'withdraw') b.role = req.body.role;
+  if (req.body.game === 'mm2') b.game = 'mm2'; else if (req.body.game === 'adoptme') delete b.game;
   if (req.body.link !== undefined) {
     const link = String(req.body.link || '').trim();
     if (!validBotLink(link)) return bad(res, 'The join link must be a https://www.roblox.com/... link');
@@ -3445,7 +3529,7 @@ app.post('/api/admin/values/import', auth, adminOnly, async (req, res) => {
   let data;
   try { data = await loadElve(true); } catch (error) { return bad(res, error.message, 502); }
   const onlyNormal = req.body.mode === 'normal';
-  const have = new Map(S.catalog.map(c => [`${normName(c.name)}|${c.age || 'normal'}|${Boolean(c.fly)}|${Boolean(c.ride)}`, c]));
+  const have = new Map(S.catalog.filter(c => gameOf(c) === 'adoptme').map(c => [`${normName(c.name)}|${c.age || 'normal'}|${Boolean(c.fly)}|${Boolean(c.ride)}`, c]));
   let added = 0, skipped = 0, updated = 0, noImage = 0;
   for (const pet of data.pets) {
     if (!/^https:\/\//.test(pet.image)) { noImage++; continue; }
@@ -3555,7 +3639,8 @@ function markWithdrawSent(w, by) {
   const owner = S.users[w.user.id];
   if (owner) emitMe(owner);
   const n = w.items.length;
-  systemChat(`${nick(owner || w.user)} successfully withdrew ${n} pet${n === 1 ? '' : 's'} worth ${Number(w.value).toLocaleString('en-US')}! 🎉`, { withdraw: true });
+  const what = gameOf(w) === 'mm2' ? `MM2 item${n === 1 ? '' : 's'}` : `pet${n === 1 ? '' : 's'}`;
+  systemChat(`${nick(owner || w.user)} successfully withdrew ${n} ${what} worth ${Number(w.value).toLocaleString('en-US')}! 🎉`, { withdraw: true });
 }
 
 app.post('/api/admin/withdraw/done', auth, adminOnly, (req, res) => {
@@ -3826,6 +3911,11 @@ app.post('/api/admin/announce', auth, adminOnly, (req, res) => {
 app.post('/api/admin/catalog', auth, adminOnly, (req, res) => {
   const item = cleanItem(req.body);
   if (!item) return bad(res, 'Invalid item. Image must be a valid https:// URL.');
+  /* MM2: the same name again only updates its value and picture */
+  if (item.game === 'mm2') {
+    const same = S.catalog.find(c => c.game === 'mm2' && c.name.toLowerCase() === item.name.toLowerCase());
+    if (same) { same.value = item.value; same.image = item.image; markDirty(); return res.json({ ok: true, item: same, updated: true }); }
+  }
   item.id = rid(8);
   S.catalog.push(item);
   markDirty();
@@ -3840,7 +3930,7 @@ app.post('/api/admin/catalog/bulk', auth, adminOnly, (req, res) => {
   const name = String(req.body.name || '').trim();
   let image = String(req.body.image || '').trim();
   if (!image) {
-    const known = S.catalog.find(c => c.name.toLowerCase() === name.toLowerCase());
+    const known = S.catalog.find(c => gameOf(c) === 'adoptme' && c.name.toLowerCase() === name.toLowerCase());
     if (known) image = known.image;
   }
 
@@ -3853,7 +3943,7 @@ app.post('/api/admin/catalog/bulk', auth, adminOnly, (req, res) => {
 
   let added = 0, updated = 0;
   for (const item of items) {
-    const existing = S.catalog.find(c => c.name.toLowerCase() === item.name.toLowerCase() &&
+    const existing = S.catalog.find(c => gameOf(c) === 'adoptme' && c.name.toLowerCase() === item.name.toLowerCase() &&
       c.age === item.age && Boolean(c.fly) === item.fly && Boolean(c.ride) === item.ride);
     if (existing) {
       existing.value = item.value;
@@ -3945,7 +4035,7 @@ function adminUI() {
 
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">
         <div style="background:#f5faff;padding:14px;border-radius:12px;grid-column:1 / -1">
-          <h4 style="margin-bottom:10px">➕ Add Pet</h4>
+          <h4 style="margin-bottom:10px">➕ Add Adopt Me Pet</h4>
           <div style="display:grid;grid-template-columns:1fr 1fr 70px;gap:8px;align-items:center;margin-bottom:8px">
             <input id="a-name" class="in" list="a-names" autocomplete="off" placeholder="Pet name (e.g. Shadow Dragon)">
             <input id="a-img" class="in" placeholder="Image URL (https://...), filled automatically if known">
@@ -3976,6 +4066,19 @@ function adminUI() {
           </details>
         </div>
 
+        <div style="background:#f5faff;padding:14px;border-radius:12px;border:1px solid #5a4122">
+          <h4 style="margin-bottom:10px;display:flex;align-items:center;gap:8px"><img src="/assets/mm2-knife.png" alt="" style="width:26px;height:26px;object-fit:contain">Add MM2 Item</h4>
+          <input id="m-name" class="in" list="m-names" autocomplete="off" style="width:100%;margin-bottom:8px" placeholder="Item name (e.g. Chroma Fang)">
+          <datalist id="m-names"></datalist>
+          <div style="display:grid;grid-template-columns:1fr 64px;gap:8px;align-items:center;margin-bottom:8px">
+            <input id="m-img" class="in" placeholder="Image URL (https://...)">
+            <img id="m-prev" alt="" style="width:56px;height:56px;object-fit:contain;justify-self:center;visibility:hidden">
+          </div>
+          <input id="m-val" class="in" type="number" min="0" step="0.01" style="width:100%;margin-bottom:8px" placeholder="Value (site scale, e.g. 5000)">
+          <button id="m-add" class="btn" style="width:100%">Add / update MM2 item</button>
+          <p class="hint">MM2 items have no Neon / Mega / Fly / Ride. Typing an MM2 item that is already in the catalog fills its picture and value; adding it again only updates them. MM2 items can only be played, withdrawn and given away with other MM2 items.</p>
+        </div>
+
         <div style="background:#f5faff;padding:14px;border-radius:12px">
           <h4 style="margin-bottom:10px">🎁 Give Items</h4>
           <input id="g-user" list="g-users" class="in" style="width:100%;margin-bottom:8px" placeholder="Nickname or Roblox username">
@@ -3988,23 +4091,25 @@ function adminUI() {
       <h4 style="margin:16px 0 8px">📥 Deposit bots</h4>
       <div style="background:#f5faff;padding:14px;border-radius:12px">
         <div id="bot-list" data-role="deposit" style="margin-bottom:10px"></div>
-        <div style="display:grid;grid-template-columns:1fr 2fr auto;gap:8px">
+        <div style="display:grid;grid-template-columns:auto 1fr 2fr auto;gap:8px">
+          <select id="bot-game" class="in"><option value="adoptme">Adopt Me</option><option value="mm2">MM2</option></select>
           <input id="bot-name" class="in" maxlength="20" placeholder="Deposit bot Roblox username">
           <input id="bot-link" class="in" placeholder="Join link (https://www.roblox.com/share?...)">
           <button id="bot-add" class="btn">Add deposit bot</button>
         </div>
-        <p class="hint">Players trade their pets to these bots. They are shown in the Deposit window with their status. Players cannot join an offline bot.</p>
+        <p class="hint">Players trade their pets / items to these bots. Pick the game of each bot: players choose Adopt Me or MM2 in the Deposit window and only see that game's bots. Players cannot join an offline bot.</p>
       </div>
 
       <h4 style="margin:16px 0 8px">📤 Withdraw bots</h4>
       <div style="background:#f5faff;padding:14px;border-radius:12px">
         <div id="wbot-list" data-role="withdraw" style="margin-bottom:10px"></div>
-        <div style="display:grid;grid-template-columns:1fr 2fr auto;gap:8px">
+        <div style="display:grid;grid-template-columns:auto 1fr 2fr auto;gap:8px">
+          <select id="wbot-game" class="in"><option value="adoptme">Adopt Me</option><option value="mm2">MM2</option></select>
           <input id="wbot-name" class="in" maxlength="20" placeholder="Withdraw bot Roblox username">
           <input id="wbot-link" class="in" placeholder="Join link (https://www.roblox.com/share?...)">
           <button id="wbot-add" class="btn">Add withdraw bot</button>
         </div>
-        <p class="hint">These bots send the pets out. Every withdraw request gets one online withdraw bot (in turns); the player sees its name and private server in the wallet. Withdrawals are paused while every withdraw bot is offline. While no withdraw bot is added, the deposit bots handle withdrawals.</p>
+        <p class="hint">These bots send the pets out. Every withdraw request gets one online withdraw bot (in turns); the player sees its name and private server in the wallet. Withdrawals are paused while every withdraw bot is offline. Every game has its own withdraw bots; while a game has no withdraw bot, its deposit bots handle its withdrawals.</p>
       </div>
 
       <h4 style="margin:16px 0 8px">💰 Coinflip tax</h4>
@@ -4098,6 +4203,7 @@ function adminUI() {
           <div class="cat-top">
             <h3>📦 Catalog <small id="cat-shown" class="hint"></small></h3>
             <input id="cat-q" class="in" placeholder="Search pet name..." autocomplete="off" style="flex:1;min-width:200px;max-width:360px">
+            <select id="cat-game" class="in"><option value="">All games</option><option value="adoptme">Adopt Me</option><option value="mm2">MM2</option></select>
             <select id="cat-age" class="in"><option value="">All versions</option><option value="normal">Normal</option><option value="neon">Neon</option><option value="mega">Mega</option></select>
             <select id="cat-sort" class="in"><option value="value">Value: high to low</option><option value="value-asc">Value: low to high</option><option value="name">Name A-Z</option></select>
             <button id="cat-x" class="x">✕</button>
@@ -4140,6 +4246,7 @@ function adminUI() {
   catPanel.addEventListener('mousedown', e => { if (e.target === catPanel) catPanel.classList.remove('open'); });
   $('cat-q').oninput = () => catRender();
   $('cat-age').onchange = () => catRender();
+  $('cat-game').onchange = () => catRender();
   $('cat-sort').onchange = () => catRender();
   const varKey = (age, fly, ride) => `${age}-${fly && ride ? 'fr' : fly ? 'f' : ride ? 'r' : 'none'}`;
   const setPreview = () => {
@@ -4148,6 +4255,26 @@ function adminUI() {
     else { $('a-prev').removeAttribute('src'); $('a-prev').style.visibility = 'hidden'; }
   };
   $('a-img').oninput = setPreview;
+  const setMPreview = () => {
+    const v = $('m-img').value.trim();
+    if (/^https:\/\//.test(v)) { $('m-prev').src = v; $('m-prev').style.visibility = 'visible'; }
+    else { $('m-prev').removeAttribute('src'); $('m-prev').style.visibility = 'hidden'; }
+  };
+  $('m-img').oninput = setMPreview;
+  $('m-name').onchange = () => {
+    const same = catalogCache.find(c => c.game === 'mm2' && c.name.toLowerCase() === $('m-name').value.trim().toLowerCase());
+    if (!same) return;
+    if (!$('m-img').value.trim()) { $('m-img').value = same.image; setMPreview(); }
+    if ($('m-val').value === '') $('m-val').value = same.value;
+  };
+  $('m-add').onclick = async () => {
+    try {
+      const r = await api('/api/admin/catalog', { method: 'POST', body: { game: 'mm2', name: $('m-name').value, image: $('m-img').value, value: $('m-val').value } });
+      toast(r.updated ? 'MM2 item updated' : 'MM2 item added', 'ok');
+      $('m-name').value = ''; $('m-img').value = ''; $('m-val').value = ''; setMPreview();
+      await load();
+    } catch (err) { toast(err.message, 'err'); }
+  };
 
   /* typing a pet that is already in the catalog fills its picture and current values */
   $('a-name').onchange = () => {
@@ -4170,6 +4297,7 @@ function adminUI() {
         <div style="border:1px solid #343842;border-radius:8px;padding:10px;margin-bottom:8px">
           <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
             <b>${esc(w.user.username)}</b>
+            <span style="padding:1px 7px;border-radius:5px;font-size:11px;font-weight:900;${w.game === 'mm2' ? 'background:rgba(255,160,40,.15);color:#ffb547' : 'background:rgba(0,239,160,.12);color:#00efa0'}">${w.game === 'mm2' ? 'MM2' : 'ADOPT ME'}</span>
             ${w.botName ? `<span style="color:#4da3ff;font-weight:800">🤖 ${esc(w.botName)}</span>` : ''}
             <span>${fmt(w.value)} · ${new Date(w.ts).toLocaleString()}</span>
             <span>
@@ -4188,7 +4316,7 @@ function adminUI() {
         <div style="border:2px solid #e0edfb;border-radius:12px;padding:10px;text-align:center">
           <img src="${esc(item.image)}" alt="" style="width:70px;height:70px;object-fit:contain">
           <div style="font-weight:700">${esc(item.name)}</div>
-          ${tags(item)}
+          ${item.game === 'mm2' ? '<span style="display:inline-block;padding:1px 6px;border-radius:5px;background:rgba(255,160,40,.15);color:#ffb547;font-size:10px;font-weight:900">MM2</span>' : tags(item)}
           <input class="in" type="number" min="0" step="0.01" value="${esc(item.value)}" data-value-id="${esc(item.id)}" style="width:100%;margin:8px 0">
           <div style="display:flex;gap:5px">
             <button class="btn mint sm" data-action="give" data-id="${esc(item.id)}" style="flex:1">Give</button>
@@ -4200,9 +4328,10 @@ function adminUI() {
     catRender = () => {
       const q = $('cat-q').value.trim().toLowerCase();
       const age = $('cat-age').value;
+      const cg = $('cat-game').value;
       const sort = $('cat-sort').value;
       const list = data.catalog
-        .filter(i => (!q || i.name.toLowerCase().includes(q)) && (!age || (i.age || 'normal') === age))
+        .filter(i => (!q || i.name.toLowerCase().includes(q)) && (!age || (i.age || 'normal') === age) && (!cg || (i.game === 'mm2' ? 'mm2' : 'adoptme') === cg))
         .sort((a, b) => sort === 'name' ? a.name.localeCompare(b.name) : sort === 'value-asc' ? a.value - b.value : b.value - a.value);
       $('cat-shown').textContent = `${list.length} / ${data.catalog.length}`;
       $('adm-cat').innerHTML = list.length
@@ -4213,14 +4342,15 @@ function adminUI() {
     catRender();
 
     catalogCache = data.catalog || [];
-    $('a-names').innerHTML = [...new Set(catalogCache.map(c => c.name))].map(n => `<option value="${esc(n)}"></option>`).join('');
+    $('a-names').innerHTML = [...new Set(catalogCache.filter(c => c.game !== 'mm2').map(c => c.name))].map(n => `<option value="${esc(n)}"></option>`).join('');
+    $('m-names').innerHTML = [...new Set(catalogCache.filter(c => c.game === 'mm2').map(c => c.name))].map(n => `<option value="${esc(n)}"></option>`).join('');
     usersCache = data.users;
     renderUsers();
     $('g-users').innerHTML = data.users.map(u => `<option value="${esc(u.username)}"></option>`).join('');
 
     const prevItem = $('ev-item').value;
     $('ev-item').innerHTML = data.catalog.length
-      ? data.catalog.map(i => `<option value="${esc(i.id)}">${esc(i.name)} (${fmt(i.value)})</option>`).join('')
+      ? data.catalog.map(i => `<option value="${esc(i.id)}">${i.game === 'mm2' ? '[MM2] ' : ''}${esc(i.name)} (${fmt(i.value)})</option>`).join('')
       : '<option value="">No catalog items</option>';
     if (prevItem) $('ev-item').value = prevItem;
 
@@ -4326,6 +4456,7 @@ function adminUI() {
       ? bots.map(b => `
         <div style="display:flex;align-items:center;gap:10px;padding:8px;border-bottom:1px solid #e0edfb;flex-wrap:wrap">
           ${b.avatar ? `<img src="${esc(b.avatar)}" alt="" style="width:32px;height:32px;border-radius:50%">` : ''}
+          <select class="in" data-bot-game="${esc(b.id)}" style="height:30px;padding:0 6px;width:auto">${['adoptme', 'mm2'].map(g => `<option value="${g}" ${(b.game || 'adoptme') === g ? 'selected' : ''}>${g === 'mm2' ? 'MM2' : 'Adopt Me'}</option>`).join('')}</select>
           <b style="min-width:110px">${esc(b.username)}</b>
           <span style="color:${b.online ? '#00efa0' : '#ff5968'};font-weight:800">● ${b.online ? 'Online' : 'Offline'}</span>
           <input class="in" data-bot-link="${esc(b.id)}" value="${esc(b.link)}" style="flex:1;min-width:180px">
@@ -4338,7 +4469,7 @@ function adminUI() {
 
   const addBot = async (role, pre) => {
     try {
-      const r = await api('/api/admin/bots/add', { method: 'POST', body: { username: $(pre + '-name').value, link: $(pre + '-link').value, role } });
+      const r = await api('/api/admin/bots/add', { method: 'POST', body: { username: $(pre + '-name').value, link: $(pre + '-link').value, role, game: $(pre + '-game').value } });
       $(pre + '-name').value = ''; $(pre + '-link').value = '';
       renderBots(r.bots);
       toast(role === 'withdraw' ? 'Withdraw bot added' : 'Deposit bot added', 'ok');
@@ -4366,6 +4497,15 @@ function adminUI() {
 
   $('bot-list').onclick = $('wbot-list').onclick = botListClick;
   $('bot-list').onchange = $('wbot-list').onchange = async e => {
+    const gsel = e.target.closest('[data-bot-game]');
+    if (gsel) {
+      try {
+        const r = await api('/api/admin/bots/update', { method: 'POST', body: { id: gsel.dataset.botGame, game: gsel.value } });
+        renderBots(r.bots);
+        toast('Bot game: ' + (gsel.value === 'mm2' ? 'MM2' : 'Adopt Me'), 'ok');
+      } catch (err) { toast(err.message, 'err'); }
+      return;
+    }
     const input = e.target.closest('[data-bot-link]');
     if (!input) return;
     try {
@@ -5015,7 +5155,7 @@ function auditItems() {
     [...m.hostItems, ...m.oppItems].forEach(i => add(i.uid, `match ${m.id}`, false));
   }
 
-  if (JP && JP.state !== 'finished') JP.entries.forEach(e => e.items.forEach(i => add(i.uid, `jackpot ${JP.id}`, false)));
+  for (const J of Object.values(JPS)) if (J && J.state !== 'finished') J.entries.forEach(e => e.items.forEach(i => add(i.uid, `jackpot ${J.id}`, false)));
 
   for (const g of Object.values(S.giveaways)) g.items.forEach(i => add(i.uid, `giveaway ${g.id}`, false));
   for (const w of S.withdrawals) {
