@@ -20,9 +20,19 @@ if not exist ".env" (
   exit /b
 )
 
-if not exist "node_modules\discord.js" (
+set NEED=0
+if not exist "node_modules\discord.js" set NEED=1
+if not exist "node_modules\socket.io-client" set NEED=1
+if not exist "node_modules\dotenv" set NEED=1
+if "%NEED%"=="1" (
   echo  Gerekli paketler kuruluyor, ilk seferde 1-2 dakika surebilir...
   call npm install --omit=dev --no-audit --no-fund
+  if errorlevel 1 (
+    echo.
+    echo  Paketler kurulamadi. Internet baglantini kontrol et ve tekrar dene.
+    pause
+    exit /b
+  )
 )
 
 :loop
