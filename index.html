@@ -3271,6 +3271,8 @@
 
       socket.on("bounty:claimed", showBountyPopup);
 
+      socket.on("autobot:status", d => { if (STATE.config) STATE.config.autoBotOnline = Boolean(d && d.online); headerSig = ""; scheduleRefresh(); });
+
       socket.on("withdraw:update", w => { if (w && bwView && w.id === bwView.id && $("#bwBox")) { bwView = w; renderBotWithdraw(); } scheduleRefresh(); });
 
       socket.on("jackpot:update", j => {
@@ -4009,7 +4011,7 @@
              <div class="ad-card">
                <small>Send a trade request in Murder Mystery 2 to</small>
                <div class="ad-bot"><b>${esc(w.botUsername)}</b><button class="btn sm" data-action="copy-text" data-text="${esc(w.botUsername)}">Copy</button></div>
-               <div class="ad-meta"><span>Code <b>${esc(w.verificationCode)}</b></span><span>${left > 0 ? `Ends in ${Math.floor(left / 60000)}:${String(Math.floor(left / 1000) % 60).padStart(2, "0")}` : "Ending…"}</span></div>
+               <div class="ad-meta"><span></span><span>${left > 0 ? `Ends in ${Math.floor(left / 60000)}:${String(Math.floor(left / 1000) % 60).padStart(2, "0")}` : "Ending…"}</span></div>
              </div>
              ${adJoinHTML()}`}
         <div class="ad-got-h">${done ? "Delivered" : "Items"}</div>
@@ -4084,7 +4086,7 @@
       return w.length ? w : depositBots(GAME);
     };
     const autoBotOn = () => GAME === "mm2" && Boolean(STATE.config && STATE.config.autoBot);
-    const botsOffline = () => !autoBotOn() && !withdrawBots().some(b => b.online !== false);
+    const botsOffline = () => autoBotOn() ? STATE.config.autoBotOnline === false : !withdrawBots().some(b => b.online !== false);
 
     const depositBots = (game = depGame) => asArray(STATE.bots).filter(b => b.role !== "withdraw" && gameOf(b) === game);
     let depGame = "adoptme";
@@ -4156,7 +4158,7 @@
           <div class="ad-card">
             <small>Send a trade request in Murder Mystery 2 to</small>
             <div class="ad-bot"><b>${esc(r.botUsername)}</b><button class="btn sm" data-action="copy-text" data-text="${esc(r.botUsername)}">Copy</button></div>
-            <div class="ad-meta"><span>Code <b>${esc(r.verificationCode)}</b></span><span id="adLeft"></span></div>
+            <div class="ad-meta"><span id="adBotSt"></span><span id="adLeft"></span></div>
           </div>
           ${adJoinHTML()}
           <div class="ad-wait" id="adWait"><span class="ad-spin"></span>Waiting for your trade… Add your items, accept, and the bot accepts too.</div>
@@ -4170,7 +4172,9 @@
       if (!$("#adBox")) return adStop();
       const left = Math.max(0, (adSession ? Number(adSession.expiresAt) : 0) - (Date.now() - clockSkew));
       const el = $("#adLeft");
-      if (el) el.textContent = left > 0 ? `Session ends in ${Math.floor(left / 60000)}:${String(Math.floor(left / 1000) % 60).padStart(2, "0")}` : "Session ended";
+      if (el) el.textContent = left > 0 ? `Open for ${Math.ceil(left / 60000)} min` : "Session ended";
+      const bs = $("#adBotSt");
+      if (bs) bs.innerHTML = STATE.config && STATE.config.autoBotOnline === false ? '<span style="color:#ff5968">● Bot offline</span>' : '<span style="color:#00efa0">● Bot online</span>';
       let st;
       try { st = await api("/api/deposit/status"); } catch { return; }
       if (!$("#adBox")) return adStop();
@@ -4184,11 +4188,12 @@
       $("#adGot").innerHTML = fresh.length ? `
         <div class="ad-got-h">Received</div>
         <div class="ad-got">${fresh.map(i => `<div class="ad-item"><img src="${esc(i.image || "")}" alt=""><b>${esc(i.name)}</b><span>${GEM}${fmt(i.value)}</span></div>`).join("")}</div>` : "";
+      if (st.session) adSession = st.session;
       if (!st.hasPendingSession) {
         adStop();
-        $("#adWait").innerHTML = fresh.length
-          ? '<span class="ad-ok">✔</span>Deposit complete. Your items are in your MM2 inventory.'
-          : 'The session ended. <button class="btn sm" data-action="ad-restart">Start again</button>';
+        $("#adWait").innerHTML = 'The session ended. <button class="btn sm" data-action="ad-restart">Start again</button>';
+      } else if (fresh.length) {
+        $("#adWait").innerHTML = '<span class="ad-ok">✔</span>Received! Your items are in your MM2 inventory. You can send the bot another trade right away.';
       }
     }
 

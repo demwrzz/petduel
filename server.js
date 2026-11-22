@@ -1316,7 +1316,8 @@ function buildState() {
       captcha: { mode: TURNSTILE_SECRET && TURNSTILE_SITE_KEY ? 'turnstile' : 'builtin', siteKey: TURNSTILE_SITE_KEY },
       robloxLogin: oauthOn(),
       autoBot: autoDepositOn() ? DEPOSIT_BOT_NAME : '',
-      autoBotLink: autoDepositOn() ? autoBotLink() : ''
+      autoBotLink: autoDepositOn() ? autoBotLink() : '',
+      autoBotOnline: autoDepositOn() && autoBotOnline()
     }
   };
 }
@@ -2128,6 +2129,7 @@ const UPDATE_LOG = [
     'Stats and profit are kept per game (profile and player card have Adopt Me / MM2 tabs); the total still decides the rank',
     'Giveaways belong to one game and only that game\'s bets count for their requirements (MM2 bets do not unlock Adopt Me giveaways)',
     'Withdraw requests are per game: the admin list, the bell and the Discord bot show the game and the bot',
+    'MM2 bot: one deposit session lasts an hour and stays open after a trade (trade again in the same server); no codes shown; the bot is set offline automatically when it stops sending its heartbeat; catalog items can be edited (✏️)',
     'MM2 automatic deposits: Deposit > MM2 opens a 15 minute session, the in-game bot (iemre547) accepts the trade and the items appear in the inventory by themselves',
     'Adopt Me and MM2 are both back after the short MM2-only time: Adopt Me pets, catalog, bots and stats come from the backup, MM2 items and the MM2 catalog are kept'
   ] },
@@ -3969,13 +3971,42 @@ app.post('/api/admin/catalog/bulk', auth, adminOnly, (req, res) => {
   res.json({ ok: true, added, updated });
 });
 
+/* change a catalog item: only the value (the box on the card) or everything (the edit window) */
 app.post('/api/admin/catalog/update', auth, adminOnly, (req, res) => {
   const item = S.catalog.find(x => x.id === req.body.id);
   const value = round2(Number(req.body.value));
   if (!item || !Number.isFinite(value) || value < 0 || value > 1e9) return bad(res, 'Invalid value');
+  if (req.body.name !== undefined) {
+    const name = String(req.body.name || '').trim().slice(0, 40);
+    const image = String(req.body.image || '').trim();
+    if (!name) return bad(res, 'Enter a name');
+    if (!/^https:\/\/[^\s"'<>]{4,400}$/.test(image)) return bad(res, 'The image must be a https:// link');
+    item.name = name;
+    item.image = image;
+    if (item.game !== 'mm2') {
+      item.age = ['normal', 'neon', 'mega'].includes(req.body.age) ? req.body.age : 'normal';
+      item.fly = Boolean(req.body.fly);
+      item.ride = Boolean(req.body.ride);
+    }
+  }
   item.value = value;
+  /* optional: the same change for the copies players already own */
+  let changed = 0;
+  if (req.body.applyToOwned) {
+    for (const u of Object.values(S.users)) {
+      let hit = false;
+      for (const i of u.inventory) {
+        if (i.catalogId !== item.id) continue;
+        i.name = item.name; i.image = item.image; i.value = item.value;
+        if (item.game !== 'mm2') { i.age = item.age; i.fly = item.fly; i.ride = item.ride; }
+        changed++; hit = true;
+      }
+      if (hit) emitMe(u);
+    }
+  }
   markDirty();
-  res.json({ ok: true });
+  console.log(`[ADMIN] ${req.user.username} edited catalog item ${item.id} (${item.name})${changed ? `, ${changed} owned copies updated` : ''}`);
+  res.json({ ok: true, item, changed });
 });
 
 app.post('/api/admin/catalog/delete', auth, adminOnly, (req, res) => {
@@ -4197,6 +4228,8 @@ function adminUI() {
         #cat-panel .cat-card { animation: cat-in .35s cubic-bezier(.2, .8, .2, 1) both; transition: transform .15s, border-color .15s; }
         #cat-panel .cat-card:hover { transform: translateY(-3px); border-color: #00efa0 !important; }
         @keyframes cat-in { from { opacity: 0; transform: translateY(14px) scale(.95); } }
+        .cat-edit { position: fixed; inset: 0; z-index: 10050; display: grid; place-items: center; padding: 16px; background: rgba(5, 6, 10, .7); }
+        .cat-edit-card { width: min(440px, 100%); max-height: 90vh; overflow-y: auto; padding: 18px; border: 1px solid #343842; border-radius: 14px; background: #171a22; box-shadow: 0 30px 80px #000c; }
         .ev-src { display: flex; gap: 6px; margin-bottom: 8px; }
         .ev-src button { flex: 1; padding: 8px; border: 1px solid #343842; border-radius: 10px; background: #1d212b; color: #9aa0ad; font: inherit; font-weight: 800; cursor: pointer; transition: .15s; }
         .ev-src button.on { border-color: #00efa0; background: rgba(0, 239, 160, .12); color: #00efa0; }
@@ -4330,6 +4363,7 @@ function adminUI() {
           <input class="in" type="number" min="0" step="0.01" value="${esc(item.value)}" data-value-id="${esc(item.id)}" style="width:100%;margin:8px 0">
           <div style="display:flex;gap:5px">
             <button class="btn mint sm" data-action="give" data-id="${esc(item.id)}" style="flex:1">Give</button>
+            <button class="btn gray sm" data-action="edit" data-id="${esc(item.id)}" title="Edit">✏️</button>
             <button class="btn red sm" data-action="delete" data-id="${esc(item.id)}">🗑</button>
           </div>
         </div>`;
@@ -4612,6 +4646,48 @@ function adminUI() {
     } catch (err) { toast(err.message, 'err'); }
   };
 
+  /* the edit window of one catalog item */
+  function editCatalogItem(c) {
+    if (!c) return;
+    const am = c.game !== 'mm2';
+    const box = document.createElement('div');
+    box.className = 'cat-edit';
+    box.innerHTML = `
+      <div class="cat-edit-card">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <img id="ce-prev" src="${esc(c.image)}" alt="" style="width:64px;height:64px;object-fit:contain">
+          <div style="flex:1"><b style="font-size:17px">Edit catalog item</b><div class="hint" style="margin:2px 0 0">${am ? 'Adopt Me' : 'MM2'} · id ${esc(c.id)}</div></div>
+          <button class="btn gray sm" data-ce="x">✕</button>
+        </div>
+        <label class="hint">Name</label><input class="in" id="ce-name" maxlength="40" value="${esc(c.name)}" style="width:100%;margin-bottom:8px">
+        <label class="hint">Image URL</label><input class="in" id="ce-img" value="${esc(c.image)}" style="width:100%;margin-bottom:8px">
+        <label class="hint">Value</label><input class="in" id="ce-val" type="number" min="0" step="0.01" value="${esc(c.value)}" style="width:100%;margin-bottom:8px">
+        ${am ? `<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+          <select class="in" id="ce-age">${['normal', 'neon', 'mega'].map(a => `<option value="${a}" ${(c.age || 'normal') === a ? 'selected' : ''}>${a[0].toUpperCase() + a.slice(1)}</option>`).join('')}</select>
+          <label><input type="checkbox" id="ce-fly" ${c.fly ? 'checked' : ''}> Fly</label>
+          <label><input type="checkbox" id="ce-ride" ${c.ride ? 'checked' : ''}> Ride</label>
+        </div>` : ''}
+        <label style="display:flex;gap:8px;align-items:center;margin:6px 0 12px"><input type="checkbox" id="ce-own"> Also change the copies players already own</label>
+        <div style="display:flex;gap:8px"><button class="btn" data-ce="save" style="flex:1">Save</button><button class="btn gray" data-ce="x">Cancel</button></div>
+      </div>`;
+    overlay.appendChild(box);
+    box.querySelector('#ce-img').oninput = e => { box.querySelector('#ce-prev').src = e.target.value; };
+    box.onclick = async e => {
+      const b = e.target.closest('[data-ce]');
+      if (e.target === box || (b && b.dataset.ce === 'x')) return box.remove();
+      if (!b) return;
+      try {
+        const body = { id: c.id, name: box.querySelector('#ce-name').value, image: box.querySelector('#ce-img').value, value: box.querySelector('#ce-val').value, applyToOwned: box.querySelector('#ce-own').checked };
+        if (am) { body.age = box.querySelector('#ce-age').value; body.fly = box.querySelector('#ce-fly').checked; body.ride = box.querySelector('#ce-ride').checked; }
+        const r = await api('/api/admin/catalog/update', { method: 'POST', body });
+        toast(r.changed ? `Saved, ${r.changed} owned copies updated` : 'Saved', 'ok');
+        box.remove();
+        await load();
+        catRender();
+      } catch (err) { toast(err.message, 'err'); }
+    };
+  }
+
   $('adm-cat').onclick = async e => {
     const button = e.target.closest('[data-action]');
     if (!button) return;
@@ -4624,6 +4700,10 @@ function adminUI() {
         });
         toast('Item given!', 'ok');
         await load();
+      }
+      if (button.dataset.action === 'edit') {
+        editCatalogItem(catalogCache.find(c => c.id === id));
+        return;
       }
       if (button.dataset.action === 'delete') {
         if (!(await confirmBox({ title: 'Delete item', text: 'Are you sure you want to delete this catalog item?', ok: 'Delete', danger: true }))) return;
@@ -5229,7 +5309,7 @@ process.on('uncaughtException', err => console.error('Uncaught exception:', err 
    Railway variables: BOT_SECRET_KEY (required, same value in the bot), DEPOSIT_BOT_NAME (optional, default iemre547). */
 
 const DEPOSIT_BOT_NAME = String(E.DEPOSIT_BOT_NAME || 'iemre547').trim();
-const DEPOSIT_SESSION_MS = 15 * 60 * 1000;
+const DEPOSIT_SESSION_MS = 60 * 60 * 1000;   /* one hour, renewed after every deposit: trade again and again in the same server */
 const DEPOSIT_GRACE_MS = 10 * 60 * 1000;   /* a trade started just before the end can still be confirmed */
 const activeSessions = new Map();          /* robloxUsername (trim, lower case) -> { robloxUsername, userId, verificationCode, expiresAt, startedAt } */
 const processedTrades = new Set();         /* filled from S.processedTrades at start */
@@ -5245,6 +5325,26 @@ function autoBotLink() {
   return pick ? pick.link : '';
 }
 
+/* The in-game bot is online while it keeps talking to the site: POST /api/bot/heartbeat every ~15 seconds
+   (every verify / confirm counts too). No sign of life for 45 seconds, or { status: "offline" }: offline.
+   Then MM2 deposits and withdrawals are paused and the MM2 bot in the admin list shows Offline. */
+const BOT_TIMEOUT_MS = 45 * 1000;
+let botLastSeen = 0, botForcedOff = false, botWasOnline = null;
+const autoBotOnline = () => !botForcedOff && now() - botLastSeen < BOT_TIMEOUT_MS;
+function botAlive() { botLastSeen = now(); botForcedOff = false; syncBotOnline(); }
+function syncBotOnline() {
+  const on = autoBotOnline();
+  if (on === botWasOnline) return;
+  botWasOnline = on;
+  let touched = false;
+  for (const b of S.bots) if (b.game === 'mm2' && b.username.toLowerCase() === DEPOSIT_BOT_NAME.toLowerCase() && (b.online !== false) !== on) { b.online = on; touched = true; }
+  if (touched) { markDirty(); emitBots(); }
+  stateCache.t = 0;
+  io.emit('autobot:status', { online: on });
+  console.log(`[BOT] ${DEPOSIT_BOT_NAME} is ${on ? 'online' : 'offline'}`);
+}
+setInterval(syncBotOnline, 5000);
+
 function gameBotSecretOk(req) {
   const key = String(E.BOT_SECRET_KEY || '');
   const got = String(req.headers['x-bot-secret'] || '');
@@ -5255,8 +5355,15 @@ function gameBotSecretOk(req) {
 function gameBotOnly(req, res, next) {
   if (!autoDepositOn()) return bad(res, 'BOT_SECRET_KEY is not set on the server', 503);
   if (!gameBotSecretOk(req)) return bad(res, 'Forbidden', 403);
+  if (req.path !== '/api/bot/heartbeat') botAlive();
   next();
 }
+
+app.post('/api/bot/heartbeat', gameBotOnly, (req, res) => {
+  if (String(req.body.status || '').toLowerCase() === 'offline') { botForcedOff = true; botLastSeen = 0; syncBotOnline(); }
+  else botAlive();
+  res.json({ ok: true, online: autoBotOnline() });
+});
 
 /* the player's MM2 items, newest deposits first */
 const mm2Inventory = user => user.inventory.filter(i => i.game === 'mm2').map(i => ({
@@ -5275,6 +5382,7 @@ setInterval(() => {
 /* the player starts a deposit (always for the Roblox account they are logged in with) */
 app.post('/api/deposit/init', auth, actionLimit, (req, res) => {
   if (!autoDepositOn()) return bad(res, 'Automatic deposits are not set up yet', 503);
+  if (!autoBotOnline()) return bad(res, 'The MM2 bot is offline right now. Please try again in a few minutes.', 409);
   const user = req.user;
   const asked = String(req.body.robloxUsername || '').trim();
   if (asked && sessionKey(asked) !== sessionKey(user.username)) return bad(res, `You can only deposit from your own Roblox account (${user.username})`);
@@ -5351,7 +5459,8 @@ app.post('/api/bot/confirm-deposit', gameBotOnly, (req, res) => {
 
   processedTrades.add(tradeId);
   S.processedTrades = [tradeId, ...(S.processedTrades || []).filter(x => x !== tradeId)].slice(0, 5000);
-  activeSessions.delete(key);
+  /* the session stays open (and is renewed), so the player can send the bot another trade right away */
+  sess.expiresAt = now() + DEPOSIT_SESSION_MS;
   const total = round2(credited.reduce((t, c) => t + c.value, 0));
   if (credited.length) addTransaction(user, 'Deposit', tradeId, total, 'mm2');
   markDirty();
@@ -5429,6 +5538,7 @@ setInterval(() => {
 
 app.post('/api/withdraw/init', auth, actionLimit, (req, res) => {
   if (!autoDepositOn()) return bad(res, 'Automatic withdrawals are not set up yet', 503);
+  if (!autoBotOnline()) return bad(res, 'The MM2 bot is offline right now. Please try again in a few minutes.', 409);
   const user = req.user;
   if (pendingBotWithdraw(user.id)) return bad(res, 'You already have a withdrawal waiting. Trade the bot or cancel it first.');
   const uids = selectionToUids(req.body);
