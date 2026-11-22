@@ -3255,11 +3255,7 @@
         STATE.bot = STATE.bots[0] || STATE.bot;
         const box = $("#depositBots");
         if (box) box.innerHTML = botsListHTML();
-        const off = $("#botsOffBox");
-        if (off) {
-          off.innerHTML = botsOffline() ? '<div class="warn"><i>!</i><span>Withdrawals are paused while our withdraw bots are offline. Please try again when a bot is back online.</span></div>' : "";
-          gridContext && gridContext.info && gridContext.info();
-        }
+        updateWithdrawGate();
       });
 
       socket.on("bounty:update", list => {
@@ -3271,7 +3267,7 @@
 
       socket.on("bounty:claimed", showBountyPopup);
 
-      socket.on("autobot:status", d => { if (STATE.config) STATE.config.autoBotOnline = Boolean(d && d.online); headerSig = ""; scheduleRefresh(); });
+      socket.on("autobot:status", d => { if (STATE.config) STATE.config.autoBotOnline = Boolean(d && d.online); headerSig = ""; updateWithdrawGate(); scheduleRefresh(); });
 
       socket.on("withdraw:update", w => { if (w && bwView && w.id === bwView.id && $("#bwBox")) { bwView = w; renderBotWithdraw(); } scheduleRefresh(); });
 
@@ -3316,6 +3312,7 @@
         const state = await api("/api/state");
         if (state.now) clockSkew = Date.now() - state.now;
         STATE = { ...STATE, ...state };
+        setTimeout(updateWithdrawGate, 0);
         if (state.jackpots) STATE.jackpot = state.jackpots[GAME] || null;
         if (!state.maintenance) STATE.maintenance = false;
 
@@ -3810,6 +3807,7 @@
       /* switching the game here switches the whole site, then the open window shows that game's items */
       $("#gridGame")?.addEventListener("change", e => {
         setGame(e.target.value);
+        updateWithdrawGate();
         const title = $("#modal .mh h3");
         if (title && /Inventory$/.test(title.textContent)) title.textContent = GAME_NAMES[GAME] + " Inventory";
         renderGrid();
@@ -3914,7 +3912,7 @@
 
       openModal(`
         ${modalHeader(GAME_NAMES[GAME] + " Inventory")}
-        <div id="botsOffBox">${botsOffline() ? '<div class="warn"><i>!</i><span>Withdrawals are paused while our withdraw bots are offline. Please try again when a bot is back online.</span></div>' : ""}</div>
+        <div id="botsOffBox">${offlineWarn()}</div>
         <div id="wdBox"></div>
         <div class="hint" style="margin:0 0 7px">Select Item</div>
 
@@ -4087,6 +4085,14 @@
     };
     const autoBotOn = () => GAME === "mm2" && Boolean(STATE.config && STATE.config.autoBot);
     const botsOffline = () => autoBotOn() ? STATE.config.autoBotOnline === false : !withdrawBots().some(b => b.online !== false);
+    const offlineWarn = () => botsOffline()
+      ? `<div class="warn"><i>!</i><span>${autoBotOn() ? "Withdrawals are paused while the MM2 bot is offline." : "Withdrawals are paused while our withdraw bots are offline."} Please try again when the bot is back online.</span></div>` : "";
+    /* the wallet's warning and Withdraw button follow the bot status right away */
+    function updateWithdrawGate() {
+      const off = $("#botsOffBox");
+      if (off) off.innerHTML = offlineWarn();
+      if (gridContext && gridContext.info) gridContext.info();
+    }
 
     const depositBots = (game = depGame) => asArray(STATE.bots).filter(b => b.role !== "withdraw" && gameOf(b) === game);
     let depGame = "adoptme";
