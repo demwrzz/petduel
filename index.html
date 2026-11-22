@@ -224,6 +224,8 @@
     .ad-meta b { color: #fff; letter-spacing: 2px; }
     .ad-join { margin-top: 10px; }
     .ad-join .btn { width: 100%; }
+    .ad-join-btn { display: flex; align-items: center; justify-content: center; gap: 8px; height: 46px; font-size: 15px; }
+    .ad-join-btn svg { width: 18px; height: 18px; }
     .ad-wait { display: flex; align-items: center; gap: 10px; margin-top: 12px; color: #cfd2db; font-size: 14px; font-weight: 600; }
     .ad-spin { flex: none; width: 18px; height: 18px; border: 3px solid #323844; border-top-color: var(--green); border-radius: 50%; animation: spin 1s linear infinite; }
     .ad-ok { display: grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 50%; color: #04120b; background: var(--green); font-weight: 900; }
@@ -4008,7 +4010,8 @@
                <small>Send a trade request in Murder Mystery 2 to</small>
                <div class="ad-bot"><b>${esc(w.botUsername)}</b><button class="btn sm" data-action="copy-text" data-text="${esc(w.botUsername)}">Copy</button></div>
                <div class="ad-meta"><span>Code <b>${esc(w.verificationCode)}</b></span><span>${left > 0 ? `Ends in ${Math.floor(left / 60000)}:${String(Math.floor(left / 1000) % 60).padStart(2, "0")}` : "Ending…"}</span></div>
-             </div>`}
+             </div>
+             ${adJoinHTML()}`}
         <div class="ad-got-h">${done ? "Delivered" : "Items"}</div>
         <div class="ad-got">${asArray(w.items).map(i => `<div class="ad-item"><img src="${esc(itemImage(i))}" alt=""><b>${esc(i.name)}</b><span>${GEM}${fmt(i.value)}</span></div>`).join("") || '<div class="empty">No items</div>'}</div>
         ${!done && !gone ? `<div class="ad-wait"><span class="ad-spin"></span>Waiting for your trade…</div>
@@ -4128,6 +4131,13 @@
     let adTimer = null, adStart = 0, adSeen = null, adSession = null;
     const adStop = () => { clearInterval(adTimer); adTimer = null; };
 
+    /* the same MM2 bot takes deposits and sends withdrawals: one Join button for both windows */
+    const adJoinHTML = () => {
+      const link = STATE.config && STATE.config.autoBotLink;
+      return link ? `<div class="ad-join"><button class="btn ad-join-btn" data-action="bot-join" data-link="${esc(link)}">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5.2 2 2 18.8 18.8 22 22 5.2zm8.6 12.7-4.5-.9.9-4.5 4.5.9z"/></svg>Join the bot's server</button></div>` : "";
+    };
+
     async function openMm2Deposit() {
       adStop();
       let r;
@@ -4148,7 +4158,7 @@
             <div class="ad-bot"><b>${esc(r.botUsername)}</b><button class="btn sm" data-action="copy-text" data-text="${esc(r.botUsername)}">Copy</button></div>
             <div class="ad-meta"><span>Code <b>${esc(r.verificationCode)}</b></span><span id="adLeft"></span></div>
           </div>
-          ${asArray(STATE.bots).some(b => gameOf(b) === "mm2" && b.role !== "withdraw") ? `<div class="ad-join">${asArray(STATE.bots).filter(b => gameOf(b) === "mm2" && b.role !== "withdraw" && b.online !== false && (b.link || b.joinLink)).slice(0, 1).map(b => `<button class="btn gray" data-action="bot-join" data-link="${esc(b.link || b.joinLink)}">Join the bot's server</button>`).join("")}</div>` : ""}
+          ${adJoinHTML()}
           <div class="ad-wait" id="adWait"><span class="ad-spin"></span>Waiting for your trade… Add your items, accept, and the bot accepts too.</div>
           <div id="adGot"></div>
         </div>`);

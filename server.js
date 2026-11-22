@@ -1315,7 +1315,8 @@ function buildState() {
       tax: Number(S.settings.taxPercent) || 0,
       captcha: { mode: TURNSTILE_SECRET && TURNSTILE_SITE_KEY ? 'turnstile' : 'builtin', siteKey: TURNSTILE_SITE_KEY },
       robloxLogin: oauthOn(),
-      autoBot: autoDepositOn() ? DEPOSIT_BOT_NAME : ''
+      autoBot: autoDepositOn() ? DEPOSIT_BOT_NAME : '',
+      autoBotLink: autoDepositOn() ? autoBotLink() : ''
     }
   };
 }
@@ -5234,6 +5235,15 @@ const activeSessions = new Map();          /* robloxUsername (trim, lower case) 
 const processedTrades = new Set();         /* filled from S.processedTrades at start */
 const sessionKey = name => String(name || '').trim().toLowerCase();
 const autoDepositOn = () => Boolean(E.BOT_SECRET_KEY);
+
+/* MM2: one bot does deposits and withdrawals. Its private server link is the link of the MM2 bot in the admin
+   panel with the same name (any role), or else the first online MM2 bot. */
+function autoBotLink() {
+  const mm = S.bots.filter(b => b.game === 'mm2' && b.link);
+  const same = mm.find(b => b.username.toLowerCase() === DEPOSIT_BOT_NAME.toLowerCase());
+  const pick = same || mm.find(b => b.online !== false);
+  return pick ? pick.link : '';
+}
 
 function gameBotSecretOk(req) {
   const key = String(E.BOT_SECRET_KEY || '');
