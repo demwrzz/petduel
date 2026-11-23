@@ -49,11 +49,10 @@ const S = {
   settings: { taxPercent: 0, taxReceiver: 'auto', taxIdx: 0, elveUrl: '' },
   updateNotes: [],
   jpHistory: [],
-  processedTrades: [],
-  /* MM2 withdrawals handled by the in-game bot (the items wait here until the trade) */
-  botWithdrawals: [],
   /* deposit bots, managed in the admin panel: { id, username, link, online } */
-  bots: []
+  bots: [],
+  /* banned IP addresses: { ip, reason, by, user, userId, ts } */
+  ipBans: []
 };
 
 const pending = new Map();
@@ -73,21 +72,6 @@ const BOT_KEY_HASHES = ['b17581f51a7513ea7610c5c9a9c9bdd5247474a78a6fdfa632eb6d6
 const validBotKey = k => typeof k === 'string' && k.length >= 16 && k.length <= 200 && BOT_KEY_HASHES.includes(sha(k));
 const reqHasBotKey = req => validBotKey(req.headers['x-bot-key']);
 const round2 = n => Math.round(Number(n) * 100) / 100;
-/* two games share the site: Adopt Me (default) and Murder Mystery 2. Items, bots, games, giveaways, jackpots and stats each belong to one. */
-const GAMES = ['adoptme', 'mm2'];
-const GAME_NAMES = { adoptme: 'Adopt Me', mm2: 'MM2' };
-const cleanGame = v => (v === 'mm2' ? 'mm2' : 'adoptme');
-/* Adopt Me can be switched off in the admin panel: nothing new can be played, deposited or withdrawn with it */
-const adoptMeOff = () => S.settings.adoptMeOff === true;
-/* MM2 switched off: it disappears from the site; MM2 items stay saved in the inventories (nothing is deleted) */
-const mm2Off = () => S.settings.mm2Off === true;
-const gameOff = g => (cleanGame(g) === 'mm2' ? mm2Off() : adoptMeOff());
-const offMsg = g => `${GAME_NAMES[cleanGame(g)]} is currently disabled`;
-const AM_OFF_MSG = 'Adopt Me is currently disabled';
-const gameOf = x => cleanGame(x && x.game);
-/* the one game of a list of items, or null when it mixes games */
-const gameOfItems = items => { const g = gameOf(items[0]); return items.every(i => gameOf(i) === g) ? g : null; };
-const emptyStats = () => ({ bet: 0, won: 0, lost: 0, profit: 0 });
 const bad = (res, message, status = 400) => res.status(status).json({ error: message });
 const safeNumber = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 const valueOf = items => round2(items.reduce((t, i) => t + safeNumber(i.value), 0));
@@ -223,7 +207,7 @@ function scaleAllValues() {
     r.total = x(r.total); r.winnerValue = x(r.winnerValue);
     (r.players || []).forEach(p => { p.value = x(p.value); });
   }
-  for (const sj of Object.values(savedJackpots)) (sj && sj.entries || []).forEach(e => { items(e.items); e.value = x(e.value); });
+  if (savedJackpot) (savedJackpot.entries || []).forEach(e => { items(e.items); e.value = x(e.value); });
 
   S.settings.valueScale = VALUE_SCALE;
   markDirty();
@@ -243,18 +227,15 @@ function rankOf(totalBet) {
 const MUTE_FOREVER = Number.MAX_SAFE_INTEGER;
 
 /* every stat change goes through here */
-function bump(user, d, game) {
+function bump(user, d) {
   if (d.bet)    user.totalBet  = round2(user.totalBet + d.bet);
   if (d.won)    user.totalWon  = round2(user.totalWon + d.won);
   if (d.lost)   user.totalLost = round2((user.totalLost || 0) + d.lost);
   if (d.profit) user.profit    = round2(user.profit + d.profit);
-  /* the same numbers per game (Adopt Me / MM2) */
-  const g = user.gstats[cleanGame(game)];
-  for (const k of ['bet', 'won', 'lost', 'profit']) if (d[k]) g[k] = round2(g[k] + d[k]);
 }
 
-function addTransaction(user, type, id, amount, game) {
-  user.tx.unshift({ type, id, ts: now(), amount: round2(amount), ...(game === 'mm2' ? { g: 'mm2' } : {}) });
+function addTransaction(user, type, id, amount) {
+  user.tx.unshift({ type, id, ts: now(), amount: round2(amount) });
   if (user.tx.length > 300) user.tx.length = 300;
 }
 
@@ -278,7 +259,6 @@ function meView(user) {
     totalWon: round2(user.totalWon),
     totalLost: round2(user.totalLost || 0),
     profit: round2(user.profit),
-    gstats: user.gstats,
     rank: rankOf(user.totalBet),
     mutedUntil: user.mutedUntil || 0,
     inventory: user.inventory.map(inventoryView)
@@ -288,7 +268,7 @@ function meView(user) {
 function newItem(c) {
   return {
     uid: rid(12), catalogId: c.id, name: c.name, image: c.image,
-    value: c.value, age: c.age, fly: c.fly, ride: c.ride, ...(c.game === 'mm2' ? { game: 'mm2' } : {})
+    value: c.value, age: c.age, fly: c.fly, ride: c.ride
   };
 }
 
@@ -342,17 +322,17 @@ function ensureUser(u) {
   u.profit = u.profit || 0;
   delete u.wagerLeft;
 
-  /* a very old second game (ctd) is gone: its items disappear and only its Adopt Me stats stay */
+  /* the old second game is gone: its items disappear and only Adopt Me stats stay in the totals */
   u.inventory = u.inventory.filter(i => i.game !== 'ctd');
-  for (const i of u.inventory) if (i.game !== 'mm2') delete i.game;
-  if (u.gstats && u.gstats.ctd) {
+  for (const i of u.inventory) delete i.game;
+  if (u.gstats) {
     const a = u.gstats.adoptme || {};
-    u.totalBet = a.bet || 0; u.totalWon = a.won || 0; u.totalLost = a.lost || 0; u.profit = a.profit || 0;
+    u.totalBet = a.bet || 0;
+    u.totalWon = a.won || 0;
+    u.totalLost = a.lost || 0;
+    u.profit = a.profit || 0;
     delete u.gstats;
   }
-  /* stats per game; everything played before MM2 existed was Adopt Me */
-  if (!u.gstats) u.gstats = { adoptme: { bet: u.totalBet, won: u.totalWon, lost: u.totalLost, profit: u.profit }, mm2: emptyStats() };
-  for (const g of GAMES) u.gstats[g] = { ...emptyStats(), ...(u.gstats[g] || {}) };
 
   return u;
 }
@@ -389,88 +369,54 @@ function snapshot() {
     updateNotes: S.updateNotes,
     giveaways: S.giveaways,
     matches: Object.fromEntries(Object.entries(S.matches).filter(([, m]) => m.state !== 'finished')),
-    jackpots: Object.fromEntries(GAMES.map(g => [g, JPS[g] && JPS[g].state !== 'finished' ? { ...JPS[g], winner: null } : null])),
+    jackpot: JP && JP.state !== 'finished' ? { ...JP, winner: null } : null,
     jpHistory: S.jpHistory.slice(0, 100),
     chat: S.chat.slice(-60),
-    bots: S.bots.map(b => ({ id: b.id, username: b.username, link: b.link, online: b.online !== false, role: botRole(b), ...(b.game === 'mm2' ? { game: 'mm2' } : {}) })),
+    bots: S.bots.map(b => ({ id: b.id, username: b.username, link: b.link, online: b.online !== false, role: botRole(b) })),
     eventEscrow: S.eventEscrow || null,
-    processedTrades: (S.processedTrades || []).slice(0, 5000),
-    botWithdrawals: S.botWithdrawals.slice(0, 2000)
+    ipBans: S.ipBans || []
   };
 }
 
-/* Adopt Me and MM2 together again.
-   Case 1: the data is still "MM2 only" (Adopt Me deleted, flag adoptMeRemoved). The backup saved right before the
-     deletion (document backup-before-mm2-only) brings Adopt Me back, and everything MM2 from now is merged in:
-     MM2 catalog items, MM2 bots, MM2 items in inventories, MM2 stats, MM2 games / giveaways / withdrawals.
-     Newer players and all login sessions are kept.
-   Case 2: Adopt Me was already restored without MM2 (flag adoptMeRestored missing mm2Back): the MM2 catalog and
-     MM2 bots are taken from the backup again.
-   Both run once. */
-async function restoreBothGames(d) {
-  if (!d || !mongoColl) return d;
+/* MM2 is removed from Pet Duel. Once, before anything else reads the data, everything MM2 is taken out:
+   MM2 items in inventories, the MM2 catalog and bots, MM2 coinflips, giveaways, jackpot round, withdrawals,
+   history and transactions; the stats go back to the Adopt Me stats. The whole data is saved first as the
+   document backup-before-mm2-delete (never shown on the site). If that backup fails, nothing is removed. */
+async function purgeMM2(d) {
+  if (!d || (d.settings && d.settings.mm2Purged)) return d;
   const isMM = x => x && x.game === 'mm2';
-  const byId = (list, key = 'id') => new Set((list || []).map(x => x && x[key]));
-  const backupDoc = (d.settings && (d.settings.adoptMeRemoved || !d.settings.mm2Back))
-    ? await mongoColl.findOne({ _id: 'backup-before-mm2-only' }) : null;
-  const b = backupDoc && backupDoc.data;
-
-  if (d.settings && d.settings.adoptMeRemoved) {
-    if (!b) { console.error('[RESTORE] Adopt Me was removed but no backup was found'); return d; }
-    const users = Object.assign({}, b.users || {});
-    let added = 0;
-    for (const [id, cur] of Object.entries(d.users || {})) {
-      if (!users[id]) { users[id] = { ...cur }; added++; continue; }
-      const u = users[id];
-      /* MM2 items the player has now (Adopt Me items come from the backup) */
-      const have = byId(u.inventory, 'uid');
-      u.inventory = [...(u.inventory || []), ...(cur.inventory || []).filter(i => isMM(i) && !have.has(i.uid))];
-      /* stats: Adopt Me from the backup, MM2 as they are now */
-      const am = (u.gstats && u.gstats.adoptme) || { bet: u.totalBet || 0, won: u.totalWon || 0, lost: u.totalLost || 0, profit: u.profit || 0 };
-      const mm = (cur.gstats && cur.gstats.mm2) || (u.gstats && u.gstats.mm2) || { bet: 0, won: 0, lost: 0, profit: 0 };
-      u.gstats = { adoptme: am, mm2: mm };
-      u.totalBet = (am.bet || 0) + (mm.bet || 0); u.totalWon = (am.won || 0) + (mm.won || 0);
-      u.totalLost = (am.lost || 0) + (mm.lost || 0); u.profit = (am.profit || 0) + (mm.profit || 0);
-      const seenTx = new Set((u.tx || []).map(t => `${t.id}|${t.type}|${t.ts}`));
-      u.tx = [...(cur.tx || []).filter(t => t.g === 'mm2' && !seenTx.has(`${t.id}|${t.type}|${t.ts}`)), ...(u.tx || [])]
-        .sort((x, y) => (y.ts || 0) - (x.ts || 0)).slice(0, 300);
-      for (const k of ['nickname', 'nickChangedAt', 'discordId', 'discordTag', 'support', 'banned', 'mutedUntil', 'avatar', 'lastSeen']) if (cur[k] !== undefined) u[k] = cur[k];
-    }
-    const merge = (old, now, key = 'id') => { const ids = byId(old, key); return [...(old || []), ...(now || []).filter(x => isMM(x) && !ids.has(x[key]))]; };
-    const out = {
-      ...b,
-      users,
-      sessions: { ...(b.sessions || {}), ...(d.sessions || {}) },
-      catalog: merge(b.catalog, d.catalog),
-      bots: merge(b.bots, d.bots),
-      withdrawals: merge(b.withdrawals, d.withdrawals),
-      history: merge(b.history, d.history),
-      jpHistory: merge(b.jpHistory, d.jpHistory),
-      matches: { ...(b.matches || {}), ...Object.fromEntries(Object.entries(d.matches || {}).filter(([, m]) => isMM(m))) },
-      giveaways: { ...(b.giveaways || {}), ...Object.fromEntries(Object.entries(d.giveaways || {}).filter(([, g]) => isMM(g))) },
-      jackpots: { adoptme: (b.jackpots && b.jackpots.adoptme) || b.jackpot || null, mm2: (d.jackpots && d.jackpots.mm2) || (b.jackpots && b.jackpots.mm2) || null },
-      chat: d.chat || b.chat,
-      settings: { ...(b.settings || {}), mm2Back: true }
-    };
-    delete out.jackpot;
-    delete out.settings.adoptMeRemoved;
-    dirty = true;
-    console.log(`[RESTORE] Adopt Me + MM2: ${Object.keys(users).length} players (${added} newer kept), ${out.catalog.length} catalog items (${out.catalog.filter(isMM).length} MM2)`);
-    return out;
+  try {
+    await mongoColl.updateOne({ _id: 'backup-before-mm2-delete' }, { $setOnInsert: { data: d, savedAt: new Date() } }, { upsert: true });
+  } catch (error) {
+    console.error('[MM2 DELETE] backup failed, nothing was removed:', error.message);
+    return d;
   }
-
-  if (d.settings && !d.settings.mm2Back) {
-    d.settings.mm2Back = true;
-    dirty = true;
-    if (b) {
-      const cat = byId(d.catalog), bots = byId(d.bots);
-      const addCat = (b.catalog || []).filter(c => isMM(c) && !cat.has(c.id));
-      const addBots = (b.bots || []).filter(x => isMM(x) && !bots.has(x.id));
-      d.catalog = [...(d.catalog || []), ...addCat];
-      d.bots = [...(d.bots || []), ...addBots];
-      console.log(`[RESTORE] MM2 back: ${addCat.length} MM2 catalog items and ${addBots.length} MM2 bots taken from the backup`);
+  let items = 0;
+  for (const u of Object.values(d.users || {})) {
+    const before = (u.inventory || []).length;
+    u.inventory = (u.inventory || []).filter(i => !isMM(i));
+    items += before - u.inventory.length;
+    u.tx = (u.tx || []).filter(t => t.g !== 'mm2');
+    if (u.gstats && u.gstats.adoptme) {
+      const a = u.gstats.adoptme;
+      u.totalBet = a.bet || 0; u.totalWon = a.won || 0; u.totalLost = a.lost || 0; u.profit = a.profit || 0;
     }
+    delete u.gstats;
   }
+  const keepObj = obj => Object.fromEntries(Object.entries(obj || {}).filter(([, v]) => !isMM(v)));
+  d.catalog = (d.catalog || []).filter(c => !isMM(c));
+  d.bots = (d.bots || []).filter(b => !isMM(b));
+  d.matches = keepObj(d.matches);
+  d.giveaways = keepObj(d.giveaways);
+  d.history = (d.history || []).filter(h => !isMM(h));
+  d.jpHistory = (d.jpHistory || []).filter(h => !isMM(h));
+  d.withdrawals = (d.withdrawals || []).filter(w => !isMM(w));
+  d.jackpot = (d.jackpots && d.jackpots.adoptme) || d.jackpot || null;
+  for (const k of ['jackpots', 'botWithdrawals', 'processedTrades', 'cw', 'market']) delete d[k];
+  d.settings = { ...(d.settings || {}), mm2Purged: true };
+  for (const k of ['mm2Off', 'adoptMeOff', 'mm2Back', 'gamesV2', 'botAutoStatusOffFix', 'adoptMeRemoved']) delete d.settings[k];
+  dirty = true;
+  console.log(`[MM2 DELETE] MM2 removed: ${items} MM2 items taken out of inventories; backup saved as backup-before-mm2-delete`);
   return d;
 }
 
@@ -490,13 +436,13 @@ async function initDb() {
     dbRev = doc && doc.rev ? doc.rev : 0;
 
     if (doc && doc.data) {
-      const d = await restoreBothGames(doc.data);
+      const d = await purgeMM2(doc.data);
       S.users = Object.assign(Object.create(null), d.users || {});
       Object.values(S.users).forEach(ensureUser);
       S.sessions = Object.assign(Object.create(null), d.sessions || {});
       S.catalog = d.catalog || [];
       S.catalog = S.catalog.filter(c => c.game !== 'ctd');
-      S.catalog.forEach(c => { if (c.game !== 'mm2') delete c.game; });
+      S.catalog.forEach(c => { delete c.game; });
       S.history = d.history || [];
       S.withdrawals = d.withdrawals || [];
       S.announcement = d.announcement || null;
@@ -509,10 +455,9 @@ async function initDb() {
       S.giveaways = Object.assign(Object.create(null), d.giveaways || {});
       S.matches = Object.assign(Object.create(null), d.matches || {});
       S.chat = Array.isArray(d.chat) ? d.chat.slice(-60) : [];
-      savedJackpots = d.jackpots || { adoptme: d.jackpot || null };
+      savedJackpot = d.jackpot || null;
       S.jpHistory = Array.isArray(d.jpHistory) ? d.jpHistory : [];
-      S.processedTrades = Array.isArray(d.processedTrades) ? d.processedTrades : [];
-      S.botWithdrawals = Array.isArray(d.botWithdrawals) ? d.botWithdrawals : [];
+      S.ipBans = Array.isArray(d.ipBans) ? d.ipBans : [];
       /* an event prize from an admin's inventory was in play when the server stopped: give it back */
       const esc = d.eventEscrow;
       if (esc && esc.item && S.users[esc.userId]) {
@@ -638,15 +583,14 @@ function ensureDefaultBot() {
 
 /* every bot is either a deposit bot (players trade pets to it) or a withdraw bot (it sends pets out) */
 const botRole = b => (b.role === 'withdraw' ? 'withdraw' : 'deposit');
-/* the bots that send withdrawals of a game; while that game has no withdraw bot, its deposit bots do it */
-function withdrawBotPool(game) {
-  const mine = S.bots.filter(b => gameOf(b) === game);
-  const w = mine.filter(b => botRole(b) === 'withdraw');
-  return w.length ? w : mine.filter(b => botRole(b) === 'deposit');
+/* the bots that send withdrawals; while no withdraw bot is set up, the deposit bots do it */
+function withdrawBotPool() {
+  const w = S.bots.filter(b => botRole(b) === 'withdraw');
+  return w.length ? w : S.bots.filter(b => botRole(b) === 'deposit');
 }
 let wdBotTurn = 0;
-function pickWithdrawBot(game) {
-  const online = withdrawBotPool(game).filter(b => b.online !== false);
+function pickWithdrawBot() {
+  const online = withdrawBotPool().filter(b => b.online !== false);
   if (!online.length) return null;
   return online[wdBotTurn++ % online.length];
 }
@@ -665,12 +609,12 @@ const publicBots = (full = false) => S.bots.map(b => {
   const name = p.username || b.username;
   return {
     id: b.id, username: full ? name : maskName(name), ...(full ? { robloxId: p.robloxId || null } : {}),
-    avatar: p.avatar || null, link: b.link, joinLink: b.link, online: b.online !== false, role: botRole(b), game: gameOf(b)
+    avatar: p.avatar || null, link: b.link, joinLink: b.link, online: b.online !== false, role: botRole(b)
   };
 });
 
 /* kept for older clients: the first bot */
-const firstBot = () => publicBots().find(b => b.role === 'deposit' && b.game === 'adoptme') || null;
+const firstBot = () => publicBots().find(b => b.role === 'deposit') || null;
 
 async function loadBotProfile(username) {
   try {
@@ -761,13 +705,22 @@ app.get('/api/whereami', async (req, res) => {
   });
 });
 
+/* banned IPs stop here (before anything else answers) */
+app.use((req, res, next) => {
+  if (!(S.ipBans || []).length || req.path === '/health') return next();
+  const ip = clientIp(req.headers, req.ip);
+  if (!ipBanned(ip) || hasStaffCookie(req.headers.cookie) || reqHasBotKey(req) || (req.query.staff && req.query.staff === staffKey())) return next();
+  if (req.path.startsWith('/api/')) return res.status(403).json({ error: 'You are banned from Pet Duel', ipBanned: true });
+  return res.status(403).type('html').send(BANNED_PAGE);
+});
+
 app.use(async (req, res, next) => {
   if (req.query.staff && req.query.staff === staffKey()) {
     res.setHeader('Set-Cookie', staffCookieHeader());
     return res.redirect('/');
   }
   if (!blockList().length || req.path === '/health' || req.path === '/api/whereami') return next();
-  if (hasStaffCookie(req.headers.cookie) || reqHasBotKey(req) || (req.headers['x-bot-secret'] && gameBotSecretOk(req))) return next();
+  if (hasStaffCookie(req.headers.cookie) || reqHasBotKey(req)) return next();
   if (await blockedCountry(req.headers, req.ip)) {
     if (req.path.startsWith('/api/')) return res.status(451).json({ error: 'Pet Duel is not available in your country' });
     return res.status(451).type('html').send(BLOCKED_PAGE);
@@ -873,12 +826,41 @@ const socketsByIp = new Map();
 const socketsByUser = new Map();
 const onlineCount = () => socketsByUser.size;
 
+/* ---------- IP bans ----------
+   Admins ban single IPs or every IP a player used (the last 10 IPs of each player are kept).
+   A banned IP gets a "banned" page / API error and cannot open a live connection. The staff link cookie and the
+   Discord bot key always get through, so an admin cannot lock themselves out. */
+const validIp = v => /^(\d{1,3}\.){3}\d{1,3}$/.test(v) || (/^[0-9a-f:]+$/i.test(v) && v.includes(':') && v.length <= 45);
+const ipBanned = ip => Boolean(ip) && (S.ipBans || []).some(b => b.ip === ip);
+const BANNED_PAGE = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pet Duel</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#101218;color:#f6f7fb;font-family:Arial,sans-serif;text-align:center;padding:20px}
+h1{font-size:34px;margin:0 0 10px}p{color:#9aa0ad;max-width:420px}</style></head>
+<body><div><h1>🚫 You are banned</h1><p>Your access to Pet Duel has been blocked. If you think this is a mistake, contact us on Discord.</p></div></body></html>`;
+
+function rememberIp(user, ip) {
+  if (!user || !ip) return;
+  const list = Array.isArray(user.ips) ? user.ips : [];
+  if (list[0] === ip) return;
+  user.ips = [ip, ...list.filter(x => x !== ip)].slice(0, 10);
+  markDirty();
+}
+
+function kickBannedIps() {
+  for (const sock of io.sockets.sockets.values()) {
+    if (ipBanned(sock._realIp) && !sock.isBot) sock.disconnect(true);
+  }
+}
+
 const socketIp = socket => {
   const xff = String(socket.handshake.headers['x-forwarded-for'] || '').split(',').map(x => x.trim()).filter(Boolean);
   return xff.length ? xff[xff.length - 1] : socket.handshake.address;
 };
 
 io.use(async (socket, next) => {
+  socket._realIp = clientIp(socket.handshake.headers, socket.handshake.address);
+  if (ipBanned(socket._realIp) && !hasStaffCookie(socket.handshake.headers.cookie) && !validBotKey(socket.handshake.auth && socket.handshake.auth.botKey)) {
+    return next(new Error('banned'));
+  }
   if (blockList().length && !hasStaffCookie(socket.handshake.headers.cookie) && !validBotKey(socket.handshake.auth && socket.handshake.auth.botKey) &&
       await blockedCountry(socket.handshake.headers, socket.handshake.address)) {
     return next(new Error('Not available in your country'));
@@ -937,6 +919,7 @@ function auth(req, res, next) {
   const user = userFromToken(tokenFromRequest(req));
   if (!user) return bad(res, 'Not logged in', 401);
   req.user = user;
+  rememberIp(user, clientIp(req.headers, req.ip));
   /* everyone has to choose a site nickname before playing (admins can still use the admin panel) */
   const path = req.originalUrl.split('?')[0];
   if (!user.nickname && !NICK_FREE.includes(path) && !(isAdmin(user) && path.startsWith('/api/admin'))) {
@@ -962,7 +945,7 @@ const maintenanceOn = () => Boolean(S.settings.maintenance);
 const MAINT_OPEN = ['/auth/', '/captcha', '/me'];
 
 app.use('/api', (req, res, next) => {
-  if (!maintenanceOn() || reqHasBotKey(req) || (req.headers['x-bot-secret'] && gameBotSecretOk(req))) return next();
+  if (!maintenanceOn() || reqHasBotKey(req)) return next();
   const user = userFromToken(tokenFromRequest(req));
   if (user && isAdmin(user)) return next();
 
@@ -1264,7 +1247,6 @@ function publicMatch(match) {
     joiner: match.opp,
     opp: match.opp,
     hostSide: match.hostSide,
-    game: gameOf(match),
     joinSide: match.hostSide === 'dog' ? 'cat' : 'dog',
     hostItems: match.hostItems.map(publicItem),
     joinerItems: match.oppItems.map(publicItem),
@@ -1296,7 +1278,7 @@ function publicMatch(match) {
 
 function publicGiveaway(g) {
   return {
-    id: g.id, host: g.host, game: gameOf(g), items: g.items.map(publicItem), value: g.value,
+    id: g.id, host: g.host, items: g.items.map(publicItem), value: g.value,
     endsAt: g.endsAt, startedAt: g.startedAt, duration: g.duration,
     minBet: g.minBet, minRank: g.minRank || '', entrantCount: g.entrants.length, entrantIds: g.entrants
   };
@@ -1314,19 +1296,13 @@ function buildState() {
     bounties: publicBounties(),
     announcement: S.announcement,
     event: publicEvent(EVENT),
-    jackpot: publicJackpot(JPS.adoptme),
-    jackpots: Object.fromEntries(GAMES.map(g => [g, publicJackpot(JPS[g])])),
+    jackpot: publicJackpot(JP),
     discord: DISCORD_INVITE,
     config: {
       range: RANGE, maxItems: MAX_ITEMS, ranks: RANKS,
       tax: Number(S.settings.taxPercent) || 0,
       captcha: { mode: TURNSTILE_SECRET && TURNSTILE_SITE_KEY ? 'turnstile' : 'builtin', siteKey: TURNSTILE_SITE_KEY },
-      robloxLogin: oauthOn(),
-      autoBot: autoDepositOn() ? DEPOSIT_BOT_NAME : '',
-      autoBotLink: autoDepositOn() ? autoBotLink() : '',
-      autoBotOnline: autoDepositOn() && autoBotOnline(),
-      adoptMeOff: adoptMeOff(),
-      mm2Off: mm2Off()
+      robloxLogin: oauthOn()
     }
   };
 }
@@ -1394,7 +1370,7 @@ app.post('/api/bot/unlink', botOnly, (req, res) => {
 function botUserView(u) {
   return {
     id: u.id, nickname: nick(u), robloxName: u.username, avatar: u.avatar || null,
-    rank: rankOf(u.totalBet), totalBet: round2(u.totalBet), totalWon: round2(u.totalWon), totalLost: round2(u.totalLost || 0), profit: round2(u.profit), gstats: u.gstats,
+    rank: rankOf(u.totalBet), totalBet: round2(u.totalBet), totalWon: round2(u.totalWon), totalLost: round2(u.totalLost || 0), profit: round2(u.profit),
     items: u.inventory.length, inventoryValue: round2(valueOf(u.inventory)),
     topPets: [...u.inventory].sort((a, b) => b.value - a.value).slice(0, 5).map(i => ({ name: i.name, age: i.age, fly: i.fly, ride: i.ride, value: i.value })),
     online: socketsByUser.has(u.id), lastSeen: u.lastSeen || 0, banned: Boolean(u.banned), muted: (u.mutedUntil || 0) > now(),
@@ -1420,10 +1396,9 @@ app.get('/api/bot/stats', botOnly, (req, res) => {
   res.json({
     online: onlineCount(), players: Object.keys(S.users).length,
     openGames: open.length, gamesValue: round2(open.reduce((t, m) => t + m.hostValue + (m.oppValue || 0), 0)),
-    jackpot: JPS.adoptme ? { state: JPS.adoptme.state, total: JPS.adoptme.total, players: JPS.adoptme.entries.length } : null,
-    jackpots: Object.fromEntries(GAMES.map(g => [g, JPS[g] ? { state: JPS[g].state, total: JPS[g].total, players: JPS[g].entries.length } : null])),
+    jackpot: JP ? { state: JP.state, total: JP.total, players: JP.entries.length } : null,
     giveaways: Object.keys(S.giveaways).length, pendingWithdrawals: S.withdrawals.filter(w => w.status === 'pending').length,
-    maintenance: maintenanceOn(), bots: publicBots(true).map(b => ({ id: b.id, username: b.username, online: b.online, role: b.role, game: b.game })),
+    maintenance: maintenanceOn(), bots: publicBots(true).map(b => ({ id: b.id, username: b.username, online: b.online, role: b.role })),
     ranks: RANKS.map(r => ({ name: r.name, min: r.min, color: r.color })),
     event: EVENT ? { type: EVENT.type, status: EVENT.status } : null
   });
@@ -1431,13 +1406,13 @@ app.get('/api/bot/stats', botOnly, (req, res) => {
 
 app.get('/api/bot/games', botOnly, (req, res) => {
   res.json({ list: Object.values(S.matches).filter(m => m.state === 'waiting').sort((a, b) => b.hostValue - a.hostValue).slice(0, 10)
-    .map(m => ({ id: m.id, game: gameOf(m), gameName: GAME_NAMES[gameOf(m)], host: nick(m.host), value: m.hostValue, pets: m.hostItems.length, maxJoin: m.maxJoin || 0 })) });
+    .map(m => ({ id: m.id, host: nick(m.host), value: m.hostValue, pets: m.hostItems.length, maxJoin: m.maxJoin || 0 })) });
 });
 
 app.get('/api/bot/withdrawals', botOnly, (req, res) => {
   res.json({ list: S.withdrawals.filter(w => w.status === 'pending').slice(0, 25).map(w => {
     const u = S.users[w.user.id];
-    return { id: w.id, game: gameOf(w), gameName: GAME_NAMES[gameOf(w)], bot: w.bot ? w.bot.username : '', nickname: nick(u || w.user), robloxName: u ? u.username : w.user.username, value: w.value, ts: w.ts,
+    return { id: w.id, nickname: nick(u || w.user), robloxName: u ? u.username : w.user.username, value: w.value, ts: w.ts,
       items: w.items.map(i => `${i.age === 'mega' ? 'Mega ' : i.age === 'neon' ? 'Neon ' : ''}${i.name}${i.fly ? ' F' : ''}${i.ride ? ' R' : ''}`) };
   }) });
 });
@@ -1445,7 +1420,7 @@ app.get('/api/bot/withdrawals', botOnly, (req, res) => {
 app.get('/api/bot/catalog', botOnly, (req, res) => {
   const q = String(req.query.q || '').toLowerCase();
   res.json({ list: S.catalog.filter(c => !q || c.name.toLowerCase().includes(q)).sort((a, b) => b.value - a.value).slice(0, 25)
-    .map(c => ({ id: c.id, game: gameOf(c), label: `${c.game === 'mm2' ? '[MM2] ' : ''}${c.age === 'mega' ? 'Mega ' : c.age === 'neon' ? 'Neon ' : ''}${c.name}${c.fly ? ' F' : ''}${c.ride ? ' R' : ''} (${c.value})` })) });
+    .map(c => ({ id: c.id, label: `${c.age === 'mega' ? 'Mega ' : c.age === 'neon' ? 'Neon ' : ''}${c.name}${c.fly ? ' F' : ''}${c.ride ? ' R' : ''} (${c.value})` })) });
 });
 
 app.post('/api/bot/say', botOnly, (req, res) => {
@@ -1489,20 +1464,19 @@ app.get('/api/profile', auth, (req, res) => {
       totalLost: round2(user.totalLost || 0),
       profit: round2(user.profit)
     },
-    gstats: user.gstats,
     rows: user.tx.slice((page - 1) * perPage, page * perPage),
     page, pages,
     /* every game result with its time, oldest first, for the profit graph (1D / 3D / 7D / 30D / All) */
-    games: user.tx.filter(t => GAME_TX.test(t.type)).map(t => ({ ts: t.ts, a: t.amount, g: t.g === 'mm2' ? 'mm2' : 'adoptme' })).reverse()
+    games: user.tx.filter(t => GAME_TX.test(t.type)).map(t => ({ ts: t.ts, a: t.amount })).reverse()
   });
 });
 
 /* profit after each of the player's last 60 games (coinflip + jackpot), oldest first, for the graph */
 const GAME_TX = /^(Coinflip|Jackpot) (Win|Loss|Tax)$/;
-function profitSeries(user, game) {
-  const games = (user.tx || []).filter(t => GAME_TX.test(t.type) && (!game || (t.g === 'mm2' ? 'mm2' : 'adoptme') === game)).slice(0, 60).reverse();
+function profitSeries(user) {
+  const games = (user.tx || []).filter(t => GAME_TX.test(t.type)).slice(0, 60).reverse();
   const recent = games.reduce((t, g) => t + Number(g.amount || 0), 0);
-  let run = round2(Number(game ? user.gstats[game].profit : user.profit || 0) - recent);
+  let run = round2(Number(user.profit || 0) - recent);
   const out = [run];
   for (const g of games) { run = round2(run + Number(g.amount || 0)); out.push(run); }
   return out;
@@ -1526,9 +1500,7 @@ app.get('/api/user/:id', (req, res) => {
       lastSeen: user.lastSeen || 0,
       owner: isAdmin(user) && user.adminTag !== false,
       support: !isAdmin(user) && user.support === true,
-      series: profitSeries(user),
-      gstats: user.gstats,
-      gseries: Object.fromEntries(GAMES.map(g => [g, profitSeries(user, g)]))
+      series: profitSeries(user)
     }
   });
 });
@@ -1637,21 +1609,20 @@ function finishMatch(match) {
 
   match.taxValue = tax.value;
 
-  const game = gameOf(match);
-  bump(host, { bet: match.hostValue }, game);
-  bump(opponent, { bet: match.oppValue }, game);
-  bump(winner, { won: round2(loserStake - tax.value), profit: round2(loserStake - tax.value) }, game);
-  bump(loser, { lost: loserStake, profit: -loserStake }, game);
+  bump(host, { bet: match.hostValue });
+  bump(opponent, { bet: match.oppValue });
+  bump(winner, { won: round2(loserStake - tax.value), profit: round2(loserStake - tax.value) });
+  bump(loser, { lost: loserStake, profit: -loserStake });
 
-  addTransaction(winner, 'Coinflip Win', match.id, round2(loserStake - tax.value), game);
+  addTransaction(winner, 'Coinflip Win', match.id, round2(loserStake - tax.value));
 
   if (tax.receiver && tax.items.length) {
-    addTransaction(winner, 'Coinflip Tax', match.id, -tax.value, game);
-    addTransaction(tax.receiver, 'Tax Received', match.id, tax.value, game);
-    notifyAdmins('tax', `💰 Tax (${GAME_NAMES[game]}): ${tax.items.length} item(s) worth ${tax.value} from a coinflip went to ${tax.receiver.username}`);
+    addTransaction(winner, 'Coinflip Tax', match.id, -tax.value);
+    addTransaction(tax.receiver, 'Tax Received', match.id, tax.value);
+    notifyAdmins('tax', `💰 Tax: ${tax.items.length} item(s) worth ${tax.value} from a coinflip went to ${tax.receiver.username}`);
     emitMe(tax.receiver);
   }
-  addTransaction(loser, 'Coinflip Loss', match.id, -loserStake, game);
+  addTransaction(loser, 'Coinflip Loss', match.id, -loserStake);
 
   S.history.unshift(publicMatch(match));
   if (S.history.length > 500) S.history.length = 500;
@@ -1662,7 +1633,6 @@ function finishMatch(match) {
     title: '🪙 Coinflip finished',
     color: 0x00efa0,
     fields: [
-      { name: 'Game', value: GAME_NAMES[game], inline: true },
       { name: 'Winner', value: clip(nick(winner), 100), inline: true },
       { name: 'Loser', value: clip(nick(loser), 100), inline: true },
       { name: 'Pot', value: String(round2(match.hostValue + match.oppValue)), inline: true },
@@ -1718,9 +1688,6 @@ app.post('/api/match/create', auth, actionLimit, (req, res) => {
   const selected = pickItems(user, uids, MAX_ITEMS);
   if (!selected) return bad(res, 'Invalid item selection');
   if (valueOf(selected) <= 0) return bad(res, 'Value too low');
-  const game = gameOfItems(selected);
-  if (gameOff(game)) return bad(res, offMsg(game));
-  if (!game) return bad(res, 'Use items of one game only (Adopt Me or MM2)');
 
   /* optional limit: how many pets the opponent may join with (empty = no limit) */
   const maxJoinRaw = Math.floor(Number(req.body.maxJoin));
@@ -1736,7 +1703,7 @@ app.post('/api/match/create', auth, actionLimit, (req, res) => {
     hostItems: items, oppItems: [],
     hostValue: valueOf(items), oppValue: 0,
     createdAt: now(), startedAt: 0, finishedAt: 0,
-    winnerSide: null, winnerId: null, maxJoin, game
+    winnerSide: null, winnerId: null, maxJoin
   };
 
   S.matches[id] = match;
@@ -1746,7 +1713,6 @@ app.post('/api/match/create', auth, actionLimit, (req, res) => {
     title: '🪙 New coinflip',
     color: 0x4da3ff,
     fields: [
-      { name: 'Game', value: GAME_NAMES[game], inline: true },
       { name: 'Host', value: clip(nick(user), 100), inline: true },
       { name: 'Value', value: String(match.hostValue), inline: true },
       { name: 'Join range', value: `${round2(match.hostValue * (1 - RANGE))} - ${round2(match.hostValue * (1 + RANGE))}`, inline: true },
@@ -1766,14 +1732,12 @@ app.post('/api/match/join', auth, actionLimit, (req, res) => {
 
   if (!match || match.state !== 'waiting') return bad(res, 'This match is no longer available');
   if (match.host.id === user.id) return bad(res, 'You cannot join your own match');
-  if (gameOff(gameOf(match))) return bad(res, offMsg(gameOf(match)));
 
   const joinLimit = match.maxJoin || MAX_ITEMS;
   if (Array.isArray(uids) && uids.length > joinLimit) return bad(res, `This game allows at most ${joinLimit} pet${joinLimit === 1 ? '' : 's'}`);
 
   const selected = pickItems(user, uids, joinLimit);
   if (!selected) return bad(res, 'Invalid item selection');
-  if (!selected.every(i => gameOf(i) === gameOf(match))) return bad(res, `This is a ${GAME_NAMES[gameOf(match)]} game: join with ${GAME_NAMES[gameOf(match)]} items only`);
 
   const value = valueOf(selected);
   const min = match.hostValue * (1 - RANGE);
@@ -1890,13 +1854,12 @@ function endGiveaway(id) {
       emitMe(host);
     } else {
       winner.inventory.push(...g.items);
-      addTransaction(winner, 'Giveaway Win', g.id, g.value, gameOf(g));
+      addTransaction(winner, 'Giveaway Win', g.id, g.value);
 
       sendWebhook(WEBHOOK_GW, {
         title: '🎉 Giveaway ended',
         color: 0xffb52e,
         fields: [
-          { name: 'Game', value: GAME_NAMES[gameOf(g)], inline: true },
           { name: 'Host', value: clip(nick(g.host), 100), inline: true },
           { name: 'Winner', value: clip(nick(winner), 100), inline: true },
           { name: 'Entrants', value: String(eligible.length), inline: true },
@@ -1938,14 +1901,11 @@ app.post('/api/giveaway/create', auth, actionLimit, (req, res) => {
 
   const picked = pickItems(user, uids, 5);
   if (!picked) return bad(res, 'Select up to 5 valid items');
-  const game = gameOfItems(picked);
-  if (!game) return bad(res, 'A giveaway can only have items of one game');
-  if (gameOff(game)) return bad(res, offMsg(game));
 
   const items = takeItems(user, uids, 5);
 
   const g = {
-    id: rid(8), host: publicUser(user), game, items, value: valueOf(items),
+    id: rid(8), host: publicUser(user), items, value: valueOf(items),
     endsAt: now() + duration * 1000,
     startedAt: now(),
     duration,
@@ -1961,7 +1921,6 @@ app.post('/api/giveaway/create', auth, actionLimit, (req, res) => {
     title: '🎁 New giveaway',
     color: 0x00efa0,
     fields: [
-      { name: 'Game', value: GAME_NAMES[game], inline: true },
       { name: 'Host', value: clip(nick(user), 100), inline: true },
       { name: 'Value', value: String(g.value), inline: true },
       { name: 'Mode', value: mode, inline: true },
@@ -2006,14 +1965,12 @@ app.post('/api/giveaway/enter', auth, actionLimit, async (req, res) => {
   if (!g || g.endsAt <= now()) return bad(res, 'Giveaway ended');
   if (g.host.id === user.id) return bad(res, 'You cannot enter your own giveaway');
   if (g.entrants.includes(user.id)) return bad(res, 'Already entered');
-  /* requirements count only the bets of this giveaway's game: MM2 bets do not unlock Adopt Me giveaways and the other way round */
-  const game = gameOf(g);
-  const wagered = user.gstats[game].bet;
+  const wagered = user.totalBet;
 
-  if (wagered < g.minBet) return bad(res, `You need ${g.minBet} total ${GAME_NAMES[game]} bet to enter`);
+  if (wagered < g.minBet) return bad(res, `You need ${g.minBet} total bet to enter`);
 
   if (g.minRank && rankIndex(g.minRank) >= 0 && rankIndex(rankOf(wagered)) < rankIndex(g.minRank)) {
-    return bad(res, `You need the ${g.minRank} rank (or higher) in ${GAME_NAMES[game]} to enter`);
+    return bad(res, `You need the ${g.minRank} rank (or higher) to enter`);
   }
 
   g.entrants.push(user.id);
@@ -2125,6 +2082,12 @@ app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
 });
 
 const UPDATE_LOG = [
+  { version: '5.0', title: 'Adopt Me only, IP bans, easier admin panel', changes: [
+    'MM2 is removed from Pet Duel; on the first start every MM2 item, catalog item, bot, game, giveaway, withdrawal and transaction is removed (a full backup is kept in the database as backup-before-mm2-delete)',
+    'IP bans: ban an IP by hand or every IP a player used with one button; banned IPs see a "You are banned" page and cannot connect',
+    'Admin panel in tabs (Overview, Users, Pets, Bots, Games); players are shown as cards like the pet catalog',
+    'Catalog: ✏️ edit button for name, picture, value, version and Fly / Ride, optionally also for the copies players own'
+  ] },
   { version: '4.6', title: 'Support: mute only', changes: [
     'Support members can only mute (up to 24 h); withdrawals are handled by admins only (site and Discord)',
     'Every Support mute / unmute shows up in the admin notification bell with who, whom, how long and the reason',
@@ -2133,18 +2096,6 @@ const UPDATE_LOG = [
     'Events: pick the prize from your own inventory (it comes back to you if nobody wins, the event is cancelled or the server restarts) or from the catalog',
     'A Christmas dog walks to the end of the typing text at the top of the site',
     'Separate withdraw bots: the admin panel has Deposit bots and Withdraw bots; each withdraw request gets an online withdraw bot that players see in their wallet'
-  ] },
-  { version: '5.0', title: 'MM2 game mode', changes: [
-    'Murder Mystery 2 next to Adopt Me: a switch at the top picks the game; coinflips, the jackpot, the inventory, deposits and withdrawals follow it',
-    'Admin: Adopt Me catalog and MM2 catalog (Add MM2 Item, game filter in the catalog browser); every deposit / withdraw bot belongs to one game',
-    'One jackpot per game with its own history; coinflips can only be joined with items of the same game',
-    'Stats and profit are kept per game (profile and player card have Adopt Me / MM2 tabs); the total still decides the rank',
-    'Giveaways belong to one game and only that game\'s bets count for their requirements (MM2 bets do not unlock Adopt Me giveaways)',
-    'Withdraw requests are per game: the admin list, the bell and the Discord bot show the game and the bot',
-    'Adopt Me is back on; MM2 is switched off and removed from the site (MM2 items stay saved). Admins can switch each game on or off',
-    'MM2 bot: one deposit session lasts an hour and stays open after a trade (trade again in the same server); no codes shown; the bot is set offline automatically when it stops sending its heartbeat; catalog items can be edited (✏️)',
-    'MM2 automatic deposits: Deposit > MM2 opens a 15 minute session, the in-game bot (iemre547) accepts the trade and the items appear in the inventory by themselves',
-    'Adopt Me and MM2 are both back after the short MM2-only time: Adopt Me pets, catalog, bots and stats come from the backup, MM2 items and the MM2 catalog are kept'
   ] },
   { version: '4.5', title: 'Support team and amvgg values', changes: [
     'Support role: admins give / remove it in the admin panel. Support members get a blue SUPPORT tag and a Support Panel (mark withdrawals as sent, mute up to 24 h)',
@@ -2399,36 +2350,31 @@ const JP_MAX_PLAYERS = 25;
 const JP_MAX_JOIN_ITEMS = 20;
 const JP_MAX_USER_ITEMS = 40;
 
-/* one jackpot round per game */
-const JPS = { adoptme: null, mm2: null };
-const jpTimers = { adoptme: [], mm2: [] };
-let savedJackpots = {};
+let JP = null;
+let jpTimers = [];
+let savedJackpot = null;
 
-/* after a restart: continue the saved rounds (their result is fixed by their seed, so nothing changes) */
+/* after a restart: continue the saved round (its result is fixed by its seed, so nothing changes) */
 function resumeJackpot() {
-  for (const game of GAMES) resumeJackpotOf(game, savedJackpots[game]);
-  savedJackpots = {};
-}
+  const j = savedJackpot;
+  savedJackpot = null;
+  if (!j || !Array.isArray(j.entries) || !j.entries.length || j.state === 'finished') return newJackpot();
 
-function resumeJackpotOf(game, j) {
-  if (!j || !Array.isArray(j.entries) || !j.entries.length || j.state === 'finished') return newJackpot(game);
-
-  jpTimers[game].forEach(clearTimeout);
-  jpTimers[game] = [];
+  jpTimers.forEach(clearTimeout);
+  jpTimers = [];
   j.winner = null;
-  j.game = game;
-  JPS[game] = j;
+  JP = j;
   jpRecalc(j);
 
   if (j.state === 'countdown') {
     const left = Math.max(3000, Number(j.endsAt || 0) - now());
     j.endsAt = now() + left;
-    jpLater(j, () => rollJackpot(j), left);
+    jpLater(() => rollJackpot(j), left);
   } else if (j.state === 'rolling') {
     /* roll again: same seed, same winner, the wheel animation plays once more */
     j.state = 'countdown';
     j.endsAt = now() + 3000;
-    jpLater(j, () => rollJackpot(j), 3000);
+    jpLater(() => rollJackpot(j), 3000);
   } else {
     j.state = 'waiting';
   }
@@ -2436,14 +2382,13 @@ function resumeJackpotOf(game, j) {
   emitJackpot(j);
 }
 
-function jpLater(j, fn, ms) { jpTimers[j.game].push(setTimeout(fn, ms)); }
+function jpLater(fn, ms) { jpTimers.push(setTimeout(fn, ms)); }
 
 function publicJackpot(j) {
   if (!j) return null;
 
   const out = {
     id: j.id,
-    game: j.game,
     state: j.state,
     hash: j.hash,
     entries: j.entries.map(e => ({ user: e.user, value: e.value, items: e.items.map(publicItem) })),
@@ -2464,18 +2409,18 @@ function publicJackpot(j) {
 
 function emitJackpot(j) { io.emit('jackpot:update', publicJackpot(j)); }
 
-function newJackpot(game) {
-  jpTimers[game].forEach(clearTimeout);
-  jpTimers[game] = [];
+function newJackpot() {
+  jpTimers.forEach(clearTimeout);
+  jpTimers = [];
 
   const seed = rid(32);
   const j = {
-    id: rid(8), game, state: 'waiting', seed, hash: sha(seed),
+    id: rid(8), state: 'waiting', seed, hash: sha(seed),
     entries: [], total: 0, endsAt: 0, rollEndsAt: 0,
     winnerId: null, roll: null, winner: null
   };
 
-  JPS[game] = j;
+  JP = j;
   emitJackpot(j);
 }
 
@@ -2485,7 +2430,7 @@ function jpRecalc(j) {
 }
 
 function rollJackpot(j) {
-  if (JPS[j.game] !== j || j.state !== 'countdown') return;
+  if (JP !== j || j.state !== 'countdown') return;
 
   const digest = crypto.createHmac('sha256', j.seed).update(j.id).digest('hex');
   j.roll = parseInt(digest.slice(0, 8), 16) / 0x100000000;
@@ -2503,11 +2448,11 @@ function rollJackpot(j) {
   j.rollEndsAt = now() + JP_ROLL_MS;
   emitJackpot(j);
 
-  jpLater(j, () => finishJackpot(j), JP_ROLL_MS);
+  jpLater(() => finishJackpot(j), JP_ROLL_MS);
 }
 
 function finishJackpot(j) {
-  if (JPS[j.game] !== j || j.state !== 'rolling') return;
+  if (JP !== j || j.state !== 'rolling') return;
 
   const winEntry = j.winner;
   const winner = S.users[winEntry.user.id];
@@ -2518,7 +2463,7 @@ function finishJackpot(j) {
 
   /* public history: who won, how much, with what chance, and the seed to verify it */
   S.jpHistory.unshift({
-    id: j.id, game: j.game, total: j.total, finishedAt: now(),
+    id: j.id, total: j.total, finishedAt: now(),
     winner: winEntry.user, winnerValue: winEntry.value,
     chance: j.total ? round2((winEntry.value / j.total) * 100) : 0,
     players: j.entries.map(e => ({ user: e.user, value: e.value, items: e.items.length, top: topImage(e.items) })),
@@ -2533,15 +2478,15 @@ function finishJackpot(j) {
     const u = S.users[e.user.id];
     if (!u) continue;
 
-    bump(u, { bet: e.value }, j.game);
+    bump(u, { bet: e.value });
 
     if (e === winEntry) {
       const gain = round2(j.total - e.value);
-      bump(u, { won: gain, profit: gain }, j.game);
-      addTransaction(u, 'Jackpot Win', j.id, gain, j.game);
+      bump(u, { won: gain, profit: gain });
+      addTransaction(u, 'Jackpot Win', j.id, gain);
     } else {
-      bump(u, { lost: e.value, profit: -e.value }, j.game);
-      addTransaction(u, 'Jackpot Loss', j.id, -e.value, j.game);
+      bump(u, { lost: e.value, profit: -e.value });
+      addTransaction(u, 'Jackpot Loss', j.id, -e.value);
     }
 
     emitMe(u);
@@ -2559,7 +2504,6 @@ function finishJackpot(j) {
     title: '💣 Jackpot finished',
     color: 0xff5968,
     fields: [
-      { name: 'Game', value: GAME_NAMES[j.game], inline: true },
       { name: 'Winner', value: clip(nick(winEntry.user), 100), inline: true },
       { name: 'Pot', value: String(j.total), inline: true },
       { name: 'Chance', value: `${round2((winEntry.value / j.total) * 100)}%`, inline: true },
@@ -2570,18 +2514,16 @@ function finishJackpot(j) {
   }, { thumb: winEntry.user, author: winEntry.user, image: topImage(j.entries.flatMap(e => e.items)) });
 
   emitJackpot(j);
-  jpLater(j, () => newJackpot(j.game), JP_RESULT_MS);
+  jpLater(() => newJackpot(), JP_RESULT_MS);
 }
 
 app.get('/api/jackpot/history', (req, res) => {
-  const game = req.query.game ? cleanGame(req.query.game) : null;
-  res.json({ list: S.jpHistory.filter(r => !game || cleanGame(r.game) === game).slice(0, 50) });
+  res.json({ list: S.jpHistory.slice(0, 50) });
 });
 
 app.post('/api/jackpot/join', auth, actionLimit, (req, res) => {
   const user = req.user;
-  const j = JPS[cleanGame(req.body.game)];
-  if (gameOff(req.body.game)) return bad(res, offMsg(req.body.game));
+  const j = JP;
 
   if (!j || (j.state !== 'waiting' && j.state !== 'countdown')) {
     return bad(res, 'This round is already rolling. Join the next round.');
@@ -2592,7 +2534,6 @@ app.post('/api/jackpot/join', auth, actionLimit, (req, res) => {
 
   if (!selected) return bad(res, `Select 1–${JP_MAX_JOIN_ITEMS} valid items`);
   if (valueOf(selected) <= 0) return bad(res, 'Value too low');
-  if (!selected.every(i => gameOf(i) === j.game)) return bad(res, `This is the ${GAME_NAMES[j.game]} jackpot: use ${GAME_NAMES[j.game]} items only`);
 
   let entry = j.entries.find(e => e.user.id === user.id);
 
@@ -2612,7 +2553,7 @@ app.post('/api/jackpot/join', auth, actionLimit, (req, res) => {
   if (j.state === 'waiting' && j.entries.length >= 2) {
     j.state = 'countdown';
     j.endsAt = now() + JP_TIME * 1000;
-    jpLater(j, () => rollJackpot(j), JP_TIME * 1000);
+    jpLater(() => rollJackpot(j), JP_TIME * 1000);
   }
 
   emitJackpot(j);
@@ -2622,7 +2563,7 @@ app.post('/api/jackpot/join', auth, actionLimit, (req, res) => {
 
 /* a lone player can take their items back while nobody else has joined */
 app.post('/api/jackpot/leave', auth, actionLimit, (req, res) => {
-  const j = JPS[cleanGame(req.body.game)];
+  const j = JP;
 
   if (!j || j.state !== 'waiting') return bad(res, 'You can only leave while waiting for a second player');
 
@@ -2678,15 +2619,10 @@ app.post('/api/withdraw', auth, actionLimit, (req, res) => {
   const user = req.user;
   const uids = selectionToUids(req.body);
 
-  /* one request = one game; it is sent by an online withdraw bot of that game */
-  const chosen = pickItems(user, uids, 50);
-  if (!chosen) return bad(res, 'Invalid item selection');
-  const game = gameOfItems(chosen);
-  if (!game) return bad(res, 'Withdraw items of one game at a time (Adopt Me or MM2)');
-  if (gameOff(game)) return bad(res, offMsg(game));
-  const wdBot = pickWithdrawBot(game);
+  /* pets can only be sent while at least one withdraw bot is online */
+  const wdBot = pickWithdrawBot();
   if (!wdBot) {
-    return bad(res, `${GAME_NAMES[game]} withdrawals are paused while our ${GAME_NAMES[game]} withdraw bots are offline. Please try again when a bot is back online.`);
+    return bad(res, 'Withdrawals are paused while our withdraw bots are offline. Please try again when a bot is back online.');
   }
 
   const open = S.withdrawals.filter(w => w.user.id === user.id && w.status === 'pending');
@@ -2701,26 +2637,23 @@ app.post('/api/withdraw', auth, actionLimit, (req, res) => {
     items,
     value: valueOf(items),
     status: 'pending',
-    game,
     bot: { id: wdBot.id, username: wdBot.username },
     ts: now()
   };
 
   S.withdrawals.unshift(request);
-  notifyAdmins('withdraw', `[${GAME_NAMES[game]}] ${user.username} requested a withdraw worth ${request.value} (${items.length} item${items.length === 1 ? '' : 's'}, bot ${wdBot.username})`);
+  notifyAdmins('withdraw', `${user.username} requested a withdraw worth ${request.value}`);
   sendWebhook(WEBHOOK_WD, {
-    title: `📤 ${GAME_NAMES[game]} withdraw request`,
+    title: '📤 Withdraw request',
     color: 0xffb52e,
     fields: [
-      { name: 'Game', value: GAME_NAMES[game], inline: true },
-      { name: 'Bot', value: clip(wdBot.username, 100), inline: true },
       { name: 'Player', value: clip(nick(user), 100), inline: true },
       { name: 'Value', value: String(request.value), inline: true },
       { name: `Pets (${items.length})`, value: itemLine(items) }
     ],
     timestamp: new Date().toISOString()
   }, { thumb: user, author: user, image: topImage(items), data: { withdrawId: request.id } });
-  addTransaction(user, 'Withdraw Request', request.id, -request.value, game);
+  addTransaction(user, 'Withdraw Request', request.id, -request.value);
   emitMe(user);
 
   res.json({
@@ -2736,7 +2669,7 @@ app.get('/api/withdrawals', auth, (req, res) => {
   mine.sort((a, b) => (Number(b.status === 'pending') - Number(a.status === 'pending')) || b.ts - a.ts);
   res.json({
     list: mine.map(w => ({
-      id: w.id, game: gameOf(w), status: w.status, value: w.value, ts: w.ts, doneAt: w.doneAt || 0,
+      id: w.id, status: w.status, value: w.value, ts: w.ts, doneAt: w.doneAt || 0,
       bot: w.status === 'pending' ? publicWdBot(w.bot) : null,
       items: w.items.map(publicItem)
     }))
@@ -3155,7 +3088,6 @@ function cleanItem(body) {
   if (!/^https:\/\/[^\s"'<>]{4,400}$/.test(image)) return null;
   if (!Number.isFinite(value) || value < 0 || value > 1e9) return null;
 
-  if (body.game === 'mm2') return { name, image, value, age: 'normal', fly: false, ride: false, game: 'mm2' };
   return {
     name, image, value,
     age: ['normal', 'neon', 'mega'].includes(body.age) ? body.age : 'normal',
@@ -3176,9 +3108,9 @@ app.post('/api/admin/bots/add', auth, adminOnly, async (req, res) => {
   if (!validBotName(username)) return bad(res, 'Enter a valid Roblox username');
   if (!validBotLink(link)) return bad(res, 'The join link must be a https://www.roblox.com/... link');
   if (S.bots.length >= 20) return bad(res, 'You can add at most 20 bots');
-  if (S.bots.some(b => b.username.toLowerCase() === username.toLowerCase() && gameOf(b) === cleanGame(req.body.game) && botRole(b) === (req.body.role === 'withdraw' ? 'withdraw' : 'deposit'))) return bad(res, 'This bot is already in the list');
+  if (S.bots.some(b => b.username.toLowerCase() === username.toLowerCase())) return bad(res, 'This bot is already in the list');
 
-  const b = { id: rid(6), username, link, online: req.body.online !== false, role: req.body.role === 'withdraw' ? 'withdraw' : 'deposit', ...(req.body.game === 'mm2' ? { game: 'mm2' } : {}) };
+  const b = { id: rid(6), username, link, online: req.body.online !== false, role: req.body.role === 'withdraw' ? 'withdraw' : 'deposit' };
   S.bots.push(b);
   markDirty();
   await loadBotProfile(username);
@@ -3191,7 +3123,6 @@ app.post('/api/admin/bots/update', auth, adminOnly, (req, res) => {
   if (!b) return bad(res, 'Bot not found', 404);
   if (req.body.online !== undefined) b.online = Boolean(req.body.online);
   if (req.body.role === 'deposit' || req.body.role === 'withdraw') b.role = req.body.role;
-  if (req.body.game === 'mm2') b.game = 'mm2'; else if (req.body.game === 'adoptme') delete b.game;
   if (req.body.link !== undefined) {
     const link = String(req.body.link || '').trim();
     if (!validBotLink(link)) return bad(res, 'The join link must be a https://www.roblox.com/... link');
@@ -3556,7 +3487,7 @@ app.post('/api/admin/values/import', auth, adminOnly, async (req, res) => {
   let data;
   try { data = await loadElve(true); } catch (error) { return bad(res, error.message, 502); }
   const onlyNormal = req.body.mode === 'normal';
-  const have = new Map(S.catalog.filter(c => gameOf(c) === 'adoptme').map(c => [`${normName(c.name)}|${c.age || 'normal'}|${Boolean(c.fly)}|${Boolean(c.ride)}`, c]));
+  const have = new Map(S.catalog.map(c => [`${normName(c.name)}|${c.age || 'normal'}|${Boolean(c.fly)}|${Boolean(c.ride)}`, c]));
   let added = 0, skipped = 0, updated = 0, noImage = 0;
   for (const pet of data.pets) {
     if (!/^https:\/\//.test(pet.image)) { noImage++; continue; }
@@ -3638,8 +3569,11 @@ app.get('/api/admin/data', auth, adminOnly, (req, res) => {
       isAdmin: isAdmin(u),
       support: u.support === true,
       adminTag: isAdmin(u) && u.adminTag !== false,
-      muted: (u.mutedUntil || 0) > now()
+      muted: (u.mutedUntil || 0) > now(),
+      avatar: u.avatar || null, rank: rankOf(u.totalBet),
+      ips: u.ips || [], ipBanned: (u.ips || []).some(ip => ipBanned(ip))
     })),
+    ipBans: S.ipBans || [],
     withdrawals: S.withdrawals.filter(w => w.status === 'pending').map(w => ({ ...w, botName: w.bot ? (publicWdBot(w.bot, true) || {}).username : '' })),
     bounties: publicBounties(),
     settings: S.settings,
@@ -3666,8 +3600,7 @@ function markWithdrawSent(w, by) {
   const owner = S.users[w.user.id];
   if (owner) emitMe(owner);
   const n = w.items.length;
-  const what = gameOf(w) === 'mm2' ? `MM2 item${n === 1 ? '' : 's'}` : `pet${n === 1 ? '' : 's'}`;
-  systemChat(`${nick(owner || w.user)} successfully withdrew ${n} ${what} worth ${Number(w.value).toLocaleString('en-US')}! 🎉`, { withdraw: true });
+  systemChat(`${nick(owner || w.user)} successfully withdrew ${n} pet${n === 1 ? '' : 's'} worth ${Number(w.value).toLocaleString('en-US')}! 🎉`, { withdraw: true });
 }
 
 app.post('/api/admin/withdraw/done', auth, adminOnly, (req, res) => {
@@ -3880,6 +3813,50 @@ app.post('/api/admin/mute', auth, adminOnly, (req, res) => {
   res.json({ ok: true });
 });
 
+/* ban IPs: { ip } for one address, or { userId } for every IP that player used (the account is banned too) */
+app.post('/api/admin/ipban', auth, adminOnly, (req, res) => {
+  const reason = String(req.body.reason || '').trim().slice(0, 120);
+  let ips = [], user = null;
+  if (req.body.userId) {
+    user = S.users[String(req.body.userId)];
+    if (!user) return bad(res, 'User not found', 404);
+    if (isAdmin(user)) return bad(res, 'You cannot IP ban an admin');
+    ips = (user.ips || []).slice();
+    if (!ips.length) return bad(res, 'No IP is known for this player yet (they have to use the site once after this update)');
+  } else {
+    const ip = String(req.body.ip || '').trim();
+    if (!validIp(ip)) return bad(res, 'Enter a valid IP address');
+    const own = clientIp(req.headers, req.ip);
+    if (ip === own) return bad(res, 'That is your own IP');
+    ips = [ip];
+  }
+  S.ipBans = S.ipBans || [];
+  let added = 0;
+  for (const ip of ips) {
+    if (S.ipBans.some(b => b.ip === ip)) continue;
+    S.ipBans.unshift({ ip, reason, by: req.user.username, user: user ? (user.nickname || user.username) : '', userId: user ? user.id : '', ts: now() });
+    added++;
+  }
+  if (user && !user.banned) {
+    user.banned = true;
+    for (const [key, session] of Object.entries(S.sessions)) if (session.userId === user.id) delete S.sessions[key];
+  }
+  markDirty();
+  kickBannedIps();
+  console.log(`[ADMIN] ${req.user.username} IP banned ${ips.join(', ')}${user ? ` (${user.username})` : ''}`);
+  res.json({ ok: true, added, ips });
+});
+
+app.post('/api/admin/ipunban', auth, adminOnly, (req, res) => {
+  const ip = String(req.body.ip || '').trim();
+  const before = (S.ipBans || []).length;
+  S.ipBans = (S.ipBans || []).filter(b => b.ip !== ip);
+  if (S.ipBans.length === before) return bad(res, 'This IP is not banned');
+  markDirty();
+  console.log(`[ADMIN] ${req.user.username} removed the IP ban of ${ip}`);
+  res.json({ ok: true });
+});
+
 app.post('/api/admin/ban', auth, adminOnly, (req, res) => {
   const user = S.users[String(req.body.id || '')];
   if (!user) return bad(res, 'User not found', 404);
@@ -3910,24 +3887,6 @@ app.post('/api/admin/ban', auth, adminOnly, (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/admin/mm2', auth, adminOnly, (req, res) => {
-  S.settings.mm2Off = req.body.off !== false;
-  markDirty();
-  stateCache.t = 0;
-  io.emit('adoptme:update', {});
-  console.log(`[ADMIN] ${req.user.username} turned MM2 ${S.settings.mm2Off ? 'off' : 'on'}`);
-  res.json({ ok: true, off: S.settings.mm2Off });
-});
-
-app.post('/api/admin/adoptme', auth, adminOnly, (req, res) => {
-  S.settings.adoptMeOff = req.body.off !== false;
-  markDirty();
-  stateCache.t = 0;
-  io.emit('adoptme:update', { off: S.settings.adoptMeOff });
-  console.log(`[ADMIN] ${req.user.username} turned Adopt Me ${S.settings.adoptMeOff ? 'off' : 'on'}`);
-  res.json({ ok: true, off: S.settings.adoptMeOff });
-});
-
 app.post('/api/admin/announce', auth, adminOnly, (req, res) => {
   const title = String(req.body.title || '').trim().slice(0, 60);
   const text = String(req.body.text || '').trim().slice(0, 300);
@@ -3956,11 +3915,6 @@ app.post('/api/admin/announce', auth, adminOnly, (req, res) => {
 app.post('/api/admin/catalog', auth, adminOnly, (req, res) => {
   const item = cleanItem(req.body);
   if (!item) return bad(res, 'Invalid item. Image must be a valid https:// URL.');
-  /* MM2: the same name again only updates its value and picture */
-  if (item.game === 'mm2') {
-    const same = S.catalog.find(c => c.game === 'mm2' && c.name.toLowerCase() === item.name.toLowerCase());
-    if (same) { same.value = item.value; same.image = item.image; markDirty(); return res.json({ ok: true, item: same, updated: true }); }
-  }
   item.id = rid(8);
   S.catalog.push(item);
   markDirty();
@@ -3975,7 +3929,7 @@ app.post('/api/admin/catalog/bulk', auth, adminOnly, (req, res) => {
   const name = String(req.body.name || '').trim();
   let image = String(req.body.image || '').trim();
   if (!image) {
-    const known = S.catalog.find(c => gameOf(c) === 'adoptme' && c.name.toLowerCase() === name.toLowerCase());
+    const known = S.catalog.find(c => c.name.toLowerCase() === name.toLowerCase());
     if (known) image = known.image;
   }
 
@@ -3988,7 +3942,7 @@ app.post('/api/admin/catalog/bulk', auth, adminOnly, (req, res) => {
 
   let added = 0, updated = 0;
   for (const item of items) {
-    const existing = S.catalog.find(c => gameOf(c) === 'adoptme' && c.name.toLowerCase() === item.name.toLowerCase() &&
+    const existing = S.catalog.find(c => c.name.toLowerCase() === item.name.toLowerCase() &&
       c.age === item.age && Boolean(c.fly) === item.fly && Boolean(c.ride) === item.ride);
     if (existing) {
       existing.value = item.value;
@@ -4004,7 +3958,7 @@ app.post('/api/admin/catalog/bulk', auth, adminOnly, (req, res) => {
   res.json({ ok: true, added, updated });
 });
 
-/* change a catalog item: only the value (the box on the card) or everything (the edit window) */
+/* change a catalog item: the value (box on the card) or everything (the ✏️ edit window) */
 app.post('/api/admin/catalog/update', auth, adminOnly, (req, res) => {
   const item = S.catalog.find(x => x.id === req.body.id);
   const value = round2(Number(req.body.value));
@@ -4016,11 +3970,9 @@ app.post('/api/admin/catalog/update', auth, adminOnly, (req, res) => {
     if (!/^https:\/\/[^\s"'<>]{4,400}$/.test(image)) return bad(res, 'The image must be a https:// link');
     item.name = name;
     item.image = image;
-    if (item.game !== 'mm2') {
-      item.age = ['normal', 'neon', 'mega'].includes(req.body.age) ? req.body.age : 'normal';
-      item.fly = Boolean(req.body.fly);
-      item.ride = Boolean(req.body.ride);
-    }
+    item.age = ['normal', 'neon', 'mega'].includes(req.body.age) ? req.body.age : 'normal';
+    item.fly = Boolean(req.body.fly);
+    item.ride = Boolean(req.body.ride);
   }
   item.value = value;
   /* optional: the same change for the copies players already own */
@@ -4030,15 +3982,13 @@ app.post('/api/admin/catalog/update', auth, adminOnly, (req, res) => {
       let hit = false;
       for (const i of u.inventory) {
         if (i.catalogId !== item.id) continue;
-        i.name = item.name; i.image = item.image; i.value = item.value;
-        if (item.game !== 'mm2') { i.age = item.age; i.fly = item.fly; i.ride = item.ride; }
+        Object.assign(i, { name: item.name, image: item.image, value: item.value, age: item.age, fly: item.fly, ride: item.ride });
         changed++; hit = true;
       }
       if (hit) emitMe(u);
     }
   }
   markDirty();
-  console.log(`[ADMIN] ${req.user.username} edited catalog item ${item.id} (${item.name})${changed ? `, ${changed} owned copies updated` : ''}`);
   res.json({ ok: true, item, changed });
 });
 
@@ -4079,23 +4029,6 @@ function adminUI() {
     <div class="modal wide">
       <div class="mh"><h3>🛠 Admin Panel</h3><button class="x" id="adm-x">✕</button></div>
 
-      <div style="margin-bottom:16px;padding:14px;border-radius:12px;border:1px solid #343842;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <img src="/assets/xmas-dog.png" alt="" style="width:28px;height:28px;object-fit:contain">
-        <b style="font-size:15px">Adopt Me</b>
-        <span id="am-state" style="font-weight:800"></span>
-        <span style="flex:1"></span>
-        <button id="am-toggle" class="btn sm"></button>
-        <p class="hint" style="margin:0;width:100%">While Adopt Me is disabled the site opens on MM2, Adopt Me shows "Currently disabled" and no Adopt Me coinflip, jackpot, giveaway or withdraw can be started.</p>
-      </div>
-      <div style="margin-bottom:16px;padding:14px;border-radius:12px;border:1px solid #343842;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <img src="/assets/mm2-knife.png" alt="" style="width:28px;height:28px;object-fit:contain">
-        <b style="font-size:15px">MM2</b>
-        <span id="mm-state" style="font-weight:800"></span>
-        <span style="flex:1"></span>
-        <button id="mm-toggle" class="btn sm"></button>
-        <p class="hint" style="margin:0;width:100%">While MM2 is off it is removed from the site: no MM2 menu, deposit, withdraw, coinflip, jackpot or giveaway, and the MM2 bot is told not to trade. MM2 items stay saved in the players' inventories and come back when MM2 is turned on again.</p>
-      </div>
-
       <div id="mt-box" style="margin-bottom:16px;padding:14px;border-radius:12px;border:1px solid #343842">
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
           <b style="font-size:15px">🔒 Maintenance mode</b>
@@ -4126,7 +4059,7 @@ function adminUI() {
 
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">
         <div style="background:#f5faff;padding:14px;border-radius:12px;grid-column:1 / -1">
-          <h4 style="margin-bottom:10px">➕ Add Adopt Me Pet</h4>
+          <h4 style="margin-bottom:10px">➕ Add Pet</h4>
           <div style="display:grid;grid-template-columns:1fr 1fr 70px;gap:8px;align-items:center;margin-bottom:8px">
             <input id="a-name" class="in" list="a-names" autocomplete="off" placeholder="Pet name (e.g. Shadow Dragon)">
             <input id="a-img" class="in" placeholder="Image URL (https://...), filled automatically if known">
@@ -4157,19 +4090,6 @@ function adminUI() {
           </details>
         </div>
 
-        <div style="background:#f5faff;padding:14px;border-radius:12px;border:1px solid #5a4122">
-          <h4 style="margin-bottom:10px;display:flex;align-items:center;gap:8px"><img src="/assets/mm2-knife.png" alt="" style="width:26px;height:26px;object-fit:contain">Add MM2 Item</h4>
-          <input id="m-name" class="in" list="m-names" autocomplete="off" style="width:100%;margin-bottom:8px" placeholder="Item name (e.g. Chroma Fang)">
-          <datalist id="m-names"></datalist>
-          <div style="display:grid;grid-template-columns:1fr 64px;gap:8px;align-items:center;margin-bottom:8px">
-            <input id="m-img" class="in" placeholder="Image URL (https://...)">
-            <img id="m-prev" alt="" style="width:56px;height:56px;object-fit:contain;justify-self:center;visibility:hidden">
-          </div>
-          <input id="m-val" class="in" type="number" min="0" step="0.01" style="width:100%;margin-bottom:8px" placeholder="Value (site scale, e.g. 5000)">
-          <button id="m-add" class="btn" style="width:100%">Add / update MM2 item</button>
-          <p class="hint">MM2 items have no Neon / Mega / Fly / Ride. Typing an MM2 item that is already in the catalog fills its picture and value; adding it again only updates them. MM2 items can only be played, withdrawn and given away with other MM2 items.</p>
-        </div>
-
         <div style="background:#f5faff;padding:14px;border-radius:12px">
           <h4 style="margin-bottom:10px">🎁 Give Items</h4>
           <input id="g-user" list="g-users" class="in" style="width:100%;margin-bottom:8px" placeholder="Nickname or Roblox username">
@@ -4182,25 +4102,23 @@ function adminUI() {
       <h4 style="margin:16px 0 8px">📥 Deposit bots</h4>
       <div style="background:#f5faff;padding:14px;border-radius:12px">
         <div id="bot-list" data-role="deposit" style="margin-bottom:10px"></div>
-        <div style="display:grid;grid-template-columns:auto 1fr 2fr auto;gap:8px">
-          <select id="bot-game" class="in"><option value="adoptme">Adopt Me</option><option value="mm2">MM2</option></select>
+        <div style="display:grid;grid-template-columns:1fr 2fr auto;gap:8px">
           <input id="bot-name" class="in" maxlength="20" placeholder="Deposit bot Roblox username">
           <input id="bot-link" class="in" placeholder="Join link (https://www.roblox.com/share?...)">
           <button id="bot-add" class="btn">Add deposit bot</button>
         </div>
-        <p class="hint">Players trade their pets / items to these bots. Pick the game of each bot: players choose Adopt Me or MM2 in the Deposit window and only see that game's bots. Players cannot join an offline bot.</p>
+        <p class="hint">Players trade their pets to these bots. They are shown in the Deposit window with their status. Players cannot join an offline bot.</p>
       </div>
 
       <h4 style="margin:16px 0 8px">📤 Withdraw bots</h4>
       <div style="background:#f5faff;padding:14px;border-radius:12px">
         <div id="wbot-list" data-role="withdraw" style="margin-bottom:10px"></div>
-        <div style="display:grid;grid-template-columns:auto 1fr 2fr auto;gap:8px">
-          <select id="wbot-game" class="in"><option value="adoptme">Adopt Me</option><option value="mm2">MM2</option></select>
+        <div style="display:grid;grid-template-columns:1fr 2fr auto;gap:8px">
           <input id="wbot-name" class="in" maxlength="20" placeholder="Withdraw bot Roblox username">
           <input id="wbot-link" class="in" placeholder="Join link (https://www.roblox.com/share?...)">
           <button id="wbot-add" class="btn">Add withdraw bot</button>
         </div>
-        <p class="hint">These bots send the pets out. Every withdraw request gets one online withdraw bot (in turns); the player sees its name and private server in the wallet. Withdrawals are paused while every withdraw bot is offline. Every game has its own withdraw bots; while a game has no withdraw bot, its deposit bots handle its withdrawals.</p>
+        <p class="hint">These bots send the pets out. Every withdraw request gets one online withdraw bot (in turns); the player sees its name and private server in the wallet. Withdrawals are paused while every withdraw bot is offline. While no withdraw bot is added, the deposit bots handle withdrawals.</p>
       </div>
 
       <h4 style="margin:16px 0 8px">💰 Coinflip tax</h4>
@@ -4280,6 +4198,39 @@ function adminUI() {
         @keyframes cat-in { from { opacity: 0; transform: translateY(14px) scale(.95); } }
         .cat-edit { position: fixed; inset: 0; z-index: 10050; display: grid; place-items: center; padding: 16px; background: rgba(5, 6, 10, .7); }
         .cat-edit-card { width: min(440px, 100%); max-height: 90vh; overflow-y: auto; padding: 18px; border: 1px solid #343842; border-radius: 14px; background: #171a22; box-shadow: 0 30px 80px #000c; }
+        /* tabs */
+        .adm-tabs { position: sticky; top: -1px; z-index: 5; display: flex; gap: 6px; margin: 0 0 14px; padding: 8px 0; overflow-x: auto; background: inherit; }
+        .adm-tabs button { flex: none; padding: 9px 14px; border: 1px solid #343842; border-radius: 10px; color: #9aa0ad; background: #1d212b; font: inherit; font-weight: 800; cursor: pointer; transition: .15s; }
+        .adm-tabs button:hover { color: #fff; }
+        .adm-tabs button.on { border-color: #00efa0; color: #04120b; background: #00efa0; }
+        .adm-tabs button .n { margin-left: 6px; padding: 1px 6px; border-radius: 99px; background: #ff5968; color: #fff; font-size: 11px; }
+        .adm-tab[hidden] { display: none !important; }
+        /* users as cards */
+        .u-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+        .u-card { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid #2f3442; border-radius: 12px; background: #171a22; animation: cat-in .3s cubic-bezier(.2, .8, .2, 1) both; transition: border-color .15s; }
+        .u-card:hover { border-color: #00efa0; }
+        .u-card.is-banned { border-color: #5c2a30; background: #1e1518; }
+        .u-top { display: flex; align-items: center; gap: 10px; }
+        .u-av { position: relative; flex: none; width: 44px; height: 44px; }
+        .u-av img, .u-av span { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; object-fit: cover; background: #262b36; color: #fff; font-weight: 900; }
+        .u-av i { position: absolute; right: -1px; bottom: -1px; width: 12px; height: 12px; border: 2px solid #171a22; border-radius: 50%; background: #5a5f6b; }
+        .u-av i.on { background: #22c55e; }
+        .u-id { min-width: 0; }
+        .u-id b { display: block; overflow: hidden; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+        .u-id small { color: #8d909a; font-size: 12px; }
+        .u-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+        .u-tag { padding: 2px 7px; border-radius: 6px; background: #22262f; color: #cfd2db; font-size: 11px; font-weight: 800; }
+        .u-tag.owner { background: rgba(192, 132, 252, .15); color: #c084fc; }
+        .u-tag.sup { background: rgba(77, 163, 255, .15); color: #4da3ff; }
+        .u-tag.ban { background: rgba(255, 89, 104, .15); color: #ff5968; }
+        .u-tag.mute { background: rgba(255, 181, 46, .15); color: #ffb52e; }
+        .u-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+        .u-stats div { padding: 6px 8px; border-radius: 8px; background: #1d212b; }
+        .u-stats small { display: block; color: #8d909a; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+        .u-stats b { font-size: 14px; }
+        .u-acts { display: flex; flex-wrap: wrap; gap: 5px; }
+        .u-acts .btn { flex: 1 1 auto; }
+        .u-ips { color: #6b7180; font-family: monospace; font-size: 11px; word-break: break-all; }
         .ev-src { display: flex; gap: 6px; margin-bottom: 8px; }
         .ev-src button { flex: 1; padding: 8px; border: 1px solid #343842; border-radius: 10px; background: #1d212b; color: #9aa0ad; font: inherit; font-weight: 800; cursor: pointer; transition: .15s; }
         .ev-src button.on { border-color: #00efa0; background: rgba(0, 239, 160, .12); color: #00efa0; }
@@ -4296,7 +4247,6 @@ function adminUI() {
           <div class="cat-top">
             <h3>📦 Catalog <small id="cat-shown" class="hint"></small></h3>
             <input id="cat-q" class="in" placeholder="Search pet name..." autocomplete="off" style="flex:1;min-width:200px;max-width:360px">
-            <select id="cat-game" class="in"><option value="">All games</option><option value="adoptme">Adopt Me</option><option value="mm2">MM2</option></select>
             <select id="cat-age" class="in"><option value="">All versions</option><option value="normal">Normal</option><option value="neon">Neon</option><option value="mega">Mega</option></select>
             <select id="cat-sort" class="in"><option value="value">Value: high to low</option><option value="value-asc">Value: low to high</option><option value="name">Name A-Z</option></select>
             <button id="cat-x" class="x">✕</button>
@@ -4317,12 +4267,58 @@ function adminUI() {
       <div id="adm-inv"></div>
       <div id="adm-stats"></div>
 
+      <h4 style="margin:16px 0 8px">🚫 IP bans</h4>
+      <div style="padding:14px;border-radius:12px;border:1px solid #343842">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <input id="ip-addr" class="in" placeholder="IP address (e.g. 85.105.12.34)" style="flex:1;min-width:180px">
+          <input id="ip-why" class="in" placeholder="Reason (optional)" maxlength="120" style="flex:1;min-width:160px">
+          <button id="ip-add" class="btn red">Ban IP</button>
+        </div>
+        <div id="ip-list"></div>
+        <p class="hint" style="margin:8px 0 0">Banned IPs see a "You are banned" page and cannot use the site. The <b>IP ban</b> button on a player card bans every IP that player used and their account. Your staff link always gets you in.</p>
+      </div>
+
       <h4 style="margin:16px 0 8px">📋 Update log</h4>
       <div id="adm-log"></div>
     </div>`;
 
   document.body.appendChild(overlay);
   const $ = id => document.getElementById(id);
+
+  /* tabs: every section of the panel goes into one tab, so only one group is on screen at a time */
+  (function makeTabs() {
+    const modal = overlay.querySelector('.modal');
+    const head = modal.querySelector('.mh');
+    const TABS = [['overview', '🏠 Overview'], ['users', '👥 Users'], ['pets', '🐾 Pets'], ['bots', '🤖 Bots'], ['games', '🎲 Games']];
+    const byTitle = [['Pending Withdrawals', 'overview'], ['Deposit bots', 'bots'], ['Withdraw bots', 'bots'], ['Coinflip tax', 'games'], ['Bounty', 'games'],
+      ['Events', 'games'], ['Announcement', 'overview'], ['Catalog', 'pets'], ['Users', 'users'], ['IP bans', 'users'], ['Update log', 'overview']];
+    const boxes = Object.fromEntries(TABS.map(([k]) => { const d = document.createElement('div'); d.className = 'adm-tab'; d.dataset.tab = k; return [k, d]; }));
+    let cur = 'overview';
+    for (const el of [...modal.children]) {
+      if (el === head || el.tagName === 'STYLE' || el.id === 'cat-panel') continue;
+      if (el.tagName === 'H4') {
+        const hit = byTitle.find(([t]) => el.textContent.includes(t));
+        if (hit) cur = hit[1];
+      } else if (el.querySelector && el.querySelector('#a-name')) cur = 'pets';
+      boxes[cur].appendChild(el);
+    }
+    const bar = document.createElement('div');
+    bar.className = 'adm-tabs';
+    bar.innerHTML = TABS.map(([k, label]) => `<button data-tab="${k}">${label}${k === 'overview' ? '<span class="n" id="tab-wd" hidden></span>' : ''}</button>`).join('');
+    head.after(bar);
+    let last = bar;
+    for (const [k] of TABS) { last.after(boxes[k]); last = boxes[k]; }
+    const show = k => {
+      for (const [t] of TABS) boxes[t].hidden = t !== k;
+      bar.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.tab === k));
+      try { localStorage.setItem('pd_admin_tab', k); } catch {}
+      modal.scrollTop = 0; overlay.scrollTop = 0;
+    };
+    bar.onclick = e => { const b = e.target.closest('[data-tab]'); if (b) show(b.dataset.tab); };
+    let start = 'overview';
+    try { start = localStorage.getItem('pd_admin_tab') || 'overview'; } catch {}
+    show(boxes[start] ? start : 'overview');
+  })();
 
   $('adm-x').onclick = () => overlay.remove();
   $('u-q').oninput = () => renderUsers();
@@ -4339,7 +4335,6 @@ function adminUI() {
   catPanel.addEventListener('mousedown', e => { if (e.target === catPanel) catPanel.classList.remove('open'); });
   $('cat-q').oninput = () => catRender();
   $('cat-age').onchange = () => catRender();
-  $('cat-game').onchange = () => catRender();
   $('cat-sort').onchange = () => catRender();
   const varKey = (age, fly, ride) => `${age}-${fly && ride ? 'fr' : fly ? 'f' : ride ? 'r' : 'none'}`;
   const setPreview = () => {
@@ -4348,26 +4343,6 @@ function adminUI() {
     else { $('a-prev').removeAttribute('src'); $('a-prev').style.visibility = 'hidden'; }
   };
   $('a-img').oninput = setPreview;
-  const setMPreview = () => {
-    const v = $('m-img').value.trim();
-    if (/^https:\/\//.test(v)) { $('m-prev').src = v; $('m-prev').style.visibility = 'visible'; }
-    else { $('m-prev').removeAttribute('src'); $('m-prev').style.visibility = 'hidden'; }
-  };
-  $('m-img').oninput = setMPreview;
-  $('m-name').onchange = () => {
-    const same = catalogCache.find(c => c.game === 'mm2' && c.name.toLowerCase() === $('m-name').value.trim().toLowerCase());
-    if (!same) return;
-    if (!$('m-img').value.trim()) { $('m-img').value = same.image; setMPreview(); }
-    if ($('m-val').value === '') $('m-val').value = same.value;
-  };
-  $('m-add').onclick = async () => {
-    try {
-      const r = await api('/api/admin/catalog', { method: 'POST', body: { game: 'mm2', name: $('m-name').value, image: $('m-img').value, value: $('m-val').value } });
-      toast(r.updated ? 'MM2 item updated' : 'MM2 item added', 'ok');
-      $('m-name').value = ''; $('m-img').value = ''; $('m-val').value = ''; setMPreview();
-      await load();
-    } catch (err) { toast(err.message, 'err'); }
-  };
 
   /* typing a pet that is already in the catalog fills its picture and current values */
   $('a-name').onchange = () => {
@@ -4385,12 +4360,13 @@ function adminUI() {
   async function load() {
     const data = await api('/api/admin/data');
 
+    const tw = $('tab-wd');
+    if (tw) { tw.hidden = !data.withdrawals.length; tw.textContent = data.withdrawals.length; }
     $('adm-wd').innerHTML = data.withdrawals.length
       ? data.withdrawals.map(w => `
         <div style="border:1px solid #343842;border-radius:8px;padding:10px;margin-bottom:8px">
           <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap">
             <b>${esc(w.user.username)}</b>
-            <span style="padding:1px 7px;border-radius:5px;font-size:11px;font-weight:900;${w.game === 'mm2' ? 'background:rgba(255,160,40,.15);color:#ffb547' : 'background:rgba(0,239,160,.12);color:#00efa0'}">${w.game === 'mm2' ? 'MM2' : 'ADOPT ME'}</span>
             ${w.botName ? `<span style="color:#4da3ff;font-weight:800">🤖 ${esc(w.botName)}</span>` : ''}
             <span>${fmt(w.value)} · ${new Date(w.ts).toLocaleString()}</span>
             <span>
@@ -4409,7 +4385,7 @@ function adminUI() {
         <div style="border:2px solid #e0edfb;border-radius:12px;padding:10px;text-align:center">
           <img src="${esc(item.image)}" alt="" style="width:70px;height:70px;object-fit:contain">
           <div style="font-weight:700">${esc(item.name)}</div>
-          ${item.game === 'mm2' ? '<span style="display:inline-block;padding:1px 6px;border-radius:5px;background:rgba(255,160,40,.15);color:#ffb547;font-size:10px;font-weight:900">MM2</span>' : tags(item)}
+          ${tags(item)}
           <input class="in" type="number" min="0" step="0.01" value="${esc(item.value)}" data-value-id="${esc(item.id)}" style="width:100%;margin:8px 0">
           <div style="display:flex;gap:5px">
             <button class="btn mint sm" data-action="give" data-id="${esc(item.id)}" style="flex:1">Give</button>
@@ -4422,10 +4398,9 @@ function adminUI() {
     catRender = () => {
       const q = $('cat-q').value.trim().toLowerCase();
       const age = $('cat-age').value;
-      const cg = $('cat-game').value;
       const sort = $('cat-sort').value;
       const list = data.catalog
-        .filter(i => (!q || i.name.toLowerCase().includes(q)) && (!age || (i.age || 'normal') === age) && (!cg || (i.game === 'mm2' ? 'mm2' : 'adoptme') === cg))
+        .filter(i => (!q || i.name.toLowerCase().includes(q)) && (!age || (i.age || 'normal') === age))
         .sort((a, b) => sort === 'name' ? a.name.localeCompare(b.name) : sort === 'value-asc' ? a.value - b.value : b.value - a.value);
       $('cat-shown').textContent = `${list.length} / ${data.catalog.length}`;
       $('adm-cat').innerHTML = list.length
@@ -4436,15 +4411,15 @@ function adminUI() {
     catRender();
 
     catalogCache = data.catalog || [];
-    $('a-names').innerHTML = [...new Set(catalogCache.filter(c => c.game !== 'mm2').map(c => c.name))].map(n => `<option value="${esc(n)}"></option>`).join('');
-    $('m-names').innerHTML = [...new Set(catalogCache.filter(c => c.game === 'mm2').map(c => c.name))].map(n => `<option value="${esc(n)}"></option>`).join('');
+    $('a-names').innerHTML = [...new Set(catalogCache.map(c => c.name))].map(n => `<option value="${esc(n)}"></option>`).join('');
     usersCache = data.users;
     renderUsers();
+    renderIpBans(data.ipBans || []);
     $('g-users').innerHTML = data.users.map(u => `<option value="${esc(u.username)}"></option>`).join('');
 
     const prevItem = $('ev-item').value;
     $('ev-item').innerHTML = data.catalog.length
-      ? data.catalog.map(i => `<option value="${esc(i.id)}">${i.game === 'mm2' ? '[MM2] ' : ''}${esc(i.name)} (${fmt(i.value)})</option>`).join('')
+      ? data.catalog.map(i => `<option value="${esc(i.id)}">${esc(i.name)} (${fmt(i.value)})</option>`).join('')
       : '<option value="">No catalog items</option>';
     if (prevItem) $('ev-item').value = prevItem;
 
@@ -4460,9 +4435,6 @@ function adminUI() {
     if (document.activeElement !== $('cb-list')) $('cb-list').value = data.blockCountries || '';
     renderBlock(data.blockCountries || '', data.blockEnv || '', data.staffLink || '');
     mtOn = Boolean(data.maintenance);
-    amOff = Boolean(data.settings && data.settings.adoptMeOff === true);
-    mmOff = Boolean(data.settings && data.settings.mm2Off === true);
-    renderMm();
     if (document.activeElement !== $('mt-text')) $('mt-text').value = data.maintenanceText || '';
     renderMaint();
     $('e-src').value = data.elveUrl || '';
@@ -4528,38 +4500,8 @@ function adminUI() {
   $('cb-off').onclick = () => saveBlock('');
 
   let mtOn = false;
-  let amOff = true, mmOff = false;
-  function renderMm() {
-    $('mm-state').textContent = mmOff ? '● Off (removed from the site)' : '● On';
-    $('mm-state').style.color = mmOff ? '#ff5968' : '#00efa0';
-    $('mm-toggle').textContent = mmOff ? 'Turn MM2 on' : 'Turn MM2 off';
-    $('mm-toggle').className = mmOff ? 'btn sm' : 'btn red sm';
-  }
-  $('mm-toggle').onclick = async () => {
-    try {
-      const r = await api('/api/admin/mm2', { method: 'POST', body: { off: !mmOff } });
-      mmOff = r.off;
-      renderMm();
-      toast(mmOff ? 'MM2 turned off' : 'MM2 turned on', 'ok');
-    } catch (err) { toast(err.message, 'err'); }
-  };
-  function renderAm() {
-    $('am-state').textContent = amOff ? '● Currently disabled' : '● Enabled';
-    $('am-state').style.color = amOff ? '#ff5968' : '#00efa0';
-    $('am-toggle').textContent = amOff ? 'Enable Adopt Me' : 'Disable Adopt Me';
-    $('am-toggle').className = amOff ? 'btn sm' : 'btn red sm';
-  }
-  $('am-toggle').onclick = async () => {
-    try {
-      const r = await api('/api/admin/adoptme', { method: 'POST', body: { off: !amOff } });
-      amOff = r.off;
-      renderAm();
-      toast(amOff ? 'Adopt Me disabled' : 'Adopt Me enabled', 'ok');
-    } catch (err) { toast(err.message, 'err'); }
-  };
   function renderMaint() {
     $('mt-state').textContent = mtOn ? '● ON: the site is closed' : '● OFF: the site is open';
-    renderAm();
     $('mt-state').style.color = mtOn ? '#ff5968' : '#00efa0';
     $('mt-box').style.borderColor = mtOn ? '#ff5968' : '#343842';
     $('mt-toggle').textContent = mtOn ? 'Open the site' : 'Close the site';
@@ -4583,7 +4525,6 @@ function adminUI() {
       ? bots.map(b => `
         <div style="display:flex;align-items:center;gap:10px;padding:8px;border-bottom:1px solid #e0edfb;flex-wrap:wrap">
           ${b.avatar ? `<img src="${esc(b.avatar)}" alt="" style="width:32px;height:32px;border-radius:50%">` : ''}
-          <select class="in" data-bot-game="${esc(b.id)}" style="height:30px;padding:0 6px;width:auto">${['adoptme', 'mm2'].map(g => `<option value="${g}" ${(b.game || 'adoptme') === g ? 'selected' : ''}>${g === 'mm2' ? 'MM2' : 'Adopt Me'}</option>`).join('')}</select>
           <b style="min-width:110px">${esc(b.username)}</b>
           <span style="color:${b.online ? '#00efa0' : '#ff5968'};font-weight:800">● ${b.online ? 'Online' : 'Offline'}</span>
           <input class="in" data-bot-link="${esc(b.id)}" value="${esc(b.link)}" style="flex:1;min-width:180px">
@@ -4596,7 +4537,7 @@ function adminUI() {
 
   const addBot = async (role, pre) => {
     try {
-      const r = await api('/api/admin/bots/add', { method: 'POST', body: { username: $(pre + '-name').value, link: $(pre + '-link').value, role, game: $(pre + '-game').value } });
+      const r = await api('/api/admin/bots/add', { method: 'POST', body: { username: $(pre + '-name').value, link: $(pre + '-link').value, role } });
       $(pre + '-name').value = ''; $(pre + '-link').value = '';
       renderBots(r.bots);
       toast(role === 'withdraw' ? 'Withdraw bot added' : 'Deposit bot added', 'ok');
@@ -4624,15 +4565,6 @@ function adminUI() {
 
   $('bot-list').onclick = $('wbot-list').onclick = botListClick;
   $('bot-list').onchange = $('wbot-list').onchange = async e => {
-    const gsel = e.target.closest('[data-bot-game]');
-    if (gsel) {
-      try {
-        const r = await api('/api/admin/bots/update', { method: 'POST', body: { id: gsel.dataset.botGame, game: gsel.value } });
-        renderBots(r.bots);
-        toast('Bot game: ' + (gsel.value === 'mm2' ? 'MM2' : 'Adopt Me'), 'ok');
-      } catch (err) { toast(err.message, 'err'); }
-      return;
-    }
     const input = e.target.closest('[data-bot-link]');
     if (!input) return;
     try {
@@ -4732,24 +4664,23 @@ function adminUI() {
   /* the edit window of one catalog item */
   function editCatalogItem(c) {
     if (!c) return;
-    const am = c.game !== 'mm2';
     const box = document.createElement('div');
     box.className = 'cat-edit';
     box.innerHTML = `
       <div class="cat-edit-card">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
           <img id="ce-prev" src="${esc(c.image)}" alt="" style="width:64px;height:64px;object-fit:contain">
-          <div style="flex:1"><b style="font-size:17px">Edit catalog item</b><div class="hint" style="margin:2px 0 0">${am ? 'Adopt Me' : 'MM2'} · id ${esc(c.id)}</div></div>
+          <div style="flex:1"><b style="font-size:17px">Edit pet</b><div class="hint" style="margin:2px 0 0">id ${esc(c.id)}</div></div>
           <button class="btn gray sm" data-ce="x">✕</button>
         </div>
         <label class="hint">Name</label><input class="in" id="ce-name" maxlength="40" value="${esc(c.name)}" style="width:100%;margin-bottom:8px">
         <label class="hint">Image URL</label><input class="in" id="ce-img" value="${esc(c.image)}" style="width:100%;margin-bottom:8px">
         <label class="hint">Value</label><input class="in" id="ce-val" type="number" min="0" step="0.01" value="${esc(c.value)}" style="width:100%;margin-bottom:8px">
-        ${am ? `<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
           <select class="in" id="ce-age">${['normal', 'neon', 'mega'].map(a => `<option value="${a}" ${(c.age || 'normal') === a ? 'selected' : ''}>${a[0].toUpperCase() + a.slice(1)}</option>`).join('')}</select>
           <label><input type="checkbox" id="ce-fly" ${c.fly ? 'checked' : ''}> Fly</label>
           <label><input type="checkbox" id="ce-ride" ${c.ride ? 'checked' : ''}> Ride</label>
-        </div>` : ''}
+        </div>
         <label style="display:flex;gap:8px;align-items:center;margin:6px 0 12px"><input type="checkbox" id="ce-own"> Also change the copies players already own</label>
         <div style="display:flex;gap:8px"><button class="btn" data-ce="save" style="flex:1">Save</button><button class="btn gray" data-ce="x">Cancel</button></div>
       </div>`;
@@ -4760,8 +4691,11 @@ function adminUI() {
       if (e.target === box || (b && b.dataset.ce === 'x')) return box.remove();
       if (!b) return;
       try {
-        const body = { id: c.id, name: box.querySelector('#ce-name').value, image: box.querySelector('#ce-img').value, value: box.querySelector('#ce-val').value, applyToOwned: box.querySelector('#ce-own').checked };
-        if (am) { body.age = box.querySelector('#ce-age').value; body.fly = box.querySelector('#ce-fly').checked; body.ride = box.querySelector('#ce-ride').checked; }
+        const body = {
+          id: c.id, name: box.querySelector('#ce-name').value, image: box.querySelector('#ce-img').value, value: box.querySelector('#ce-val').value,
+          age: box.querySelector('#ce-age').value, fly: box.querySelector('#ce-fly').checked, ride: box.querySelector('#ce-ride').checked,
+          applyToOwned: box.querySelector('#ce-own').checked
+        };
         const r = await api('/api/admin/catalog/update', { method: 'POST', body });
         toast(r.changed ? `Saved, ${r.changed} owned copies updated` : 'Saved', 'ok');
         box.remove();
@@ -4806,6 +4740,42 @@ function adminUI() {
       });
       toast('Catalog value updated', 'ok');
     } catch (err) { toast(err.message, 'err'); await load(); }
+  };
+
+  $('adm-users').addEventListener('click', async e => {
+    const b = e.target.closest('[data-ipban]');
+    if (!b) return;
+    e.stopImmediatePropagation();
+    const ok = await confirmBox({ title: 'IP ban ' + b.dataset.name, text: b.dataset.ips ? `Ban these IPs and the account: ${b.dataset.ips}?` : 'No IP is known for this player yet. The account will not be IP banned.', ok: 'IP ban', danger: true });
+    if (!ok) return;
+    try {
+      const r = await api('/api/admin/ipban', { method: 'POST', body: { userId: b.dataset.ipban } });
+      toast(`${r.ips.length} IP${r.ips.length === 1 ? '' : 's'} banned`, 'ok');
+      await load();
+    } catch (err) { toast(err.message, 'err'); }
+  }, true);
+
+  function renderIpBans(list) {
+    $('ip-list').innerHTML = list.length ? list.map(b => `
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid #2a2e39;flex-wrap:wrap">
+        <code style="font-weight:800">${esc(b.ip)}</code>
+        <span class="hint" style="margin:0;flex:1">${b.user ? esc(b.user) + ' · ' : ''}${b.reason ? esc(b.reason) + ' · ' : ''}by ${esc(b.by)} · ${esc(ago(b.ts))}</span>
+        <button class="btn sm mint" data-ipunban="${esc(b.ip)}">Unban</button>
+      </div>`).join('') : '<p class="hint" style="margin:0">No banned IPs.</p>';
+  }
+  $('ip-add').onclick = async () => {
+    try {
+      await api('/api/admin/ipban', { method: 'POST', body: { ip: $('ip-addr').value, reason: $('ip-why').value } });
+      $('ip-addr').value = ''; $('ip-why').value = '';
+      toast('IP banned', 'ok');
+      await load();
+    } catch (err) { toast(err.message, 'err'); }
+  };
+  $('ip-list').onclick = async e => {
+    const b = e.target.closest('[data-ipunban]');
+    if (!b) return;
+    try { await api('/api/admin/ipunban', { method: 'POST', body: { ip: b.dataset.ipunban } }); toast('IP unbanned', 'ok'); await load(); }
+    catch (err) { toast(err.message, 'err'); }
   };
 
   $('adm-users').onclick = async e => {
@@ -4948,26 +4918,38 @@ function adminUI() {
     $('u-count').textContent = `${list.length} shown · ${online} online · ${usersCache.length} total`;
 
     $('adm-users').innerHTML = list.length
-      ? list.slice(0, 100).map(u => `
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px;border-bottom:1px solid #e0edfb;flex-wrap:wrap">
-          <span style="display:flex;align-items:center;gap:8px;min-width:150px">
-            <i style="width:9px;height:9px;border-radius:50%;background:${u.online ? '#22c55e' : '#8b93a3'};display:inline-block"></i>
-            <b>${u.nickname ? esc(u.nickname) : '<i style="color:#ffb52e">no nickname</i>'}${u.banned ? ' (banned)' : ''}${u.muted ? ' (muted)' : ''}</b>
-            <small style="color:#8d909a">Roblox: ${esc(u.username)}</small>
-            <small>${u.online ? 'online' : esc(ago(u.lastSeen))}</small>
-          </span>
-          <span>${u.items} items · ${fmt(u.value)} · bet ${fmt(u.totalBet)}</span>
-          <span style="display:flex;gap:6px;flex-wrap:wrap">
-            ${!u.isAdmin ? `<button class="btn sm gray" data-mute="${esc(u.id)}" data-state="${u.muted ? '0' : '1'}">${u.muted ? 'Unmute' : 'Mute'}</button>` : ''}
-            <button class="btn sm gray" data-inv="${esc(u.id)}">Items</button>
-            ${u.items ? `<button class="btn sm red" data-clearinv="${esc(u.id)}" data-name="${esc(u.nickname || u.username)}" data-count="${u.items}" data-val="${esc(fmt(u.value))}">Delete all pets</button>` : ''}
-            <button class="btn sm gray" data-stats="${esc(u.id)}">Stats</button>
+      ? `<div class="u-grid">${list.slice(0, 120).map((u, k) => `
+        <div class="u-card ${u.banned ? 'is-banned' : ''}" style="animation-delay:${Math.min(k, 24) * 18}ms">
+          <div class="u-top">
+            <div class="u-av">${u.avatar ? `<img src="${esc(u.avatar)}" alt="">` : `<span>${esc((u.nickname || u.username).charAt(0).toUpperCase())}</span>`}<i class="${u.online ? 'on' : ''}"></i></div>
+            <div class="u-id">
+              <b>${u.nickname ? esc(u.nickname) : '<i style="color:#ffb52e">no nickname</i>'}</b>
+              <small>@${esc(u.username)} · ${u.online ? '<span style="color:#22c55e">online</span>' : esc(ago(u.lastSeen))}</small>
+            </div>
+          </div>
+          <div class="u-tags">
+            ${u.isAdmin ? '<span class="u-tag owner">Owner</span>' : ''}${u.support ? '<span class="u-tag sup">Support</span>' : ''}
+            ${u.banned ? '<span class="u-tag ban">Banned</span>' : ''}${u.ipBanned ? '<span class="u-tag ban">IP banned</span>' : ''}${u.muted ? '<span class="u-tag mute">Muted</span>' : ''}
+            <span class="u-tag">${esc(u.rank || '')}</span>
+          </div>
+          <div class="u-stats">
+            <div><small>Items</small><b>${u.items}</b></div>
+            <div><small>Value</small><b>${fmt(u.value)}</b></div>
+            <div><small>Bet</small><b>${fmt(u.totalBet)}</b></div>
+          </div>
+          <div class="u-acts">
+            <button class="btn sm gray" data-inv="${esc(u.id)}">🎒 Items</button>
+            <button class="btn sm gray" data-stats="${esc(u.id)}">📊 Stats</button>
+            ${!u.isAdmin ? `<button class="btn sm gray" data-mute="${esc(u.id)}" data-state="${u.muted ? '0' : '1'}">${u.muted ? '🔊 Unmute' : '🔇 Mute'}</button>` : ''}
+            ${!u.isAdmin ? `<button class="btn sm ${u.support ? 'mint' : 'gray'}" data-support="${esc(u.id)}" data-state="${u.support ? '0' : '1'}">${u.support ? '🎧 Support ✓' : '🎧 Support'}</button>` : ''}
             ${u.isAdmin ? `<button class="btn sm gray" data-tag="${esc(u.id)}" data-state="${u.adminTag ? '0' : '1'}">Tag: ${u.adminTag ? 'ON' : 'OFF'}</button>` : ''}
-            ${!u.isAdmin ? `<button class="btn sm ${u.support ? 'mint' : 'gray'}" data-support="${esc(u.id)}" data-state="${u.support ? '0' : '1'}">${u.support ? 'Support ✓' : 'Make support'}</button>` : ''}
-            <button class="btn sm gray" data-role="${esc(u.id)}" data-state="${u.isAdmin ? '0' : '1'}">${u.isAdmin ? 'Remove admin' : 'Make admin'}</button>
-            <button class="btn sm ${u.banned ? 'mint' : 'red'}" data-ban="${esc(u.id)}" data-state="${u.banned ? '0' : '1'}">${u.banned ? 'Unban' : 'Ban'}</button>
-          </span>
-        </div>`).join('') + (list.length > 100 ? '<p class="hint">Showing the first 100. Use the search to narrow it down.</p>' : '')
+            <button class="btn sm gray" data-role="${esc(u.id)}" data-state="${u.isAdmin ? '0' : '1'}">${u.isAdmin ? 'Remove admin' : '👑 Admin'}</button>
+            ${u.items ? `<button class="btn sm red" data-clearinv="${esc(u.id)}" data-name="${esc(u.nickname || u.username)}" data-count="${u.items}" data-val="${esc(fmt(u.value))}">🗑 Pets</button>` : ''}
+            <button class="btn sm ${u.banned ? 'mint' : 'red'}" data-ban="${esc(u.id)}" data-state="${u.banned ? '0' : '1'}">${u.banned ? 'Unban' : '⛔ Ban'}</button>
+            ${!u.isAdmin && !u.ipBanned ? `<button class="btn sm red" data-ipban="${esc(u.id)}" data-name="${esc(u.nickname || u.username)}" data-ips="${esc((u.ips || []).join(', '))}">🚫 IP ban</button>` : ''}
+          </div>
+          ${u.ips && u.ips.length ? `<div class="u-ips" title="Last IPs">IP: ${u.ips.slice(0, 3).map(esc).join(', ')}${u.ips.length > 3 ? ` +${u.ips.length - 3}` : ''}</div>` : ''}
+        </div>`).join('')}</div>` + (list.length > 120 ? '<p class="hint">Showing the first 120. Use the search to narrow it down.</p>' : '')
       : '<p class="hint">No users match.</p>';
   }
 
@@ -5327,9 +5309,8 @@ function auditItems() {
     if (m.state === 'finished') continue;
     [...m.hostItems, ...m.oppItems].forEach(i => add(i.uid, `match ${m.id}`, false));
   }
-  for (const w of S.botWithdrawals) if (w.status === 'pending') w.items.forEach(i => add(i.uid, `bot withdraw ${w.id}`, false));
 
-  for (const J of Object.values(JPS)) if (J && J.state !== 'finished') J.entries.forEach(e => e.items.forEach(i => add(i.uid, `jackpot ${J.id}`, false)));
+  if (JP && JP.state !== 'finished') JP.entries.forEach(e => e.items.forEach(i => add(i.uid, `jackpot ${JP.id}`, false)));
 
   for (const g of Object.values(S.giveaways)) g.items.forEach(i => add(i.uid, `giveaway ${g.id}`, false));
   for (const w of S.withdrawals) {
@@ -5382,367 +5363,12 @@ app.use((err, req, res, next) => {
 process.on('unhandledRejection', err => console.error('Unhandled rejection:', err && err.message ? err.message : err));
 process.on('uncaughtException', err => console.error('Uncaught exception:', err && err.stack ? err.stack : err));
 
-/* ================= MM2 AUTO DEPOSIT (in-game bot) =================
-   1. The player presses Deposit (MM2): POST /api/deposit/init opens a 15 minute session for their Roblox name.
-   2. The in-game bot gets a trade request and asks GET /api/bot/verify-player/:robloxUsername (header x-bot-secret).
-   3. After the trade the bot sends POST /api/bot/confirm-deposit { tradeId, robloxUsername, items: [{ name, amount }] }.
-      Every item is matched by name with the MM2 catalog and added to the player's inventory (MongoDB, like every
-      other item). Each tradeId is handled only once (409 on repeats, also after a restart).
-   4. The deposit window polls GET /api/deposit/status every 2 seconds and shows the new items.
-   Railway variables: BOT_SECRET_KEY (required, same value in the bot), DEPOSIT_BOT_NAME (optional, default iemre547). */
-
-const DEPOSIT_BOT_NAME = String(E.DEPOSIT_BOT_NAME || 'iemre547').trim();
-const DEPOSIT_SESSION_MS = 60 * 60 * 1000;   /* one hour, renewed after every deposit: trade again and again in the same server */
-const DEPOSIT_GRACE_MS = 10 * 60 * 1000;   /* a trade started just before the end can still be confirmed */
-const activeSessions = new Map();          /* robloxUsername (trim, lower case) -> { robloxUsername, userId, verificationCode, expiresAt, startedAt } */
-const processedTrades = new Set();         /* filled from S.processedTrades at start */
-const sessionKey = name => String(name || '').trim().toLowerCase();
-const autoDepositOn = () => Boolean(E.BOT_SECRET_KEY);
-
-/* MM2: one bot does deposits and withdrawals. Its private server link is the link of the MM2 bot in the admin
-   panel with the same name (any role), or else the first online MM2 bot. */
-function autoBotLink() {
-  const mm = S.bots.filter(b => b.game === 'mm2' && b.link);
-  const same = mm.find(b => b.username.toLowerCase() === DEPOSIT_BOT_NAME.toLowerCase());
-  const pick = same || mm.find(b => b.online !== false);
-  return pick ? pick.link : '';
-}
-
-/* The in-game bot is online while it keeps talking to the site: POST /api/bot/heartbeat every ~15 seconds
-   (every verify / confirm counts too). No sign of life for 45 seconds, or { status: "offline" }: offline.
-   Then MM2 deposits and withdrawals are paused and the MM2 bot in the admin list shows Offline. */
-const BOT_TIMEOUT_MS = 45 * 1000;
-let botLastSeen = 0, botForcedOff = false, botWasOnline = null;
-/* automatic detection is turned off for now (BOT_AUTO_STATUS = false): the MM2 bot's Online / Offline switch in the
-   admin panel decides. Turn it back on with BOT_AUTO_STATUS = true. */
-const BOT_AUTO_STATUS = false;
-const manualBotOnline = () => {
-  const b = S.bots.find(x => x.game === 'mm2' && x.username.toLowerCase() === DEPOSIT_BOT_NAME.toLowerCase());
-  return b ? b.online !== false : true;
-};
-const autoBotOnline = () => BOT_AUTO_STATUS ? (!botForcedOff && now() - botLastSeen < BOT_TIMEOUT_MS) : manualBotOnline();
-function botAlive() { botLastSeen = now(); botForcedOff = false; syncBotOnline(); }
-function syncBotOnline() {
-  if (!BOT_AUTO_STATUS) return;
-  const on = autoBotOnline();
-  if (on === botWasOnline) return;
-  botWasOnline = on;
-  let touched = false;
-  for (const b of S.bots) if (b.game === 'mm2' && b.username.toLowerCase() === DEPOSIT_BOT_NAME.toLowerCase() && (b.online !== false) !== on) { b.online = on; touched = true; }
-  if (touched) { markDirty(); emitBots(); }
-  stateCache.t = 0;
-  io.emit('autobot:status', { online: on });
-  console.log(`[BOT] ${DEPOSIT_BOT_NAME} is ${on ? 'online' : 'offline'}`);
-}
-setInterval(syncBotOnline, 5000);
-
-function gameBotSecretOk(req) {
-  const key = String(E.BOT_SECRET_KEY || '');
-  const got = String(req.headers['x-bot-secret'] || '');
-  if (!key || !got) return false;
-  return crypto.timingSafeEqual(crypto.createHash('sha256').update(got).digest(), crypto.createHash('sha256').update(key).digest());
-}
-
-function gameBotOnly(req, res, next) {
-  if (!autoDepositOn()) return bad(res, 'BOT_SECRET_KEY is not set on the server', 503);
-  if (!gameBotSecretOk(req)) return bad(res, 'Forbidden', 403);
-  if (req.path !== '/api/bot/heartbeat') botAlive();
-  next();
-}
-
-app.post('/api/bot/heartbeat', gameBotOnly, (req, res) => {
-  if (String(req.body.status || '').toLowerCase() === 'offline') { botForcedOff = true; botLastSeen = 0; syncBotOnline(); }
-  else botAlive();
-  res.json({ ok: true, online: autoBotOnline() });
-});
-
-/* the player's MM2 items, newest deposits first */
-const mm2Inventory = user => user.inventory.filter(i => i.game === 'mm2').map(i => ({
-  id: i.uid, name: i.name, amount: 1, value: i.value, image: i.image, depositedAt: i.depositedAt || 0
-})).sort((a, b) => b.depositedAt - a.depositedAt);
-
-function sessionView(sess) {
-  return sess ? { botUsername: DEPOSIT_BOT_NAME, verificationCode: sess.verificationCode, expiresAt: sess.expiresAt, startedAt: sess.startedAt } : null;
-}
-
-setInterval(() => {
-  const t = now();
-  for (const [k, sess] of activeSessions) if (sess.expiresAt + DEPOSIT_GRACE_MS < t) activeSessions.delete(k);
-}, 60 * 1000);
-
-/* the player starts a deposit (always for the Roblox account they are logged in with) */
-app.post('/api/deposit/init', auth, actionLimit, (req, res) => {
-  if (mm2Off()) return bad(res, offMsg('mm2'));
-  if (!autoDepositOn()) return bad(res, 'Automatic deposits are not set up yet', 503);
-  if (!autoBotOnline()) return bad(res, 'The MM2 bot is offline right now. Please try again in a few minutes.', 409);
-  const user = req.user;
-  const asked = String(req.body.robloxUsername || '').trim();
-  if (asked && sessionKey(asked) !== sessionKey(user.username)) return bad(res, `You can only deposit from your own Roblox account (${user.username})`);
-  const key = sessionKey(user.username);
-  const busy = activeSessions.get(key);
-  if (busy && busy.type === 'withdraw') return bad(res, 'Finish or cancel your withdrawal first');
-  const old = busy;
-  const sess = {
-    type: 'deposit', robloxUsername: user.username, userId: user.id,
-    verificationCode: old && old.expiresAt > now() ? old.verificationCode : String(crypto.randomInt(100000, 1000000)),
-    startedAt: old && old.expiresAt > now() ? old.startedAt : now(),
-    expiresAt: now() + DEPOSIT_SESSION_MS
-  };
-  activeSessions.set(key, sess);
-  res.json({ status: 'ready', ...sessionView(sess) });
-});
-
-/* the deposit window asks every 2 seconds */
-app.get('/api/deposit/status', auth, (req, res) => {
-  const sess = activeSessions.get(sessionKey(req.user.username));
-  const live = sess && sess.type !== 'withdraw' && sess.expiresAt > now() ? sess : null;
-  res.json({ username: req.user.username, inventory: mm2Inventory(req.user), hasPendingSession: Boolean(live), session: sessionView(live) });
-});
-
-/* the in-game bot: may this player trade with me? */
-app.get('/api/bot/verify-player/:robloxUsername', gameBotOnly, (req, res) => {
-  if (mm2Off()) return res.json({ allowed: false });
-  const sess = activeSessions.get(sessionKey(req.params.robloxUsername));
-  const ok = Boolean(sess && sess.expiresAt > now() && S.users[sess.userId] && !S.users[sess.userId].banned);
-  if (!ok) return res.json({ allowed: false });
-  if (sess.type === 'withdraw') {
-    const w = S.botWithdrawals.find(x => x.id === sess.withdrawId && x.status === 'pending');
-    if (!w) return res.json({ allowed: false });
-    /* the bot is trading now: the player cannot cancel for a few minutes (the items may already be handed over) */
-    w.botSeenAt = now();
-    markDirty();
-    return res.json({ allowed: true, type: 'withdraw', items: groupItems(w.items), verificationCode: sess.verificationCode, expiresAt: sess.expiresAt });
-  }
-  res.json({ allowed: true, type: 'deposit', verificationCode: sess.verificationCode, expiresAt: sess.expiresAt });
-});
-
-/* the in-game bot: the trade is done, credit the items */
-app.post('/api/bot/confirm-deposit', gameBotOnly, (req, res) => {
-  const tradeId = String(req.body.tradeId || '').trim();
-  const name = String(req.body.robloxUsername || '').trim();
-  const rows = Array.isArray(req.body.items) ? req.body.items : null;
-  if (!/^[\w:.\-]{1,100}$/.test(tradeId)) return bad(res, 'tradeId is missing or invalid');
-  if (processedTrades.has(tradeId)) return res.status(409).json({ error: 'This trade was already processed', tradeId });
-  if (!name || !rows || !rows.length || rows.length > 100) return bad(res, 'robloxUsername and 1-100 items are required');
-
-  const items = [];
-  for (const r of rows) {
-    const itemName = String((r && r.name) || '').trim().slice(0, 80);
-    const amount = Math.floor(Number(r && r.amount === undefined ? 1 : r && r.amount));
-    if (!itemName || !(amount >= 1 && amount <= 500)) return bad(res, 'Every item needs a name and an amount of 1-500');
-    items.push({ name: itemName, amount });
-  }
-
-  const key = sessionKey(name);
-  const sess = activeSessions.get(key);
-  if (!sess || sess.type === 'withdraw' || sess.expiresAt + DEPOSIT_GRACE_MS < now()) return res.status(403).json({ error: 'No active deposit session for this player' });
-  const user = S.users[sess.userId];
-  if (!user) return res.status(404).json({ error: 'Player not found on the site' });
-
-  /* match with the MM2 catalog: the value and the picture come from there */
-  const byName = new Map(S.catalog.filter(c => c.game === 'mm2').map(c => [normName(c.name), c]));
-  const credited = [], unmatched = [];
-  const at = now();
-  for (const it of items) {
-    const c = byName.get(normName(it.name));
-    if (!c) { unmatched.push(it); continue; }
-    for (let k = 0; k < it.amount; k++) user.inventory.push({ ...newItem(c), depositedAt: at, tradeId });
-    credited.push({ name: c.name, amount: it.amount, value: round2(c.value * it.amount) });
-  }
-
-  processedTrades.add(tradeId);
-  S.processedTrades = [tradeId, ...(S.processedTrades || []).filter(x => x !== tradeId)].slice(0, 5000);
-  /* the session stays open (and is renewed), so the player can send the bot another trade right away */
-  sess.expiresAt = now() + DEPOSIT_SESSION_MS;
-  const total = round2(credited.reduce((t, c) => t + c.value, 0));
-  if (credited.length) addTransaction(user, 'Deposit', tradeId, total, 'mm2');
-  markDirty();
-  emitMe(user);
-  io.to('u:' + user.id).emit('deposit:done', { credited, unmatched, total });
-  notifyAdmins('withdraw', `📥 MM2 deposit by ${nick(user)} (${user.username}): ${credited.map(c => `${c.amount}x ${c.name}`).join(', ') || 'nothing matched'} · ${total}` +
-    (unmatched.length ? ` · NOT IN CATALOG: ${unmatched.map(u => `${u.amount}x ${u.name}`).join(', ')} (add them to the MM2 catalog and give them by hand)` : ''));
-  console.log(`[DEPOSIT] ${user.username} trade ${tradeId}: ${credited.length} matched, ${unmatched.length} unmatched`);
-  res.json({ success: true, inventory: mm2Inventory(user), credited, unmatched });
-});
-
-/* ================= MM2 AUTOMATIC WITHDRAW (in-game bot) =================
-   1. The player picks MM2 items and presses Withdraw: POST /api/withdraw/init takes them out of the inventory into a
-      saved withdraw record (S.botWithdrawals, kept in MongoDB, so a restart never loses them) and opens a
-      15 minute session of type "withdraw".
-   2. verify-player answers { allowed: true, type: "withdraw", items: [{ name, amount }] } to the bot.
-   3. After handing the items over the bot calls POST /api/bot/confirm-withdraw { tradeId, robloxUsername, items }.
-      Items it did not hand over go back to the player.
-   4. Cancel (POST /api/withdraw/cancel) or 15 minutes without a trade: everything goes back to the inventory.
-      Cancel is refused for 3 minutes after the bot started trading with the player. */
-
-const WD_SESSION_MS = 15 * 60 * 1000;
-const WD_BOT_LOCK_MS = 3 * 60 * 1000;
-const WD_MAX_ITEMS = 20;
-
-function groupItems(items) {
-  const m = new Map();
-  for (const i of items) m.set(i.name, (m.get(i.name) || 0) + 1);
-  return [...m].map(([name, amount]) => ({ name, amount }));
-}
-
-function wdView(w) {
-  if (!w) return null;
-  return {
-    id: w.id, status: w.status, botUsername: DEPOSIT_BOT_NAME, verificationCode: w.verificationCode, expiresAt: w.expiresAt, ts: w.ts,
-    items: w.items.map(publicItem), grouped: groupItems(w.items), value: valueOf(w.items),
-    canCancel: w.status === 'pending' && !(w.botSeenAt && now() - w.botSeenAt < WD_BOT_LOCK_MS)
-  };
-}
-
-const pendingBotWithdraw = userId => S.botWithdrawals.find(w => w.userId === userId && w.status === 'pending') || null;
-
-/* give the items back and close the record (cancel / expired) */
-function refundBotWithdraw(w, status) {
-  if (!w || w.status !== 'pending') return false;
-  w.status = status;
-  w.doneAt = now();
-  const user = S.users[w.userId];
-  if (user) { user.inventory.push(...w.items); emitMe(user); }
-  const key = sessionKey(w.robloxUsername);
-  const sess = activeSessions.get(key);
-  if (sess && sess.withdrawId === w.id) activeSessions.delete(key);
-  markDirty();
-  if (user) io.to('u:' + user.id).emit('withdraw:update', wdView(w));
-  return true;
-}
-
-/* sessions are in memory: after a restart they are rebuilt from the saved records */
-function resumeBotWithdrawals() {
-  for (const w of S.botWithdrawals) {
-    if (w.status !== 'pending') continue;
-    activeSessions.set(sessionKey(w.robloxUsername), { type: 'withdraw', robloxUsername: w.robloxUsername, userId: w.userId, withdrawId: w.id, verificationCode: w.verificationCode, startedAt: w.ts, expiresAt: w.expiresAt });
-  }
-}
-
-setInterval(() => {
-  const t = now();
-  for (const w of S.botWithdrawals) {
-    if (w.status !== 'pending' || w.expiresAt > t) continue;
-    if (w.botSeenAt && t - w.botSeenAt < WD_BOT_LOCK_MS) continue; /* the bot is in the middle of the trade */
-    refundBotWithdraw(w, 'expired');
-    console.log(`[WITHDRAW] ${w.robloxUsername}: no trade in 15 minutes, ${w.items.length} item(s) returned`);
-  }
-}, 30 * 1000);
-
-app.post('/api/withdraw/init', auth, actionLimit, (req, res) => {
-  if (mm2Off()) return bad(res, offMsg('mm2'));
-  if (!autoDepositOn()) return bad(res, 'Automatic withdrawals are not set up yet', 503);
-  if (!autoBotOnline()) return bad(res, 'The MM2 bot is offline right now. Please try again in a few minutes.', 409);
-  const user = req.user;
-  if (pendingBotWithdraw(user.id)) return bad(res, 'You already have a withdrawal waiting. Trade the bot or cancel it first.');
-  const uids = selectionToUids(req.body);
-  const picked = pickItems(user, uids, WD_MAX_ITEMS);
-  if (!picked) return bad(res, `Select 1-${WD_MAX_ITEMS} items from your inventory`);
-  if (!picked.every(i => i.game === 'mm2')) return bad(res, 'Only MM2 items can be withdrawn with the bot');
-  /* a waiting deposit session of this player is replaced by the withdrawal */
-  const items = takeItems(user, uids, WD_MAX_ITEMS);
-  const w = {
-    id: rid(8), userId: user.id, nickname: nick(user), robloxUsername: user.username, items,
-    verificationCode: String(crypto.randomInt(100000, 1000000)), status: 'pending', ts: now(), expiresAt: now() + WD_SESSION_MS
-  };
-  S.botWithdrawals.unshift(w);
-  if (S.botWithdrawals.length > 2000) S.botWithdrawals.length = 2000;
-  activeSessions.set(sessionKey(user.username), { type: 'withdraw', robloxUsername: user.username, userId: user.id, withdrawId: w.id, verificationCode: w.verificationCode, startedAt: w.ts, expiresAt: w.expiresAt });
-  addTransaction(user, 'Withdraw Request', w.id, -valueOf(items), 'mm2');
-  markDirty();
-  emitMe(user);
-  notifyAdmins('withdraw', `📤 MM2 bot withdraw by ${nick(user)} (${user.username}): ${groupItems(items).map(g => `${g.amount}x ${g.name}`).join(', ')} · ${valueOf(items)}`);
-  res.json({ status: 'ready', withdraw: wdView(w), inventory: mm2Inventory(user) });
-});
-
-app.get('/api/withdraw/status', auth, (req, res) => {
-  const w = pendingBotWithdraw(req.user.id) || S.botWithdrawals.find(x => x.userId === req.user.id && x.id === String(req.query.id || '')) || null;
-  res.json({ withdraw: wdView(w), inventory: mm2Inventory(req.user) });
-});
-
-app.post('/api/withdraw/cancel', auth, actionLimit, (req, res) => {
-  const w = pendingBotWithdraw(req.user.id);
-  if (!w) return bad(res, 'You have no withdrawal waiting');
-  if (w.botSeenAt && now() - w.botSeenAt < WD_BOT_LOCK_MS) return bad(res, 'The bot is trading with you right now. Wait a few minutes before cancelling.');
-  refundBotWithdraw(w, 'cancelled');
-  addTransaction(req.user, 'Withdraw Refund', w.id, valueOf(w.items), 'mm2');
-  res.json({ ok: true, withdraw: wdView(w), inventory: mm2Inventory(req.user) });
-});
-
-app.post('/api/bot/confirm-withdraw', gameBotOnly, (req, res) => {
-  const tradeId = String(req.body.tradeId || '').trim();
-  const name = String(req.body.robloxUsername || '').trim();
-  const rows = Array.isArray(req.body.items) ? req.body.items : [];
-  if (!/^[\w:.\-]{1,100}$/.test(tradeId)) return bad(res, 'tradeId is missing or invalid');
-  if (processedTrades.has(tradeId)) return res.status(409).json({ error: 'This trade was already processed', tradeId });
-  const key = sessionKey(name);
-  const sess = activeSessions.get(key);
-  const w = sess && sess.type === 'withdraw' ? S.botWithdrawals.find(x => x.id === sess.withdrawId && x.status === 'pending') : null;
-  if (!w) return res.status(403).json({ error: 'No active withdraw session for this player' });
-
-  /* what the bot says it handed over, by name */
-  const given = new Map();
-  for (const r of rows) {
-    const n = normName(r && r.name);
-    const a = Math.floor(Number(r && r.amount === undefined ? 1 : r && r.amount));
-    if (n && a > 0) given.set(n, (given.get(n) || 0) + Math.min(a, 500));
-  }
-  const delivered = [], back = [];
-  for (const item of w.items) {
-    const n = normName(item.name);
-    if ((given.get(n) || 0) > 0) { given.set(n, given.get(n) - 1); delivered.push(item); } else back.push(item);
-  }
-  const extra = [...given].filter(([, a]) => a > 0);
-
-  processedTrades.add(tradeId);
-  S.processedTrades = [tradeId, ...(S.processedTrades || []).filter(x => x !== tradeId)].slice(0, 5000);
-  w.status = 'completed';
-  w.doneAt = now();
-  w.tradeId = tradeId;
-  w.delivered = delivered.length;
-  activeSessions.delete(key);
-  const user = S.users[w.userId];
-  if (user && back.length) {
-    /* items the bot did not hand over stay with the player */
-    user.inventory.push(...back);
-    addTransaction(user, 'Withdraw Refund', w.id, valueOf(back), 'mm2');
-  }
-  w.items = delivered;
-  markDirty();
-  if (user) {
-    emitMe(user);
-    io.to('u:' + user.id).emit('withdraw:update', wdView(w));
-    const n = delivered.length;
-    if (n) systemChat(`${nick(user)} successfully withdrew ${n} MM2 item${n === 1 ? '' : 's'} worth ${Number(valueOf(delivered)).toLocaleString('en-US')}! 🎉`, { withdraw: true });
-  }
-  if (back.length || extra.length) {
-    notifyAdmins('security', `MM2 withdraw ${w.id} of ${w.robloxUsername}: ${back.length} item(s) not handed over (returned to the player)` +
-      (extra.length ? `; the bot reported extra items: ${extra.map(([n, a]) => `${a}x ${n}`).join(', ')}` : ''));
-  }
-  console.log(`[WITHDRAW] ${w.robloxUsername} trade ${tradeId}: ${delivered.length} delivered, ${back.length} returned`);
-  res.json({ success: true, delivered: groupItems(delivered), returned: groupItems(back) });
-});
-
 /* ================= START ================= */
 
 (async () => {
   await initDb();
   ensureDefaultBot();
   scaleAllValues();
-  for (const t of S.processedTrades || []) processedTrades.add(t);
-  resumeBotWithdrawals();
-  if (!S.settings.gamesV2) {
-    S.settings.adoptMeOff = false;
-    S.settings.mm2Off = true;
-    S.settings.gamesV2 = true;
-    markDirty();
-    console.log('[GAMES] Adopt Me on, MM2 off');
-  }
-  if (!S.settings.botAutoStatusOffFix) {
-    for (const b of S.bots) if (b.game === 'mm2' && b.username.toLowerCase() === DEPOSIT_BOT_NAME.toLowerCase()) b.online = true;
-    S.settings.botAutoStatusOffFix = true;
-    markDirty();
-  }
   resumeJackpot();
   auditItems();
   resumeMatches();

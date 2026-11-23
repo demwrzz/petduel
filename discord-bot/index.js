@@ -693,7 +693,7 @@ async function handleCommand(i) {
     for (const w of list.slice(0, 10)) {
       await i.followUp({
         flags: EPHEMERAL,
-        embeds: [embed(`📤 ${w.gameName ? `[${w.gameName}] ` : ''}${w.nickname}`, `**Game:** ${w.gameName || 'Adopt Me'}${w.bot ? `\n**Bot:** ${w.bot}` : ''}\n**Roblox:** ${w.robloxName}\n**Value:** ${gem} ${fmt(w.value)}\n**Requested:** ${ago(w.ts)}\n**${w.game === 'mm2' ? 'Items' : 'Pets'}:** ${w.items.join(', ').slice(0, 900)}`).setFooter({ text: `Withdraw ID ${w.id}` })],
+        embeds: [embed(`📤 ${w.nickname}`, `**Roblox:** ${w.robloxName}\n**Value:** ${gem} ${fmt(w.value)}\n**Requested:** ${ago(w.ts)}\n**Pets:** ${w.items.join(', ').slice(0, 900)}`).setFooter({ text: `Withdraw ID ${w.id}` })],
         components: [withdrawButtons(w.id)]
       });
     }

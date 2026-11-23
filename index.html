@@ -192,67 +192,6 @@
     }
     .banner h1 { margin: 0 0 5px; color: var(--orange); font-size: 20px; }
     .banner p { margin: 0; color: #bab4a5; font-size: 13px; }
-    /* ---------- game switch (Adopt Me / MM2) ---------- */
-    .game-dd .gd-ico, .game-dd .cf-menu img { width: 20px; height: 20px; object-fit: contain; flex: none; }
-    .game-dd .cf-menu button { display: flex; align-items: center; gap: 8px; }
-    .game-dd { z-index: 21; }
-    .gd-off { display: none; margin-left: auto; padding: 1px 6px; border-radius: 5px; color: #ff8a94; background: rgba(255, 89, 104, .12); font-size: 10px; font-weight: 800; }
-    body.am-off .gd-am { opacity: .55; cursor: not-allowed; }
-    body.am-off .gd-off { display: inline-block; }
-    /* MM2 switched off: the game menu and every MM2 choice disappear */
-    body.mm-off .game-dd { display: none !important; }
-    .dep-off { position: relative; opacity: .5; cursor: not-allowed; filter: grayscale(.6); }
-    .dep-off small { display: block; margin-top: 4px; color: #ffb3ba; font-size: 12px; font-weight: 800; }
-    .jp-gbar { margin-bottom: 12px; }
-    .gtag { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 5px; font-size: 10px; font-weight: 900; letter-spacing: .4px; vertical-align: middle; }
-    .gtag.adoptme { color: #00efa0; background: rgba(0, 239, 160, .12); }
-    .gtag.mm2 { color: #ffb547; background: rgba(255, 160, 40, .14); }
-    /* deposit: pick the game first */
-    .dep-games { display: grid; gap: 10px; }
-    .dep-game { display: flex; align-items: center; gap: 16px; min-height: 100px; padding: 10px 18px 10px 10px; border: 1px solid #3a3326; border-radius: 10px; color: #fff; font: inherit; text-align: left; cursor: pointer; transition: transform .15s, border-color .2s, filter .2s; }
-    .dep-game:hover { transform: translateY(-2px); filter: brightness(1.12); }
-    .dep-game img { width: 92px; height: 82px; object-fit: contain; filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .5)); }
-    .dep-game b { flex: 1; font-size: 19px; font-weight: 800; line-height: 1.25; text-align: center; }
-    .dep-game.mm2 { border-color: #5a4122; background: radial-gradient(circle at 1px 1px, rgba(0, 0, 0, .18) 1px, transparent 1.4px) 0 0 / 7px 7px, linear-gradient(110deg, #8a5a1c 0%, #5b3d1d 38%, #2c2722 100%); }
-    .dep-game.adoptme { border-color: #23504a; background: radial-gradient(circle at 1px 1px, rgba(0, 0, 0, .16) 1px, transparent 1.4px) 0 0 / 7px 7px, linear-gradient(110deg, #b8414f 0%, #6b2e47 38%, #232634 100%); }
-    .pf-gtabs { display: flex; gap: 6px; margin: 0 0 12px; }
-    .pf-gtabs button { flex: 1; height: 34px; border: 1px solid #2a2f3b; border-radius: 9px; color: #8d909a; background: #171a22; font: inherit; font-weight: 900; transition: .2s; }
-    .pf-gtabs button.on { border-color: var(--green); color: #04120b; background: var(--green); }
-
-    /* ---------- MM2 automatic deposit window ---------- */
-    .ad-warn { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; padding: 12px 14px; border: 1px solid #8a6a2c; border-radius: 9px; color: #f3cf7a; background: #2a2418; font-size: 14px; font-weight: 600; line-height: 1.45; }
-    .ad-warn i { display: grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 50%; color: #2a2418; background: #f3a712; font-style: normal; font-weight: 900; }
-    .ad-warn b { color: #fff; }
-    .ad-card { padding: 14px 16px; border: 1px solid #2a2e39; border-radius: 10px; background: #161920; }
-    .ad-card small { color: var(--muted); font-weight: 700; }
-    .ad-bot { display: flex; align-items: center; gap: 10px; margin: 6px 0 10px; }
-    .ad-bot b { flex: 1; font-size: 26px; font-weight: 900; letter-spacing: .3px; }
-    .ad-meta { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 13px; font-weight: 700; }
-    .ad-meta b { color: #fff; letter-spacing: 2px; }
-    .ad-join { margin-top: 10px; }
-    .ad-join .btn { width: 100%; }
-    .ad-join-btn { display: flex; align-items: center; justify-content: center; gap: 8px; height: 46px; font-size: 15px; }
-    .ad-join-btn svg { width: 18px; height: 18px; }
-    .ad-wait { display: flex; align-items: center; gap: 10px; margin-top: 12px; color: #cfd2db; font-size: 14px; font-weight: 600; }
-    .ad-spin { flex: none; width: 18px; height: 18px; border: 3px solid #323844; border-top-color: var(--green); border-radius: 50%; animation: spin 1s linear infinite; }
-    .ad-ok { display: grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 50%; color: #04120b; background: var(--green); font-weight: 900; }
-    .ad-got-h { margin: 14px 0 6px; color: var(--muted); font-size: 12px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; }
-    .ad-got { display: grid; gap: 6px; max-height: 220px; overflow-y: auto; }
-    .ad-item { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border: 1px solid #1f5a45; border-radius: 9px; background: #14231e; animation: enter .35s both; }
-    .ad-item img { width: 34px; height: 34px; object-fit: contain; }
-    .ad-item b { flex: 1; font-size: 14px; }
-    .ad-item span { display: flex; align-items: center; color: var(--green); font-weight: 800; }
-
-    .bw-ready { margin-bottom: 12px; padding: 14px 16px; border: 1px solid #1f5a45; border-radius: 10px; color: #d6fff0; background: #14231e; font-size: 15px; line-height: 1.5; }
-    .bw-ready b { color: #fff; }
-    .bw-done { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; padding: 14px 16px; border: 1px solid #1f5a45; border-radius: 10px; background: #14231e; font-size: 15px; }
-    .bw-cancel { width: 100%; margin-top: 12px; }
-    .bw-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; padding: 12px 14px; border: 1px solid #1f5a45; border-radius: 10px; background: #14231e; }
-    .bw-row div { flex: 1; min-width: 0; }
-    .bw-row b { display: block; }
-    .bw-row small { color: var(--muted); }
-    .bw-row small b { display: inline; color: #fff; }
-
     /* ---------- typing hero ---------- */
     .hero {
       position: relative; overflow: hidden; margin-bottom: 14px; padding: 22px 24px; border: 1px solid #22503f; border-radius: 12px;
@@ -1778,17 +1717,6 @@
         </div>
 
         <div class="cf-bar">
-          <div class="cf-sort game-dd">
-            <button class="cf-sort-btn" data-action="game-toggle">
-              <img class="gd-ico" src="/assets/xmas-dog.png" alt="">
-              <span class="gd-label">Adopt Me</span>
-              <svg class="caret" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
-            </button>
-            <div class="cf-menu">
-              <button data-action="game" data-game="adoptme" class="gd-am"><img src="/assets/xmas-dog.png" alt="">Adopt Me<small class="gd-off">Currently disabled</small></button>
-              <button data-action="game" data-game="mm2"><img src="/assets/mm2-knife.png" alt="">MM2</button>
-            </div>
-          </div>
           <div class="cf-sort" id="cfSortBox">
             <button class="cf-sort-btn" data-action="sort-toggle">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 4v16M3 16l4 4 4-4M14 6h7M14 11h5M14 16h3"/></svg>
@@ -1817,17 +1745,7 @@
 
       <section class="content" id="profileContent" style="display:none"><div id="profile"></div></section>
       <section class="content" id="eventContent" style="display:none"><div id="eventView"></div></section>
-      <section class="content" id="jackpotContent" style="display:none"><div class="cf-bar jp-gbar"><div class="cf-sort game-dd">
-            <button class="cf-sort-btn" data-action="game-toggle">
-              <img class="gd-ico" src="/assets/xmas-dog.png" alt="">
-              <span class="gd-label">Adopt Me</span>
-              <svg class="caret" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
-            </button>
-            <div class="cf-menu">
-              <button data-action="game" data-game="adoptme" class="gd-am"><img src="/assets/xmas-dog.png" alt="">Adopt Me<small class="gd-off">Currently disabled</small></button>
-              <button data-action="game" data-game="mm2"><img src="/assets/mm2-knife.png" alt="">MM2</button>
-            </div>
-          </div></div><div id="jackpotView"></div></section>
+      <section class="content" id="jackpotContent" style="display:none"><div id="jackpotView"></div></section>
     </main>
 
     <footer class="site-footer">
@@ -2052,45 +1970,7 @@
 
     const itemId = item => String(item.uid || item.id || item.catalogId || "");
     const itemImage = item => item.image || item.imageUrl || "";
-    /* the game the player is looking at: lobby, jackpot, inventory, deposit and withdraw follow it */
-    const GAME_NAMES = { adoptme: "Adopt Me", mm2: "MM2" };
-    const gameOf = x => (x && x.game === "mm2" ? "mm2" : "adoptme");
-    /* a game can be switched off by the admins (config.adoptMeOff / config.mm2Off): the site then uses the other one,
-       and a switched-off MM2 is not shown at all */
-    let GAME = "adoptme";
-    try { if (localStorage.getItem("pd_game") === "mm2") GAME = "mm2"; } catch {}
-    const amOff = () => Boolean(STATE.config && STATE.config.adoptMeOff === true);
-    const mmOff = () => !STATE.config || STATE.config.mm2Off === true;
-    if (GAME === "mm2") GAME = "adoptme";
-    const gameTag = g => `<span class="gtag ${g}">${g === "mm2" ? "MM2" : "ADOPT ME"}</span>`;
-    const inventory = () => ME ? asArray(ME.inventory).filter(i => gameOf(i) === GAME) : [];
-    function renderGameSw() {
-      document.querySelectorAll(".game-dd").forEach(d => {
-        d.querySelector(".gd-label").textContent = GAME_NAMES[GAME];
-        d.querySelector(".gd-ico").src = GAME === "mm2" ? "/assets/mm2-knife.png" : "/assets/xmas-dog.png";
-        d.querySelectorAll("[data-game]").forEach(b => b.classList.toggle("on", b.dataset.game === GAME));
-        d.classList.remove("open");
-      });
-      document.body.dataset.game = GAME;
-    }
-    renderGameSw();
-    function setGame(g) {
-      g = g === "mm2" ? "mm2" : "adoptme";
-      if (g === "adoptme" && amOff()) { toast("Adopt Me is currently disabled", "err"); renderGameSw(); return; }
-      if (g === "mm2" && mmOff()) { renderGameSw(); return; }
-      if (g === GAME) return;
-      GAME = g;
-      try { localStorage.setItem("pd_game", g); } catch {}
-      selected = new Set();
-      STATE.jackpot = (STATE.jackpots || {})[GAME] || null;
-      lobbySig = ""; headerSig = ""; jpSig = "";
-      renderGameSw();
-      renderLobby();
-      renderHeader();
-      renderJpNav();
-      if (currentPage === "jackpot") renderJackpot(true);
-      toast(`${GAME_NAMES[g]} selected`, "ok");
-    }
+    const inventory = () => ME ? asArray(ME.inventory) : [];
     const gridItems = () => inventory();
 
     const taxHint = () => Number(STATE.config && STATE.config.tax) > 0
@@ -2319,7 +2199,7 @@
         ci.placeholder = !ME ? "Login to chat" : locked ? "Place a bet to chat" : "Write something..";
       }
 
-      const sig = JSON.stringify(ME ? [ME.id, ME.username, ME.avatar, ME.isAdmin, inv.length, value, NOTIFS.unread, NOTIFS.list.length, GAME] : null);
+      const sig = JSON.stringify(ME ? [ME.id, ME.username, ME.avatar, ME.isAdmin, inv.length, value, NOTIFS.unread, NOTIFS.list.length] : null);
       if (sig === headerSig) return;
       headerSig = sig;
 
@@ -2415,7 +2295,7 @@
       const sortBy = lobbySort;
       const potOf = m => Number(m.hostValue || 0) + Number(m.oppValue || 0);
       const matches = asArray(STATE.matches)
-        .filter(m => m.state !== "cancelled" && gameOf(m) === GAME)
+        .filter(m => m.state !== "cancelled")
         .slice()
         .sort((a, b) =>
           (Number(a.state === "finished") - Number(b.state === "finished")) ||
@@ -2429,14 +2309,14 @@
 
       const sig = JSON.stringify([
         matches.map(m => [m.id, m.state, m.joiner && m.joiner.id, m.winnerId]),
-        ME && ME.id, ME && ME.isAdmin, asArray(STATE.bounties).map(b => b.id), sortBy, GAME
+        ME && ME.id, ME && ME.isAdmin, asArray(STATE.bounties).map(b => b.id), sortBy
       ]);
 
       if (sig === lobbySig) return;
       lobbySig = sig;
 
       if (!matches.length) {
-        $("#lobby").innerHTML = `<div class="card empty enter">No ${GAME_NAMES[GAME]} games right now.<br>Bet your ${GAME === "mm2" ? "items" : "pets"} and start the first coinflip!</div>`;
+        $("#lobby").innerHTML = `<div class="card empty enter">No games right now.<br>Bet your items and start the first coinflip!</div>`;
         return;
       }
 
@@ -2836,8 +2716,8 @@
         const mine = ME && g.host && g.host.id === ME.id;
 
         const chips = [
-          Number(g.minBet) > 0 ? `<span class="gw-chip">Min ${GAME_NAMES[gameOf(g)]} bet ${fmt(g.minBet)}</span>` : "",
-          g.minRank ? `<span class="gw-chip" style="color:${rankColor(g.minRank)}">Min ${GAME_NAMES[gameOf(g)]} rank ${esc(g.minRank)}</span>` : ""
+          Number(g.minBet) > 0 ? `<span class="gw-chip">Min bet ${fmt(g.minBet)}</span>` : "",
+          g.minRank ? `<span class="gw-chip" style="color:${rankColor(g.minRank)}">Min rank ${esc(g.minRank)}</span>` : ""
         ].join("");
 
         const button = mine
@@ -2851,7 +2731,7 @@
             <div class="gw-head">
               ${avatar(g.host, "md")}
               <div class="gw-title">
-                <b>${esc(getUsername(g.host))}'s Giveaway ${gameTag(gameOf(g))}</b>
+                <b>${esc(getUsername(g.host))}'s Giveaway</b>
                 <small>${GEM}${fmt(g.value)} · ${Number(g.entrantCount || 0)} entered</small>
               </div>
               <div class="gw-timer ticker-giveaway" data-end="${Number(g.endsAt || 0)}"></div>
@@ -3101,7 +2981,6 @@
     let lobbySort = "high";
     document.addEventListener("click", e => {
       if (!e.target.closest || !e.target.closest("#cfSortBox")) $("#cfSortBox")?.classList.remove("open");
-      document.querySelectorAll(".game-dd.open").forEach(d => { if (!e.target.closest || !d.contains(e.target)) d.classList.remove("open"); });
     });
     $("#chatInput").addEventListener("keydown", e => { if (e.key === "Enter") sendChat(); });
 
@@ -3165,14 +3044,12 @@
         </svg>`;
     }
 
-    let ucGame = "adoptme";
     function ucRender() {
       const user = ucUser;
       if (!user) return;
 
       const rank = user.rank || "Rookie";
-      const gs = (user.gstats || {})[ucGame] || { bet: user.totalBet, won: user.totalWon, lost: user.totalLost, profit: user.profit };
-      const profit = Number(gs.profit || 0);
+      const profit = Number(user.profit || 0);
       const role = user.owner ? OWNER_TAG : user.support ? SUPPORT_TAG : `<span class="uc-role" style="color:${rankColor(rank)}">${esc(rank)} ${rankBadge(rank)}</span>`;
 
       $("#modal2").innerHTML = `
@@ -3187,18 +3064,16 @@
             </div>
           </div>
 
-          <div class="pf-gtabs">${["adoptme", "mm2"].map(g => `<button class="${g === ucGame ? "on" : ""}" data-action="uc-game" data-game="${g}">${GAME_NAMES[g]}</button>`).join("")}</div>
-
           <div class="uc2-grid">
-            <div class="uc2-stat" style="--d:0ms"><b>${GEM}<span data-count="${Number(gs.bet || 0)}">0</span></b><small>${GAME_NAMES[ucGame]} bet</small></div>
-            <div class="uc2-stat" style="--d:70ms"><b class="${profit >= 0 ? "pos" : "neg"}">${GEM}<span data-count="${profit}" data-sign="1">0</span></b><small>${GAME_NAMES[ucGame]} profit</small></div>
-            <div class="uc2-stat" style="--d:140ms"><b class="pos">${GEM}<span data-count="${Number(gs.won || 0)}">0</span></b><small>${GAME_NAMES[ucGame]} won</small></div>
-            <div class="uc2-stat" style="--d:210ms"><b class="neg">${GEM}<span data-count="${Number(gs.lost || 0)}">0</span></b><small>${GAME_NAMES[ucGame]} lost</small></div>
+            <div class="uc2-stat" style="--d:0ms"><b>${GEM}<span data-count="${Number(user.totalBet || 0)}">0</span></b><small>Total bet</small></div>
+            <div class="uc2-stat" style="--d:70ms"><b class="${profit >= 0 ? "pos" : "neg"}">${GEM}<span data-count="${profit}" data-sign="1">0</span></b><small>Total profit</small></div>
+            <div class="uc2-stat" style="--d:140ms"><b class="pos">${GEM}<span data-count="${Number(user.totalWon || 0)}">0</span></b><small>Total won</small></div>
+            <div class="uc2-stat" style="--d:210ms"><b class="neg">${GEM}<span data-count="${Number(user.totalLost || 0)}">0</span></b><small>Total lost</small></div>
           </div>
 
           <div class="uc2-chart">
-            <div class="uc2-chart-head"><small>${GAME_NAMES[ucGame]} game history</small><b class="${profit >= 0 ? "pos" : "neg"}">${GEM}${profit > 0 ? "+" : ""}${fmt(profit)}</b></div>
-            ${profitChart((user.gseries || {})[ucGame] || user.series)}
+            <div class="uc2-chart-head"><small>Game history</small><b class="${profit >= 0 ? "pos" : "neg"}">${GEM}${profit > 0 ? "+" : ""}${fmt(profit)}</b></div>
+            ${profitChart(user.series)}
           </div>
 
           ${ME && ME.id !== user.id ? `<button class="btn uc2-tip" data-action="tip" data-id="${esc(user.id)}" data-name="${esc(user.username)}">
@@ -3215,7 +3090,6 @@
       try {
         const { user } = await api("/api/user/" + encodeURIComponent(id));
         ucUser = user;
-        ucGame = GAME;
         ucRender();
       } catch (error) {
         closeModal2();
@@ -3269,7 +3143,11 @@
         STATE.bot = STATE.bots[0] || STATE.bot;
         const box = $("#depositBots");
         if (box) box.innerHTML = botsListHTML();
-        updateWithdrawGate();
+        const off = $("#botsOffBox");
+        if (off) {
+          off.innerHTML = botsOffline() ? '<div class="warn"><i>!</i><span>Withdrawals are paused while our withdraw bots are offline. Please try again when a bot is back online.</span></div>' : "";
+          gridContext && gridContext.info && gridContext.info();
+        }
       });
 
       socket.on("bounty:update", list => {
@@ -3281,20 +3159,10 @@
 
       socket.on("bounty:claimed", showBountyPopup);
 
-      socket.on("adoptme:update", d => { if (STATE.config) STATE.config.adoptMeOff = Boolean(d && d.off); scheduleRefresh(); });
-
-      socket.on("autobot:status", d => { if (STATE.config) STATE.config.autoBotOnline = Boolean(d && d.online); headerSig = ""; updateWithdrawGate(); scheduleRefresh(); });
-
-      socket.on("withdraw:update", w => { if (w && bwView && w.id === bwView.id && $("#bwBox")) { bwView = w; renderBotWithdraw(); } scheduleRefresh(); });
-
       socket.on("jackpot:update", j => {
-        if (!j) return;
-        STATE.jackpots = STATE.jackpots || {};
-        STATE.jackpots[gameOf(j)] = j;
-        if (gameOf(j) !== GAME) return;
-        STATE.jackpot = j;
+        if (j) STATE.jackpot = j;
         renderJpNav();
-        if (currentPage === "jackpot") renderJackpot();
+        if (currentPage === "jackpot" && j) renderJackpot();
       });
 
       socket.on("admin:notify", n => {
@@ -3328,13 +3196,6 @@
         const state = await api("/api/state");
         if (state.now) clockSkew = Date.now() - state.now;
         STATE = { ...STATE, ...state };
-        setTimeout(updateWithdrawGate, 0);
-        if (GAME === "adoptme" && amOff() && !mmOff()) { GAME = "mm2"; lobbySig = ""; headerSig = ""; jpSig = ""; }
-        if (GAME === "mm2" && mmOff()) { GAME = "adoptme"; lobbySig = ""; headerSig = ""; jpSig = ""; }
-        document.body.classList.toggle("am-off", amOff());
-        document.body.classList.toggle("mm-off", mmOff());
-        renderGameSw();
-        if (state.jackpots) STATE.jackpot = state.jackpots[GAME] || null;
         if (!state.maintenance) STATE.maintenance = false;
 
         if (token) {
@@ -3757,7 +3618,7 @@
             <option value="name">Name</option>
           </select>
 
-          <select class="control" id="gridGame">${["adoptme", "mm2"].filter(g => !(g === "mm2" && mmOff())).map(g => `<option value="${g}" ${g === GAME ? "selected" : ""} ${g === "adoptme" && amOff() ? "disabled" : ""}>${GAME_NAMES[g]}${g === "adoptme" && amOff() ? " (currently disabled)" : ""}</option>`).join("")}</select>
+          <select class="control" disabled><option>Adopt Me</option></select>
         </div>
 
         <div class="inventory-box">
@@ -3825,15 +3686,6 @@
     function bindGrid() {
       $("#gridSearch")?.addEventListener("input", renderGrid);
       $("#gridSort")?.addEventListener("change", renderGrid);
-      /* switching the game here switches the whole site, then the open window shows that game's items */
-      $("#gridGame")?.addEventListener("change", e => {
-        setGame(e.target.value);
-        updateWithdrawGate();
-        const title = $("#modal .mh h3");
-        if (title && /Inventory$/.test(title.textContent)) title.textContent = GAME_NAMES[GAME] + " Inventory";
-        renderGrid();
-        if (gridContext && gridContext.info) gridContext.info();
-      });
       renderGrid();
     }
 
@@ -3932,8 +3784,8 @@
       };
 
       openModal(`
-        ${modalHeader(GAME_NAMES[GAME] + " Inventory")}
-        <div id="botsOffBox">${offlineWarn()}</div>
+        ${modalHeader("Inventory")}
+        <div id="botsOffBox">${botsOffline() ? '<div class="warn"><i>!</i><span>Withdrawals are paused while our withdraw bots are offline. Please try again when a bot is back online.</span></div>' : ""}</div>
         <div id="wdBox"></div>
         <div class="hint" style="margin:0 0 7px">Select Item</div>
 
@@ -3956,20 +3808,13 @@
       const box = $("#wdBox");
       if (!box) return;
       try {
-        const [{ list }, bw] = await Promise.all([api("/api/withdrawals"), STATE.config && STATE.config.autoBot ? api("/api/withdraw/status").catch(() => ({})) : {}]);
+        const { list } = await api("/api/withdrawals");
         if (!$("#wdBox")) return;
-        const botW = bw && bw.withdraw && bw.withdraw.status === "pending" ? bw.withdraw : null;
-        const botRow = botW ? `
-          <div class="bw-row">
-            <span class="ad-spin"></span>
-            <div><b>Withdrawal waiting</b><small>Trade <b>${esc(botW.botUsername)}</b> in MM2 · ${botW.items.length} item${botW.items.length === 1 ? "" : "s"} · ${GEM}${fmt(botW.value)}</small></div>
-            <button class="btn sm" data-action="bw-open">Open</button>
-          </div>` : "";
         const pending = asArray(list).filter(w => w.status === "pending");
-        if (!pending.length) { box.innerHTML = botRow; return; }
+        if (!pending.length) { box.innerHTML = ""; return; }
         const rows = pending;
         const label = { pending: "Pending", done: "Sent", refunded: "Refunded" };
-        box.innerHTML = botRow + `
+        box.innerHTML = `
           <div class="wd-panel ${wdOpen ? "open" : ""}">
             <button class="wd-head" data-action="wd-toggle">
               <span class="wd-title"><span class="wd-pulse"></span>Pending withdrawals
@@ -3979,7 +3824,7 @@
             <div class="wd-body"><div>
               ${rows.slice(0, 15).map(w => `
                 <div class="wd-row">
-                  <span class="wd-st ${esc(w.status)}">${label[w.status] || esc(w.status)}</span>${gameTag(gameOf(w))}
+                  <span class="wd-st ${esc(w.status)}">${label[w.status] || esc(w.status)}</span>
                   <div class="items">${thumbs(w.items, 6)}</div>
                   <div class="wd-meta"><b>${GEM}${fmt(w.value)}</b><small>${esc(ago(w.ts))}</small></div>
                   ${wdBotHTML(w.bot)}
@@ -3990,80 +3835,12 @@
       } catch { box.innerHTML = ""; }
     }
 
-    /* ---------- MM2 automatic withdraw: the in-game bot hands the items over ---------- */
-    let bwTimer = null, bwView = null;
-    const bwStop = () => { clearInterval(bwTimer); bwTimer = null; };
-
-    async function botWithdraw(uids) {
-      const btn = $("#withdrawButton");
-      if (btn) btn.disabled = true;
-      try {
-        const r = await api("/api/withdraw/init", { body: { uids } });
-        closeModal();
-        await refresh();
-        openBotWithdraw(r.withdraw);
-      } catch (error) {
-        if (btn) btn.disabled = false;
-        fail(error);
-      }
-    }
-
-    function openBotWithdraw(view) {
-      bwStop();
-      bwView = view;
-      openModal2(`${modalHeader("Murder Mystery 2", "close2")}<div class="ad" id="bwBox"></div>`);
-      renderBotWithdraw();
-      bwTimer = setInterval(bwTick, 2000);
-    }
-
-    function renderBotWithdraw() {
-      const box = $("#bwBox");
-      const w = bwView;
-      if (!box || !w) return;
-      const done = w.status === "completed", gone = w.status === "cancelled" || w.status === "expired";
-      const left = Math.max(0, Number(w.expiresAt) - (Date.now() - clockSkew));
-      box.innerHTML = `
-        ${done ? '<div class="bw-done"><span class="ad-ok">✔</span><b>Withdrawal complete!</b> The bot handed your items over in game.</div>'
-          : gone ? `<div class="ad-warn"><i>!</i><span>${w.status === "cancelled" ? "Withdrawal cancelled." : "No trade in 15 minutes."} Your items are back in your inventory.</span></div>`
-          : `<div class="bw-ready"><b>Withdrawal ready!</b> Send a trade to <b>${esc(w.botUsername)}</b> in Murder Mystery 2, the bot gives you your items automatically.</div>
-             <div class="ad-warn"><i>!</i><span>Always check that the username of your trading partner matches exactly: <b>${esc(w.botUsername)}</b>. Users often copy bot names.</span></div>
-             <div class="ad-card">
-               <small>Send a trade request in Murder Mystery 2 to</small>
-               <div class="ad-bot"><b>${esc(w.botUsername)}</b><button class="btn sm" data-action="copy-text" data-text="${esc(w.botUsername)}">Copy</button></div>
-               <div class="ad-meta"><span></span><span>${left > 0 ? `Ends in ${Math.floor(left / 60000)}:${String(Math.floor(left / 1000) % 60).padStart(2, "0")}` : "Ending…"}</span></div>
-             </div>
-             ${adJoinHTML()}`}
-        <div class="ad-got-h">${done ? "Delivered" : "Items"}</div>
-        <div class="ad-got">${asArray(w.items).map(i => `<div class="ad-item"><img src="${esc(itemImage(i))}" alt=""><b>${esc(i.name)}</b><span>${GEM}${fmt(i.value)}</span></div>`).join("") || '<div class="empty">No items</div>'}</div>
-        ${!done && !gone ? `<div class="ad-wait"><span class="ad-spin"></span>Waiting for your trade…</div>
-          <button class="btn red bw-cancel" data-action="bw-cancel" ${w.canCancel ? "" : "disabled"}>${w.canCancel ? "Cancel withdrawal" : "The bot is trading with you…"}</button>` : ""}`;
-    }
-
-    async function bwTick() {
-      if (!$("#bwBox") || !bwView) return bwStop();
-      try {
-        const r = await api("/api/withdraw/status?id=" + encodeURIComponent(bwView.id));
-        if (!$("#bwBox")) return bwStop();
-        if (r.withdraw) {
-          const changed = r.withdraw.status !== bwView.status;
-          bwView = r.withdraw;
-          if (changed) {
-            if (bwView.status === "completed") toast("Withdrawal complete!", "ok");
-            refresh();
-          }
-        }
-        renderBotWithdraw();
-        if (bwView.status !== "pending") bwStop();
-      } catch { /* try again in 2 seconds */ }
-    }
-
     async function withdraw() {
       if (!requireLogin()) return;
 
       const uids = selectedUids();
       if (botsOffline()) return toast("Withdrawals are paused while our bots are offline", "err");
       if (!uids.length) return toast("Select items first", "err");
-      if (autoBotOn()) return botWithdraw(uids);
 
       const btn = $("#withdrawButton");
       if (btn) btn.disabled = true;
@@ -4101,22 +3878,16 @@
 
     /* true when no withdraw bot is online: withdrawals are paused (without withdraw bots the deposit bots send) */
     const withdrawBots = () => {
-      const w = asArray(STATE.bots).filter(b => b.role === "withdraw" && gameOf(b) === GAME);
-      return w.length ? w : depositBots(GAME);
+      const w = asArray(STATE.bots).filter(b => b.role === "withdraw");
+      return w.length ? w : depositBots();
     };
-    const autoBotOn = () => GAME === "mm2" && Boolean(STATE.config && STATE.config.autoBot);
-    const botsOffline = () => autoBotOn() ? STATE.config.autoBotOnline === false : !withdrawBots().some(b => b.online !== false);
-    const offlineWarn = () => botsOffline()
-      ? `<div class="warn"><i>!</i><span>${autoBotOn() ? "Withdrawals are paused while the MM2 bot is offline." : "Withdrawals are paused while our withdraw bots are offline."} Please try again when the bot is back online.</span></div>` : "";
-    /* the wallet's warning and Withdraw button follow the bot status right away */
-    function updateWithdrawGate() {
-      const off = $("#botsOffBox");
-      if (off) off.innerHTML = offlineWarn();
-      if (gridContext && gridContext.info) gridContext.info();
-    }
+    const botsOffline = () => !withdrawBots().some(b => b.online !== false);
 
-    const depositBots = (game = depGame) => asArray(STATE.bots).filter(b => b.role !== "withdraw" && gameOf(b) === game);
-    let depGame = "adoptme";
+    const depositBots = () => {
+      const list = asArray(STATE.bots).filter(b => b.role !== "withdraw");
+      if (list.length || asArray(STATE.bots).length) return list;
+      return STATE.bot ? [STATE.bot] : [];
+    };
 
     /* the withdraw bot that sends a request: masked name, avatar and its private server */
     const wdBotHTML = bot => !bot ? "" : `
@@ -4131,7 +3902,7 @@
     /* the bot's name is shown masked and big (ltcs***e) so players can match it in game */
     function botsListHTML() {
       const bots = depositBots();
-      if (!bots.length) return `<div class="empty">No ${GAME_NAMES[depGame]} deposit bot is available right now. Please try again later.</div>`;
+      if (!bots.length) return '<div class="empty">No deposit bot is available right now. Please try again later.</div>';
       const anyOnline = bots.some(b => b.online !== false);
       return bots.map(bot => {
         const online = bot.online !== false;
@@ -4156,90 +3927,8 @@
     }
 
     /* Deposit: 1. accept the risk  2. read the trade rules  3. see the bot and the private server */
-    /* ---------- MM2 automatic deposit: trade the in-game bot, the items appear by themselves ---------- */
-    let adTimer = null, adStart = 0, adSeen = null, adSession = null;
-    const adStop = () => { clearInterval(adTimer); adTimer = null; };
-
-    /* the same MM2 bot takes deposits and sends withdrawals: one Join button for both windows */
-    const adJoinHTML = () => {
-      const link = STATE.config && STATE.config.autoBotLink;
-      return link ? `<div class="ad-join"><button class="btn ad-join-btn" data-action="bot-join" data-link="${esc(link)}">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5.2 2 2 18.8 18.8 22 22 5.2zm8.6 12.7-4.5-.9.9-4.5 4.5.9z"/></svg>Join the bot's server</button></div>` : "";
-    };
-
-    async function openMm2Deposit() {
-      adStop();
-      let r;
-      try { r = await api("/api/deposit/init", { body: { robloxUsername: ME && ME.robloxName } }); }
-      catch (error) {
-        if (error.status === 503) return openBotsModal(1); /* not set up yet: the bot list as before */
-        return fail(error);
-      }
-      adSession = r;
-      adStart = Number(r.startedAt) || Date.now();
-      adSeen = null;
-      openModal2(`
-        ${modalHeader("Murder Mystery 2", "close2")}
-        <div class="ad" id="adBox">
-          <div class="ad-warn"><i>!</i><span>Always check that the username of your trading partner matches exactly: <b>${esc(r.botUsername)}</b>. Users often copy bot names.</span></div>
-          <div class="ad-card">
-            <small>Send a trade request in Murder Mystery 2 to</small>
-            <div class="ad-bot"><b>${esc(r.botUsername)}</b><button class="btn sm" data-action="copy-text" data-text="${esc(r.botUsername)}">Copy</button></div>
-            <div class="ad-meta"><span id="adBotSt"></span><span id="adLeft"></span></div>
-          </div>
-          ${adJoinHTML()}
-          <div class="ad-wait" id="adWait"><span class="ad-spin"></span>Waiting for your trade… Add your items, accept, and the bot accepts too.</div>
-          <div id="adGot"></div>
-        </div>`);
-      adTick();
-      adTimer = setInterval(adTick, 2000);
-    }
-
-    async function adTick() {
-      if (!$("#adBox")) return adStop();
-      const left = Math.max(0, (adSession ? Number(adSession.expiresAt) : 0) - (Date.now() - clockSkew));
-      const el = $("#adLeft");
-      if (el) el.textContent = left > 0 ? `Open for ${Math.ceil(left / 60000)} min` : "Session ended";
-      const bs = $("#adBotSt");
-      if (bs) bs.innerHTML = STATE.config && STATE.config.autoBotOnline === false ? '<span style="color:#ff5968">● Bot offline</span>' : '<span style="color:#00efa0">● Bot online</span>';
-      let st;
-      try { st = await api("/api/deposit/status"); } catch { return; }
-      if (!$("#adBox")) return adStop();
-      const fresh = asArray(st.inventory).filter(i => Number(i.depositedAt) >= adStart - 1000);
-      const sig = fresh.map(i => i.id).join(",");
-      if (adSeen !== null && sig !== adSeen && fresh.length) {
-        toast(`Deposit received: ${fresh.length} item${fresh.length === 1 ? "" : "s"}!`, "ok");
-        refresh();
-      }
-      adSeen = sig;
-      $("#adGot").innerHTML = fresh.length ? `
-        <div class="ad-got-h">Received</div>
-        <div class="ad-got">${fresh.map(i => `<div class="ad-item"><img src="${esc(i.image || "")}" alt=""><b>${esc(i.name)}</b><span>${GEM}${fmt(i.value)}</span></div>`).join("")}</div>` : "";
-      if (st.session) adSession = st.session;
-      if (!st.hasPendingSession) {
-        adStop();
-        $("#adWait").innerHTML = 'The session ended. <button class="btn sm" data-action="ad-restart">Start again</button>';
-      } else if (fresh.length) {
-        $("#adWait").innerHTML = '<span class="ad-ok">✔</span>Received! Your items are in your MM2 inventory. You can send the bot another trade right away.';
-      }
-    }
-
-    function openBotsModal(step = 0) {
+    function openBotsModal(step = 1) {
       const steps = `<div class="dep-steps">${[1, 2, 3].map(n => `<i class="${n <= step ? "on" : ""}"></i>`).join("")}</div>`;
-      const mm2 = depGame === "mm2";
-
-      if (step === 0 && mmOff()) { depGame = "adoptme"; return openBotsModal(1); }
-      if (step === 0) {
-        openModal2(`
-          ${modalHeader("Deposit", "close2")}
-          <div class="dep-games">
-            <button class="dep-game mm2" data-action="dep-game" data-game="mm2"><img src="/assets/mm2-knife.png" alt=""><b>Murder Mystery<br>2</b></button>
-            ${amOff()
-              ? '<div class="dep-game adoptme dep-off"><img src="/assets/xmas-dog.png" alt=""><b>Adopt Me!<small>Currently disabled</small></b></div>'
-              : '<button class="dep-game adoptme" data-action="dep-game" data-game="adoptme"><img src="/assets/xmas-dog.png" alt=""><b>Adopt Me!</b></button>'}
-          </div>`);
-        return;
-      }
 
       if (step === 1) {
         openModal2(`
@@ -4248,8 +3937,8 @@
           <div class="dep-risk">
             <div class="dep-risk-ico">!</div>
             <h3>Deposit at your own risk</h3>
-            <p>Depositing ${mm2 ? "items" : "pets"} is <b>at your own risk</b>. Roblox / ${mm2 ? "Murder Mystery 2" : "Adopt Me"} can ban or restrict trading accounts at any time, and ${mm2 ? "items" : "pets"} on a banned bot can be lost. Pet Duel cannot guarantee that lost ${mm2 ? "items" : "pets"} are replaced.</p>
-            <p>Only deposit ${mm2 ? "items" : "pets"} you are okay with risking. Never deposit ${mm2 ? "items" : "pets"} that are not yours.</p>
+            <p>Depositing pets is <b>at your own risk</b>. Roblox / Adopt Me can ban or restrict trading accounts at any time, and pets on a banned bot can be lost. Pet Duel cannot guarantee that lost pets are replaced.</p>
+            <p>Only deposit pets you are okay with risking. Never deposit pets that are not yours.</p>
             <p style="color:#9aa0ad;font-size:13px">Pet Duel is for entertainment only. Gems and values have no monetary value and nothing can be exchanged for real money.</p>
           </div>
           <label class="lg-check dep-ack">
@@ -4267,11 +3956,11 @@
           ${modalHeader("How to deposit", "close2")}
           ${steps}
           <ol class="dep-rules">
-            <li><b>Join the bot's private server</b> in ${mm2 ? "Murder Mystery 2" : "Adopt Me"} (next step).</li>
-            <li><b>Send the bot a trade</b> with the ${mm2 ? "items" : "pets"} you want to deposit.</li>
-            ${mm2 ? "" : '<li><span class="dep-food">🍔 Add at least <b>6 food items</b> to every trade.</span> This is required for security. Trades without 6 food items are declined.</li>'}
+            <li><b>Join the bot's private server</b> in Adopt Me (next step).</li>
+            <li><b>Send the bot a trade</b> with the pets you want to deposit.</li>
+            <li><span class="dep-food">🍔 Add at least <b>6 food items</b> to every trade.</span> This is required for security. Trades without 6 food items are declined.</li>
             <li><b>Check the bot's name</b> before you accept. Scammers copy bot names with tiny changes.</li>
-            <li>Your ${mm2 ? "items" : "pets"} appear in your ${GAME_NAMES[depGame]} inventory <b>once an admin confirms</b> the trade.</li>
+            <li>Your pets appear in your inventory <b>once an admin confirms</b> the trade.</li>
           </ol>
           <div class="warn"><i>!</i><span>Staff will never DM you asking for pets. Only trade with the bot shown in this window.</span></div>
           <div class="dep-nav">
@@ -4282,10 +3971,10 @@
       }
 
       openModal2(`
-        ${modalHeader(GAME_NAMES[depGame] + " deposit bot", "close2")}
+        ${modalHeader("Deposit bot", "close2")}
         ${steps}
         <div id="depositBots">${botsListHTML()}</div>
-        <p class="hint">${mm2 ? "Your items appear in your MM2 inventory once an admin confirms them." : "Remember: at least <b>6 food items</b> in every trade. Your pets appear in your inventory once an admin confirms them."}</p>
+        <p class="hint">Remember: at least <b>6 food items</b> in every trade. Your pets appear in your inventory once an admin confirms them.</p>
         <div class="dep-nav"><button class="btn gray" data-action="dep-step" data-step="2">Back</button></div>`);
     }
 
@@ -4514,17 +4203,11 @@
     }
 
     /* ---------- Profile (window): stats, profit graph with time ranges, transactions ---------- */
-    let pfData = null, pfRange = "all", pfGame = "adoptme";
-
-    const pfStats = () => {
-      const g = pfData && pfData.gstats && pfData.gstats[pfGame];
-      const st = (pfData && pfData.stats) || {};
-      return g ? { totalBet: g.bet, totalWon: g.won, totalLost: g.lost, profit: g.profit } : st;
-    };
+    let pfData = null, pfRange = "all";
 
     function pfSeries() {
-      const games = asArray(pfData && pfData.games).filter(g => (g.g || "adoptme") === pfGame);
-      const profit = Number(pfStats().profit || 0);
+      const games = asArray(pfData && pfData.games);
+      const profit = Number(pfData && pfData.stats && pfData.stats.profit || 0);
       /* cumulative profit after each game; the start value makes the last point equal the current profit */
       let run = profit - games.reduce((t, g) => t + Number(g.a || 0), 0);
       const pts = [{ ts: games.length ? games[0].ts - 1 : Date.now(), v: run }];
@@ -4543,27 +4226,26 @@
       const change = series.length ? series[series.length - 1] - series[0] : 0;
       return `
         <div class="pf-chart-top">
-          <div><small>${GAME_NAMES[pfGame]} game history</small><b class="${change >= 0 ? "pos" : "neg"}">${GEM}${change > 0 ? "+" : ""}${fmt(change)}</b></div>
+          <div><small>Game history</small><b class="${change >= 0 ? "pos" : "neg"}">${GEM}${change > 0 ? "+" : ""}${fmt(change)}</b></div>
           <div class="pf-range">${["1d", "3d", "7d", "30d", "all"].map(r => `<button class="${r === pfRange ? "on" : ""}" data-action="pf-range" data-r="${r}">${r === "all" ? "All" : r.toUpperCase()}</button>`).join("")}</div>
         </div>
         ${profitChart(series.length >= 2 ? series : [series[0] || 0, series[0] || 0], Math.max(300, Math.round(($("#pfChart")?.clientWidth || 730) - 30)), 180)}`;
     }
 
-    async function showProfile(page = 1, keep = false) {
+    async function showProfile(page = 1) {
       if (!requireLogin()) return;
       gridContext = null;
       viewMatchId = null;
-      if (!keep && !$("#pfWin")) pfGame = GAME;
 
       try {
         const result = await api("/api/profile?page=" + encodeURIComponent(page));
         pfData = result;
-        const st = pfStats();
+        const st = result.stats || {};
         const profit = Number(st.profit || 0);
         const rows = asArray(result.rows);
         const pages = Number(result.pages || 1);
         const cur = Number(result.page) || 1;
-        const reopen = (page !== 1 || keep) && $("#pfWin");
+        const reopen = page !== 1 && $("#pfWin");
 
         const html = `
           <div class="pf2" id="pfWin">
@@ -4580,12 +4262,10 @@
                 : `<button class="pf-discord" data-action="discord-link">${DISCORD_ICO}<span>Link Discord</span></button>`}
             </div>
 
-            <div class="pf-gtabs">${["adoptme", "mm2"].map(g => `<button class="${g === pfGame ? "on" : ""}" data-action="pf-game" data-game="${g}">${GAME_NAMES[g]}</button>`).join("")}</div>
-
             <div class="pf-stats">
-              <div class="uc2-stat" style="--d:0ms"><b>${GEM}<span data-count="${Number(st.totalBet || 0)}">0</span></b><small>${GAME_NAMES[pfGame]} bet</small></div>
-              <div class="uc2-stat" style="--d:70ms"><b class="pos">${GEM}<span data-count="${Number(st.totalWon || 0)}">0</span></b><small>${GAME_NAMES[pfGame]} won</small></div>
-              <div class="uc2-stat" style="--d:140ms"><b class="${profit >= 0 ? "pos" : "neg"}">${GEM}<span data-count="${profit}" data-sign="1">0</span></b><small>${GAME_NAMES[pfGame]} profit</small></div>
+              <div class="uc2-stat" style="--d:0ms"><b>${GEM}<span data-count="${Number(st.totalBet || 0)}">0</span></b><small>Total bet</small></div>
+              <div class="uc2-stat" style="--d:70ms"><b class="pos">${GEM}<span data-count="${Number(st.totalWon || 0)}">0</span></b><small>Total won</small></div>
+              <div class="uc2-stat" style="--d:140ms"><b class="${profit >= 0 ? "pos" : "neg"}">${GEM}<span data-count="${profit}" data-sign="1">0</span></b><small>Profit</small></div>
             </div>
 
             <div class="uc2-chart" id="pfChart"></div>
@@ -4595,7 +4275,7 @@
                 <div class="pf-tr pf-th"><span>Type</span><span>ID</span><span>Date and time</span><span>Amount</span></div>
                 ${rows.map(r => `
                   <div class="pf-tr">
-                    <b>${esc(r.type)} ${r.g === "mm2" ? gameTag("mm2") : ""}</b>
+                    <b>${esc(r.type)}</b>
                     <span class="pf-id" title="${esc(r.id || "")}">${esc(r.id || "")}</span>
                     <span>${r.ts ? esc(new Date(r.ts).toLocaleString()) : ""}</span>
                     <b class="pf-amt ${Number(r.amount) < 0 ? "neg" : "pos"}">${GEM}${Number(r.amount) > 0 ? "+" : ""}${fmt(r.amount)}</b>
@@ -5628,9 +5308,9 @@
     async function showJpHistory() {
       gridContext = null;
       viewMatchId = null;
-      openModal(`${modalHeader(GAME_NAMES[GAME] + " Jackpot History")}<div class="info-scroll" id="jpHist"><div class="empty">Loading…</div></div>`, "small");
+      openModal(`${modalHeader("Jackpot History")}<div class="info-scroll" id="jpHist"><div class="empty">Loading…</div></div>`, "small");
       try {
-        const { list } = await api("/api/jackpot/history?game=" + GAME);
+        const { list } = await api("/api/jackpot/history");
         const box = $("#jpHist");
         if (!box) return;
         box.innerHTML = asArray(list).length ? asArray(list).map((r, i) => `
@@ -5805,7 +5485,7 @@
       };
 
       openModal(`
-        ${modalHeader("Join " + GAME_NAMES[GAME] + " Jackpot")}
+        ${modalHeader("Join Jackpot")}
         <p class="hint">Your chance is your share of the total pot. The winner takes everything.</p>
 
         ${selectionGridHTML()}
@@ -5824,7 +5504,7 @@
       if (!uids.length) return toast("Select items first", "err");
 
       try {
-        await api("/api/jackpot/join", { body: { uids, game: GAME } });
+        await api("/api/jackpot/join", { body: { uids } });
         closeModal();
         toast("You joined the jackpot!", "ok");
         await refresh();
@@ -5833,7 +5513,7 @@
 
     async function jpLeave() {
       try {
-        await api("/api/jackpot/leave", { body: { game: GAME } });
+        await api("/api/jackpot/leave", { body: {} });
         toast("Items returned", "ok");
         await refresh();
       } catch (error) { fail(error); }
@@ -5985,21 +5665,6 @@
       "profile-page"(el) { showProfile(Number(el.dataset.page)); },
       "discord-link"() { discordLink(); },
       "support-panel"() { showSupportPanel(); },
-      game(el) { setGame(el.dataset.game); renderGameSw(); },
-      "game-toggle"(el) { el.closest(".game-dd").classList.toggle("open"); },
-      async "bw-open"() {
-        try { const r = await api("/api/withdraw/status"); if (r.withdraw) { closeModal(); openBotWithdraw(r.withdraw); } }
-        catch (error) { fail(error); }
-      },
-      async "bw-cancel"() {
-        if (!(await confirmBox({ title: "Cancel withdrawal", text: "Cancel this withdrawal? The items go back to your inventory.", ok: "Cancel withdrawal", danger: true }))) return;
-        try { const r = await api("/api/withdraw/cancel", { body: {} }); bwView = r.withdraw; renderBotWithdraw(); bwStop(); toast("Withdrawal cancelled, items returned", "ok"); refresh(); }
-        catch (error) { fail(error); }
-      },
-      "dep-game"(el) { depGame = el.dataset.game === "mm2" ? "mm2" : "adoptme"; if (depGame === "mm2") openMm2Deposit(); else openBotsModal(1); },
-      "ad-restart"() { openMm2Deposit(); },
-      "pf-game"(el) { pfGame = el.dataset.game === "mm2" ? "mm2" : "adoptme"; showProfile(1, true); },
-      "uc-game"(el) { ucGame = el.dataset.game === "mm2" ? "mm2" : "adoptme"; ucRender(); },
       async "sp-mute"() {
         const name = $("#spName")?.value.trim();
         if (!name) return toast("Write a nickname", "err");
