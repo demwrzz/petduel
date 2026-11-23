@@ -4549,7 +4549,7 @@ function adminUI() {
   async function loadBotLog() {
     try {
       const r = await api('/api/admin/botlog');
-      $('bl-state').innerHTML = r.on ? '<span style="color:#00efa0">● Automatic deposits ON</span>' : '<span style="color:#ff5968">● OFF: BOT_SECRET_KEY is not set in Railway</span>';
+      $('bl-state').innerHTML = r.on ? '<span style="color:#00efa0">● Automatic deposits ON</span>' : '<span style="color:#ff5968">● OFF: BOT_SECRET is not set in Railway</span>';
       $('bl-sessions').textContent = 'Open deposit sessions: ' + r.sessions;
       $('bl-list').innerHTML = r.log.length ? r.log.map(l => `<div style="padding:4px 0;border-top:1px solid #2a2e39;color:${/allowed=true|added/.test(l.text) ? '#7dffcf' : /403|503|allowed=false/.test(l.text) ? '#ff8a94' : '#cfd2db'}">${new Date(l.ts).toLocaleTimeString()} · ${esc(l.text)}</div>`).join('') : '<p class="hint">Nothing yet. Press Deposit on the site and send the bot a trade.</p>';
     } catch (err) { $('bl-list').textContent = err.message; }
@@ -5411,7 +5411,8 @@ process.on('uncaughtException', err => console.error('Uncaught exception:', err 
       inventory with the catalog value and picture. Pets that are not in the catalog (and food) are not added; admins
       get a notification. Each tradeId is handled once (409 on repeats, also after a restart).
    4. The deposit window polls GET /api/deposit/status every 2 seconds and shows the new pets.
-   Both bot routes need the header x-bot-secret = the Railway variable BOT_SECRET_KEY. */
+   Both bot routes need the header x-bot-secret = the Railway variable BOT_SECRET (or BOT_SECRET_KEY).
+   They are open to requests from anywhere (no CORS / origin check): the secret is the only key. */
 
 const DEPOSIT_SESSION_MS = 10 * 60 * 1000;
 const DEPOSIT_GRACE_MS = 5 * 60 * 1000;      /* a trade started just before the end can still be confirmed */
@@ -5437,11 +5438,13 @@ const sessionsText = () => {
   const list = activeSessions.entries().map(([k, v]) => `${k} (${v.expiresAt > t ? Math.ceil((v.expiresAt - t) / 60000) + ' min left' : 'expired'})`);
   return list.length ? list.join(', ') : 'none';
 };
-const autoDepositOn = () => Boolean(E.BOT_SECRET_KEY);
+/* the secret of the in-game bot: Railway variable BOT_SECRET (BOT_SECRET_KEY also works); spaces / new lines around it are ignored */
+const botSecret = () => String(process.env.BOT_SECRET || process.env.BOT_SECRET_KEY || '').trim();
+const autoDepositOn = () => Boolean(botSecret());
 
 function gameBotSecretOk(req) {
-  const key = String(E.BOT_SECRET_KEY || '');
-  const got = String(req.headers['x-bot-secret'] || '');
+  const key = botSecret();
+  const got = String(req.headers['x-bot-secret'] || '').trim();
   if (!key || !got) return false;
   return crypto.timingSafeEqual(crypto.createHash('sha256').update(got).digest(), crypto.createHash('sha256').update(key).digest());
 }
@@ -5449,12 +5452,12 @@ function gameBotSecretOk(req) {
 /* middleware for the in-game bot routes */
 function gameBotOnly(req, res, next) {
   if (!autoDepositOn()) {
-    logBot(`${req.method} ${req.path} -> 503: BOT_SECRET_KEY is not set in Railway`);
-    return bad(res, 'BOT_SECRET_KEY is not set on the server', 503);
+    logBot(`${req.method} ${req.path} -> 503: BOT_SECRET is not set in Railway`);
+    return bad(res, 'BOT_SECRET is not set on the server', 503);
   }
   if (!gameBotSecretOk(req)) {
-    const got = String(req.headers['x-bot-secret'] || '');
-    logBot(`${req.method} ${req.path} -> 403: ${got ? `wrong x-bot-secret (sent ${got.length} characters, the server expects ${String(E.BOT_SECRET_KEY).length})` : 'no x-bot-secret header'}`);
+    const got = String(req.headers['x-bot-secret'] || '').trim();
+    logBot(`${req.method} ${req.path} -> 403: ${got ? `wrong x-bot-secret (sent ${got.length} characters, the server expects ${botSecret().length})` : 'no x-bot-secret header'}`);
     return bad(res, 'Forbidden', 403);
   }
   next();
