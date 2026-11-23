@@ -26,6 +26,8 @@ const SITE = String(CONFIG.siteUrl || 'https://petduel.win').replace(/\/+$/, '')
 const COLOR = parseInt(String(CONFIG.color || '#F5A623').replace('#', ''), 16);
 const CH = CONFIG.channels;
 const EPHEMERAL = 64;
+/* commands start with this prefix (config.json "prefix", or PREFIX in .env); default ! */
+const P = String(process.env.PREFIX || CONFIG.prefix || '!').trim() || '!';
 
 if (!TOKEN) {
   console.error('DISCORD_TOKEN is missing in the .env file.');
@@ -107,7 +109,8 @@ async function start() {
   } catch (error) {
     if (/disallowed intents/i.test(String(error && error.message))) {
       console.warn('\n  Server Members Intent / Message Content Intent are off in the Developer Portal.');
-      console.warn('  The bot works without them, but join/leave logs and deleted message text are disabled.');
+      console.warn('  !!! Prefix commands (!help, !link ...) NEED the Message Content Intent: without it the bot cannot read commands.');
+      console.warn('  Join/leave logs and deleted message text are also disabled.');
       console.warn('  Turn them on: discord.com/developers > your app > Bot > Privileged Gateway Intents.\n');
       privileged = false;
       try { client.destroy(); } catch { /* ignore */ }
@@ -152,6 +155,41 @@ async function ensureRoles(guild) {
     try { await guild.roles.create({ name: r.name, color: r.color, reason: 'PetDuel rank role' }); }
     catch (error) { console.warn(`Could not create role ${r.name}: ${error.message}`); }
   }
+  await removeOldRoles(guild);
+  await setRoleIcons(guild);
+}
+
+/* roles listed in config.json "deleteRoles" (Red Team, Blue Team...) are deleted, whatever their emoji or case */
+async function removeOldRoles(guild) {
+  const kill = (CONFIG.deleteRoles || []).map(norm).filter(Boolean);
+  if (!kill.length) return;
+  for (const role of guild.roles.cache.values()) {
+    if (role.managed || role.id === guild.id || !kill.includes(norm(role.name))) continue;
+    try { await role.delete('PetDuel: removed old role'); console.log(`  Deleted role "${role.name}"`); }
+    catch (error) { console.warn(`  Could not delete role "${role.name}": ${error.message} (move the bot's role above it)`); }
+  }
+}
+
+/* every role that has a picture in role-icons/<role name>.png gets it as its role icon.
+   Discord shows role icons only on servers with Boost level 2 (7+ boosts). Roles that already have an icon keep it,
+   unless config.json "replaceRoleIcons" is true. */
+async function setRoleIcons(guild) {
+  if (CONFIG.roleIcons === false) return;
+  if (!guild.features.includes('ROLE_ICONS')) {
+    console.log(`  Role icons skipped in "${guild.name}": the server needs Boost level 2 for role icons.`);
+    return;
+  }
+  const dir = path.join(__dirname, 'role-icons');
+  let files = [];
+  try { files = fs.readdirSync(dir).filter(f => f.endsWith('.png')); } catch { return; }
+  let done = 0;
+  for (const f of files) {
+    const role = guild.roles.cache.find(r => norm(r.name) === norm(f.slice(0, -4)));
+    if (!role || role.managed || (role.icon && !CONFIG.replaceRoleIcons)) continue;
+    try { await role.setIcon(fs.readFileSync(path.join(dir, f)), 'PetDuel role icon'); done++; }
+    catch (error) { console.warn(`  Could not set the icon of "${role.name}": ${error.message}`); }
+  }
+  if (done) console.log(`  Role icons set: ${done}`);
 }
 
 /* posts a message only once: when the channel has nothing from the bot yet */
@@ -165,7 +203,7 @@ async function postOnce(channel, payload) {
 }
 
 const ticketPanel = () => ({
-  embeds: [embed('🎫 Support Tickets', 'Need help with a deposit, a withdrawal or anything else?\nPress the button below and a private channel opens with our staff.\n\n**Tip:** link your account with `/link` first so staff can see your Pet Duel info.')],
+  embeds: [embed('🎫 Support Tickets', 'Need help with a deposit, a withdrawal or anything else?\nPress the button below and a private channel opens with our staff.\n\n**Tip:** link your account with `!link` first so staff can see your Pet Duel info.')],
   components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('ticket_open').setLabel('Open a ticket').setEmoji('🎫').setStyle(ButtonStyle.Primary))]
 });
 
@@ -183,7 +221,7 @@ async function setupGuild(guild) {
     if (!CONFIG.postInfoMessages) { await registerCommands(guild); console.log(`Ready in "${guild.name}".`); return; }
     await postOnce(findChannel(guild, CH.openTicket), ticketPanel());
     await postOnce(findChannel(guild, CH.website), {
-      embeds: [embed('🌐 petduel.win', `**Adopt Me PvP duels**: coinflip, jackpot, giveaways and events.\n\n👉 **${SITE}**\n\nLink your account with \`/link\` (get the code on the site: Profile > Link Discord) to get your rank role!`)],
+      embeds: [embed('🌐 petduel.win', `**Adopt Me PvP duels**: coinflip, jackpot, giveaways and events.\n\n👉 **${SITE}**\n\nLink your account with \`!link\` (get the code on the site: Profile > Link Discord) to get your rank role!`)],
       components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setLabel('Open Pet Duel').setStyle(ButtonStyle.Link).setURL(SITE))]
     });
     await postOnce(findChannel(guild, CH.rules), { embeds: [embed('📜 Server Rules', [
@@ -202,7 +240,7 @@ async function setupGuild(guild) {
       '**2. Deposit:** Wallet > Deposit. Join the bot\'s private server and trade your pets (add at least 6 food items). An admin confirms it.',
       '**3. Play:** create or join a **Coinflip** (pick paw or cat), or join the **Jackpot**: the bigger your share, the bigger your chance.',
       '**4. Withdraw:** Wallet > select pets > Withdraw. An admin sends them to you in game.',
-      '**5. Link Discord:** Profile > Link Discord on the site, then `/link CODE` here for your rank role.',
+      '**5. Link Discord:** Profile > Link Discord on the site, then `!link CODE` here for your rank role.',
       '',
       'Every result is provably fair. Questions? Open a ticket.'
     ].join('\n'))] });
@@ -303,9 +341,16 @@ function commandList() {
   ].map(c => c.toJSON());
 }
 
+/* the bot works with prefix commands now: the old / commands are removed from Discord (server and global) */
+let globalCleared = false;
 async function registerCommands(guild) {
   const rest = new REST({ version: '10' }).setToken(TOKEN);
-  await rest.put(Routes.applicationGuildCommands(guild.client.user.id, guild.id), { body: commandList() });
+  try { await rest.put(Routes.applicationGuildCommands(guild.client.user.id, guild.id), { body: [] }); }
+  catch (error) { console.warn(`Could not remove the / commands in "${guild.name}": ${error.message}`); }
+  if (!globalCleared) {
+    globalCleared = true;
+    try { await rest.put(Routes.applicationCommands(guild.client.user.id), { body: [] }); } catch { /* none */ }
+  }
 }
 
 /* ---------------- logs ---------------- */
@@ -468,7 +513,7 @@ async function openTicket(interaction) {
   /* staff instantly see the player's Pet Duel account when it is linked */
   if (BOT_KEY) {
     site('GET', `/api/bot/user?discordId=${interaction.user.id}`).then(({ user }) => ch.send({ embeds: [playerEmbed(user, true)] })).catch(() => {
-      ch.send({ content: 'ℹ️ This member has not linked a Pet Duel account (`/link`).' }).catch(() => {});
+      ch.send({ content: 'ℹ️ This member has not linked a Pet Duel account (`!link`).' }).catch(() => {});
     });
   }
 
@@ -531,6 +576,145 @@ async function catalogChoices(focused) {
   return list.map(c => ({ name: c.label.slice(0, 100), value: c.id }));
 }
 
+/* ---------------- prefix commands ----------------
+   "!giveaway start "Shadow Dragon" 60 2" works like /giveaway start with the same options in the same order.
+   Users: @mention or ID. Yes / no: true, false, on, off, yes, no. Text with spaces: in "quotes"; the last text
+   option takes the rest of the message. Permissions are the same as the old / commands had. */
+const OPT = { SUB: 1, GROUP: 2, STRING: 3, INTEGER: 4, BOOLEAN: 5, USER: 6, CHANNEL: 7, ROLE: 8, NUMBER: 10 };
+let COMMANDS = null;
+const commandsByName = () => (COMMANDS ||= new Map(commandList().map(c => [c.name, c])));
+
+function tokens(text) {
+  const out = [], re = /"([^"]*)"|'([^']*)'|(\S+)/g;
+  let m;
+  while ((m = re.exec(text))) out.push({ v: m[1] ?? m[2] ?? m[3], quoted: m[3] === undefined, start: m.index });
+  return out;
+}
+
+const optName = o => (o.required ? `<${o.name}>` : `[${o.name}:…]`);
+function usage(cmd, sub) {
+  if (sub) return `${P}${cmd.name} ${sub.name} ${(sub.options || []).map(optName).join(' ')}`.trim();
+  const subs = (cmd.options || []).filter(o => o.type === OPT.SUB);
+  if (subs.length) return subs.map(x => `${P}${cmd.name} ${x.name} ${(x.options || []).map(optName).join(' ')}`.trim()).join('\n');
+  return `${P}${cmd.name} ${(cmd.options || []).map(optName).join(' ')}`.trim();
+}
+
+async function parseValue(o, raw, msg) {
+  if (o.type === OPT.INTEGER || o.type === OPT.NUMBER) {
+    const n = o.type === OPT.INTEGER ? parseInt(raw, 10) : parseFloat(raw);
+    if (!Number.isFinite(n)) throw new Error(`\`${o.name}\` must be a number`);
+    if (o.min_value !== undefined && n < o.min_value) throw new Error(`\`${o.name}\` must be at least ${o.min_value}`);
+    if (o.max_value !== undefined && n > o.max_value) throw new Error(`\`${o.name}\` must be at most ${o.max_value}`);
+    return n;
+  }
+  if (o.type === OPT.BOOLEAN) {
+    const v = String(raw).toLowerCase();
+    if (['true', 'yes', 'on', '1', 'evet', 'acik'].includes(v)) return true;
+    if (['false', 'no', 'off', '0', 'hayir', 'kapali'].includes(v)) return false;
+    throw new Error(`\`${o.name}\` must be true or false`);
+  }
+  if (o.type === OPT.USER) {
+    const id = (String(raw).match(/^<@!?(\d+)>$/) || String(raw).match(/^(\d{15,25})$/) || [])[1];
+    if (!id) throw new Error(`\`${o.name}\`: mention a member or paste their ID`);
+    return msg.client.users.fetch(id);
+  }
+  /* options that used autocomplete: a typed name is turned into the site's id */
+  if (o.name === 'pet') {
+    const { list } = await site('GET', `/api/bot/catalog?q=${encodeURIComponent(raw)}`);
+    const hit = list.find(c => c.id === raw) || list.find(c => c.label.toLowerCase().startsWith(raw.toLowerCase())) || list[0];
+    if (!hit) throw new Error(`No catalog pet matches "${raw}"`);
+    return hit.id;
+  }
+  if (o.name === 'name' && o.autocomplete) {
+    const { bots } = await site('GET', '/api/bot/stats');
+    const hit = bots.find(b => b.id === raw || b.username.toLowerCase() === raw.toLowerCase());
+    if (!hit) throw new Error(`No deposit bot named "${raw}"`);
+    return hit.id;
+  }
+  return raw;
+}
+
+function toPayload(content) {
+  const p = typeof content === 'string' ? { content } : { ...content };
+  delete p.flags; delete p.ephemeral;
+  p.allowedMentions = { repliedUser: false, parse: [] };
+  return p;
+}
+
+async function handlePrefix(msg) {
+  if (msg.author.bot || !msg.guild || !msg.content.startsWith(P)) return;
+  if (ONLY_GUILD && msg.guild.id !== ONLY_GUILD) return;
+  const body = msg.content.slice(P.length);
+  const words = tokens(body);
+  if (!words.length) return;
+  const name = words[0].v.toLowerCase();
+  const cmd = commandsByName().get(name);
+  if (!cmd) return;
+
+  if (cmd.default_member_permissions && !(msg.member && msg.member.permissions.has(BigInt(cmd.default_member_permissions)))) {
+    return msg.reply(toPayload('⛔ You do not have permission to use this command.')).catch(() => {});
+  }
+
+  let rest = words.slice(1), sub = null, opts = cmd.options || [];
+  const subs = opts.filter(o => o.type === OPT.SUB);
+  if (subs.length) {
+    sub = subs.find(x => rest[0] && x.name === rest[0].v.toLowerCase());
+    if (!sub) return msg.reply(toPayload(`ℹ️ Usage:\n\`\`\`\n${usage(cmd)}\n\`\`\``)).catch(() => {});
+    rest = rest.slice(1);
+    opts = sub.options || [];
+  }
+
+  const values = {};
+  try {
+    /* name:value anywhere sets that option (handy for optional ones: qty:3 everyone:true) */
+    const named = {};
+    rest = rest.filter(t => {
+      const m = !t.quoted && t.v.match(/^([a-z_]+):(.+)$/i);
+      const o = m && opts.find(x => x.name === m[1].toLowerCase());
+      if (!o) return true;
+      named[o.name] = m[2];
+      return false;
+    });
+    for (let k = 0; k < opts.length; k++) {
+      const o = opts[k];
+      if (named[o.name] !== undefined) { values[o.name] = await parseValue(o, named[o.name], msg); continue; }
+      if (!rest.length) {
+        if (o.required) throw new Error(`\`${o.name}\` is missing`);
+        continue;
+      }
+      /* text: a "quoted" value is one value; otherwise it takes the rest when no required option comes after it */
+      let raw;
+      const noRequiredAfter = opts.slice(k + 1).every(x => !x.required);
+      if (o.type === OPT.STRING && !rest[0].quoted && noRequiredAfter) { raw = rest.map(t => t.v).join(' '); rest = []; }
+      else raw = rest.shift().v;
+      values[o.name] = await parseValue(o, raw, msg);
+    }
+  } catch (error) {
+    return msg.reply(toPayload(`❌ ${error.message}\nUsage: \`${usage(cmd, sub)}\``)).catch(() => {});
+  }
+
+  /* a /link code is private: the command message is removed */
+  if (name === 'link') msg.delete().catch(() => {});
+
+  const get = n => (values[n] === undefined ? null : values[n]);
+  let last = null;
+  const i = {
+    commandName: name, user: msg.author, member: msg.member, guild: msg.guild, channel: msg.channel, client: msg.client,
+    deferred: false, replied: false, isPrefix: true,
+    isRepliable: () => true,
+    options: { getSubcommand: () => (sub ? sub.name : null), getString: get, getInteger: get, getNumber: get, getBoolean: get, getUser: get },
+    async deferReply() { this.deferred = true; msg.channel.sendTyping().catch(() => {}); },
+    async reply(c) { this.replied = true; last = await (name === 'link' ? msg.channel.send(toPayload(c)) : msg.reply(toPayload(c))); return last; },
+    async editReply(c) { if (last) return last.edit(toPayload(c)); return this.reply(c); },
+    async followUp(c) { return msg.channel.send(toPayload(c)); }
+  };
+  try { await handleCommand(i); }
+  catch (error) {
+    console.warn(`Command error (${P}${name}):`, error.message);
+    i.editReply(`❌ ${error.message}`).catch(() => {});
+  }
+}
+
 /* ---------------- command handlers ---------------- */
 
 const reply = (i, content, eph = true) => i.deferred || i.replied
@@ -544,13 +728,15 @@ async function handleCommand(i) {
   if (name === 'help') {
     return reply(i, { embeds: [embed('📖 PetDuel bot', [
       '**Everyone**',
-      '`/link` `/unlink` `/profile` `/rank` `/leaderboard` `/stats` `/games` `/website` `/coinflip`',
+      [`link`, 'unlink', 'profile', 'rank', 'leaderboard', 'stats', 'games', 'website', 'coinflip'].map(c => `\`${P}${c}\``).join(' '),
       '',
       '**Staff / Support**',
-      '`/clear` `/timeout` `/kick` `/ban`',
+      ['clear', 'timeout', 'kick', 'ban'].map(c => `\`${P}${c}\``).join(' '),
       '',
       '**Admins**',
-      '`/site maintenance|say|bot|block` `/player info|mute|ban|give|clearpets` `/match cancel` `/event wheel|scramble|cancel` `/announce` `/giveaway start|end|reroll` `/ticketpanel`'
+      ['site maintenance|say|bot|block', 'player info|mute|ban|give|clearpets', 'match cancel', 'event wheel|scramble|cancel', 'announce', 'giveaway start|end|reroll', 'ticketpanel'].map(c => `\`${P}${c}\``).join(' '),
+      '',
+      `Text with spaces goes in "quotes", members as @mention, optional options as name:value. Examples: \`${P}giveaway start "Shadow Dragon" 60 2\` · \`${P}player give laura "Neon Shadow Dragon" qty:3\``
     ].join('\n'))] });
   }
 
@@ -805,7 +991,7 @@ async function handleButton(i) {
     }
     if (g.linkedOnly) {
       try { await site('GET', `/api/bot/user?discordId=${i.user.id}`); }
-      catch { return reply(i, '🔗 Link your Pet Duel account first: get a code on petduel.win (Profile > Link Discord), then `/link CODE`.'); }
+      catch { return reply(i, '🔗 Link your Pet Duel account first: get a code on petduel.win (Profile > Link Discord), then `!link CODE`.'); }
     }
     g.entries.push(i.user.id);
     saveGiveaways();
@@ -871,6 +1057,8 @@ function attachHandlers(c) {
       if (i.isRepliable()) reply(i, `❌ ${error.message}`).catch(() => {});
     }
   });
+
+  c.on(Events.MessageCreate, msg => { handlePrefix(msg).catch(error => console.warn('Prefix command error:', error.message)); });
 
   c.on(Events.GuildMemberAdd, m => log(m.guild, '📥 Member joined', `${m} (${m.user.username})\nAccount created <t:${Math.floor(m.user.createdTimestamp / 1000)}:R>`, 0x00efa0));
   c.on(Events.GuildMemberRemove, m => log(m.guild, '📤 Member left', `${m.user ? m.user.username : 'unknown'} (${m.id})`, 0x8d909a));

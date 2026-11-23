@@ -1,5 +1,6 @@
 {
   "siteUrl": "https://petduel.win",
+  "prefix": "!",
   "color": "#F5A623",
   "channels": {
     "announcements": "announcements",
@@ -44,5 +45,11 @@
     "botLogs": ""
   },
   "createChannels": false,
-  "postInfoMessages": false
+  "postInfoMessages": false,
+  "deleteRoles": [
+    "Red Team",
+    "Blue Team"
+  ],
+  "roleIcons": true,
+  "replaceRoleIcons": false
 }
