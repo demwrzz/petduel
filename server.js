@@ -375,7 +375,8 @@ function snapshot() {
     bots: S.bots.map(b => ({ id: b.id, username: b.username, link: b.link, online: b.online !== false, role: botRole(b) })),
     eventEscrow: S.eventEscrow || null,
     ipBans: S.ipBans || [],
-    amTrades: (S.amTrades || []).slice(0, 5000)
+    amTrades: (S.amTrades || []).slice(0, 5000),
+    depositSessions: S.depositSessions || {}
   };
 }
 
@@ -460,6 +461,7 @@ async function initDb() {
       S.jpHistory = Array.isArray(d.jpHistory) ? d.jpHistory : [];
       S.ipBans = Array.isArray(d.ipBans) ? d.ipBans : [];
       S.amTrades = Array.isArray(d.amTrades) ? d.amTrades : [];
+      S.depositSessions = d.depositSessions && typeof d.depositSessions === 'object' ? d.depositSessions : {};
       /* an event prize from an admin's inventory was in play when the server stopped: give it back */
       const esc = d.eventEscrow;
       if (esc && esc.item && S.users[esc.userId]) {
@@ -2098,6 +2100,7 @@ const UPDATE_LOG = [
     'IP bans: ban an IP by hand or every IP a player used with one button; banned IPs see a "You are banned" page and cannot connect',
     'Admin panel in tabs (Overview, Users, Pets, Bots, Games); players are shown as cards like the pet catalog',
     'Catalog: ✏️ edit button for name, picture, value, version and Fly / Ride, optionally also for the copies players own',
+    'Deposit bot fix: the deposit session opens as soon as Deposit is pressed (not only on step 3) and survives a restart; bot log in the admin panel (Bots tab) shows every bot request and why it was allowed or refused',
     'Automatic Adopt Me deposits: Deposit step 3 opens a 10 minute session, the in-game bot accepts the trade and the pets (matched by name, Neon / Mega, Fly / Ride) appear in the inventory by themselves',
     'Giveaways: one entry per IP address, and nobody can enter from the host\'s connection',
     'Fixes: the top bar no longer makes the page wider than the screen on laptops and tablets (1280 / 1366 px and smaller); phones now have the menu (Coinflip, Jackpot, Leaderboard...) as a swipeable row'
@@ -4124,6 +4127,17 @@ function adminUI() {
         <p class="hint">Players trade their pets to these bots. They are shown in the Deposit window with their status. Players cannot join an offline bot.</p>
       </div>
 
+      <h4 style="margin:16px 0 8px">🧾 In-game bot log</h4>
+      <div style="padding:14px;border-radius:12px;border:1px solid #343842;margin-bottom:6px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+          <span id="bl-state" style="font-weight:800"></span><span style="flex:1"></span>
+          <button id="bl-refresh" class="btn gray sm">Refresh</button>
+        </div>
+        <div id="bl-sessions" class="hint" style="margin:0 0 6px"></div>
+        <div id="bl-list" style="max-height:260px;overflow:auto;font-family:monospace;font-size:12px"></div>
+        <p class="hint" style="margin:8px 0 0">Every request of the in-game deposit bot: which name it asked for, the deposit sessions that were open and why it was allowed or refused.</p>
+      </div>
+
       <h4 style="margin:16px 0 8px">📤 Withdraw bots</h4>
       <div style="background:#f5faff;padding:14px;border-radius:12px">
         <div id="wbot-list" data-role="withdraw" style="margin-bottom:10px"></div>
@@ -4531,6 +4545,17 @@ function adminUI() {
       toast(mtOn ? 'Maintenance ON: the site is closed' : 'Maintenance OFF: the site is open', 'ok');
     } catch (err) { toast(err.message, 'err'); }
   };
+
+  async function loadBotLog() {
+    try {
+      const r = await api('/api/admin/botlog');
+      $('bl-state').innerHTML = r.on ? '<span style="color:#00efa0">● Automatic deposits ON</span>' : '<span style="color:#ff5968">● OFF: BOT_SECRET_KEY is not set in Railway</span>';
+      $('bl-sessions').textContent = 'Open deposit sessions: ' + r.sessions;
+      $('bl-list').innerHTML = r.log.length ? r.log.map(l => `<div style="padding:4px 0;border-top:1px solid #2a2e39;color:${/allowed=true|added/.test(l.text) ? '#7dffcf' : /403|503|allowed=false/.test(l.text) ? '#ff8a94' : '#cfd2db'}">${new Date(l.ts).toLocaleTimeString()} · ${esc(l.text)}</div>`).join('') : '<p class="hint">Nothing yet. Press Deposit on the site and send the bot a trade.</p>';
+    } catch (err) { $('bl-list').textContent = err.message; }
+  }
+  $('bl-refresh').onclick = loadBotLog;
+  loadBotLog();
 
   function renderBots(all) {
     for (const [id, role] of [['bot-list', 'deposit'], ['wbot-list', 'withdraw']]) {
@@ -5390,8 +5415,28 @@ process.on('uncaughtException', err => console.error('Uncaught exception:', err 
 
 const DEPOSIT_SESSION_MS = 10 * 60 * 1000;
 const DEPOSIT_GRACE_MS = 5 * 60 * 1000;      /* a trade started just before the end can still be confirmed */
-const activeSessions = new Map();            /* robloxUsername (lower case) -> { userId, robloxUsername, startedAt, expiresAt } */
+/* robloxUsername (trim + lower case) -> { userId, robloxUsername, startedAt, expiresAt }; saved in S.depositSessions */
+const activeSessions = {
+  get: k => (S.depositSessions || {})[k],
+  set: (k, v) => { S.depositSessions = { ...(S.depositSessions || {}), [k]: v }; markDirty(); },
+  delete: k => { if (S.depositSessions && S.depositSessions[k]) { delete S.depositSessions[k]; markDirty(); } },
+  entries: () => Object.entries(S.depositSessions || {})
+};
 const sessionKey = name => String(name || '').trim().toLowerCase();
+
+/* what the in-game bot asked and what it got: Railway log + the last 60 lines in the admin panel (Bots tab) */
+const botLog = [];
+function logBot(text) {
+  const line = `[BOT] ${text}`;
+  console.log(line);
+  botLog.unshift({ ts: now(), text });
+  if (botLog.length > 60) botLog.length = 60;
+}
+const sessionsText = () => {
+  const t = now();
+  const list = activeSessions.entries().map(([k, v]) => `${k} (${v.expiresAt > t ? Math.ceil((v.expiresAt - t) / 60000) + ' min left' : 'expired'})`);
+  return list.length ? list.join(', ') : 'none';
+};
 const autoDepositOn = () => Boolean(E.BOT_SECRET_KEY);
 
 function gameBotSecretOk(req) {
@@ -5403,8 +5448,15 @@ function gameBotSecretOk(req) {
 
 /* middleware for the in-game bot routes */
 function gameBotOnly(req, res, next) {
-  if (!autoDepositOn()) return bad(res, 'BOT_SECRET_KEY is not set on the server', 503);
-  if (!gameBotSecretOk(req)) return bad(res, 'Forbidden', 403);
+  if (!autoDepositOn()) {
+    logBot(`${req.method} ${req.path} -> 503: BOT_SECRET_KEY is not set in Railway`);
+    return bad(res, 'BOT_SECRET_KEY is not set on the server', 503);
+  }
+  if (!gameBotSecretOk(req)) {
+    const got = String(req.headers['x-bot-secret'] || '');
+    logBot(`${req.method} ${req.path} -> 403: ${got ? `wrong x-bot-secret (sent ${got.length} characters, the server expects ${String(E.BOT_SECRET_KEY).length})` : 'no x-bot-secret header'}`);
+    return bad(res, 'Forbidden', 403);
+  }
   next();
 }
 
@@ -5413,10 +5465,14 @@ function rememberTrade(id) { S.amTrades = [id, ...(S.amTrades || []).filter(x =>
 
 setInterval(() => {
   const t = now();
-  for (const [k, sess] of activeSessions) if (sess.expiresAt + DEPOSIT_GRACE_MS < t) activeSessions.delete(k);
+  for (const [k, sess] of activeSessions.entries()) if (sess.expiresAt + DEPOSIT_GRACE_MS < t) activeSessions.delete(k);
 }, 60 * 1000);
 
 const sessionView = sess => (sess ? { startedAt: sess.startedAt, expiresAt: sess.expiresAt } : null);
+
+app.get('/api/admin/botlog', auth, adminOnly, (req, res) => {
+  res.json({ on: autoDepositOn(), sessions: sessionsText(), log: botLog });
+});
 
 app.post('/api/deposit/init', auth, actionLimit, (req, res) => {
   if (!autoDepositOn()) return bad(res, 'Automatic deposits are not set up yet', 503);
@@ -5426,6 +5482,7 @@ app.post('/api/deposit/init', auth, actionLimit, (req, res) => {
   const live = old && old.expiresAt > now();
   const sess = { userId: user.id, robloxUsername: user.username, startedAt: live ? old.startedAt : now(), expiresAt: now() + DEPOSIT_SESSION_MS };
   activeSessions.set(key, sess);
+  logBot(`deposit session ${live ? 'renewed' : 'opened'} for "${user.username}" (key "${key}", 10 min)`);
   res.json({ status: 'ready', robloxUsername: user.username, ...sessionView(sess) });
 });
 
@@ -5440,9 +5497,16 @@ app.get('/api/deposit/status', auth, (req, res) => {
 });
 
 app.get('/api/bot/verify-player/:robloxUsername', gameBotOnly, (req, res) => {
-  const sess = activeSessions.get(sessionKey(req.params.robloxUsername));
+  const asked = String(req.params.robloxUsername || '');
+  const key = sessionKey(asked);
+  const sess = activeSessions.get(key);
   const user = sess && S.users[sess.userId];
-  res.json({ allowed: Boolean(sess && sess.expiresAt > now() && user && !user.banned) });
+  const reason = !sess ? 'no deposit session for this name (the player has to press Deposit on the site first)'
+    : sess.expiresAt <= now() ? 'the deposit session expired'
+    : !user ? 'the site account was not found'
+    : user.banned ? 'the site account is banned' : '';
+  logBot(`verify-player "${asked}" (key "${key}") -> allowed=${!reason}${reason ? ` (${reason})` : ''} · open sessions: ${sessionsText()}`);
+  res.json({ allowed: !reason });
 });
 
 app.post('/api/bot/confirm-deposit', gameBotOnly, (req, res) => {
@@ -5455,7 +5519,10 @@ app.post('/api/bot/confirm-deposit', gameBotOnly, (req, res) => {
 
   const key = sessionKey(name);
   const sess = activeSessions.get(key);
-  if (!sess || sess.expiresAt + DEPOSIT_GRACE_MS < now()) return res.status(403).json({ success: false, error: 'No active deposit session for this player' });
+  if (!sess || sess.expiresAt + DEPOSIT_GRACE_MS < now()) {
+    logBot(`confirm-deposit "${name}" trade ${tradeId} -> 403 (no deposit session) · open sessions: ${sessionsText()}`);
+    return res.status(403).json({ success: false, error: 'No active deposit session for this player' });
+  }
   const user = S.users[sess.userId];
   if (!user) return res.status(404).json({ success: false, error: 'Player not found on the site' });
 
@@ -5486,7 +5553,7 @@ app.post('/api/bot/confirm-deposit', gameBotOnly, (req, res) => {
   io.to('u:' + user.id).emit('deposit:done', { credited: credited.length, total });
   notifyAdmins('withdraw', `📥 Bot deposit by ${nick(user)} (${user.username}): ${credited.map(c => c.label).join(', ') || 'no catalog pets'} · ${total}` +
     (unmatched.length ? ` · NOT IN CATALOG: ${unmatched.map(u => u.label).join(', ')}` : ''));
-  console.log(`[DEPOSIT] ${user.username} trade ${tradeId}: ${credited.length} added, ${unmatched.length} not in catalog`);
+  logBot(`confirm-deposit "${name}" trade ${tradeId} -> ${credited.length} pet(s) added${unmatched.length ? `, not in catalog: ${unmatched.map(u => u.label).join(', ')}` : ''}`);
   res.json({ success: true, credited: credited.length, total, unmatched });
 });
 

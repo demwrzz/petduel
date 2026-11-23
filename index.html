@@ -3910,6 +3910,8 @@
 
     function showDeposit() {
       if (!requireLogin()) return;
+      /* the deposit session starts right away, so the bot accepts the trade even before step 3 */
+      if (STATE.config && STATE.config.autoDeposit) api("/api/deposit/init", { body: {} }).then(r => { adSession = r; }).catch(() => {});
       openBotsModal();
     }
 
