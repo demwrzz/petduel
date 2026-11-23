@@ -1973,6 +1973,14 @@ app.post('/api/giveaway/enter', auth, actionLimit, async (req, res) => {
     return bad(res, `You need the ${g.minRank} rank (or higher) to enter`);
   }
 
+  /* one entry per IP: a second account on the same connection cannot enter, and neither can the host's connection */
+  const ip = clientIp(req.headers, req.ip);
+  g.entrantIps = g.entrantIps || {};
+  if (ip && g.entrantIps[ip] && g.entrantIps[ip] !== user.id) return bad(res, 'Only one account per IP address can enter this giveaway');
+  const host = S.users[g.host.id];
+  if (ip && host && (host.ips || []).includes(ip)) return bad(res, 'You cannot enter a giveaway from the same connection as its host');
+
+  if (ip) g.entrantIps[ip] = user.id;
   g.entrants.push(user.id);
   markDirty();
   io.emit('giveaway:update', publicGiveaway(g));
@@ -2086,7 +2094,9 @@ const UPDATE_LOG = [
     'MM2 is removed from Pet Duel; on the first start every MM2 item, catalog item, bot, game, giveaway, withdrawal and transaction is removed (a full backup is kept in the database as backup-before-mm2-delete)',
     'IP bans: ban an IP by hand or every IP a player used with one button; banned IPs see a "You are banned" page and cannot connect',
     'Admin panel in tabs (Overview, Users, Pets, Bots, Games); players are shown as cards like the pet catalog',
-    'Catalog: ✏️ edit button for name, picture, value, version and Fly / Ride, optionally also for the copies players own'
+    'Catalog: ✏️ edit button for name, picture, value, version and Fly / Ride, optionally also for the copies players own',
+    'Giveaways: one entry per IP address, and nobody can enter from the host\'s connection',
+    'Fixes: the top bar no longer makes the page wider than the screen on laptops and tablets (1280 / 1366 px and smaller); phones now have the menu (Coinflip, Jackpot, Leaderboard...) as a swipeable row'
   ] },
   { version: '4.6', title: 'Support: mute only', changes: [
     'Support members can only mute (up to 24 h); withdrawals are handled by admins only (site and Discord)',
