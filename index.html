@@ -212,6 +212,16 @@
     }
     .banner h1 { margin: 0 0 5px; color: var(--orange); font-size: 20px; }
     .banner p { margin: 0; color: #bab4a5; font-size: 13px; }
+    /* ---------- automatic withdraw ---------- */
+    .bw-ready { margin-bottom: 12px; padding: 14px 16px; border: 1px solid #1f5a45; border-radius: 10px; color: #d6fff0; background: #14231e; font-size: 15px; line-height: 1.5; }
+    .bw-ready b { color: #fff; }
+    .bw-done { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; padding: 14px 16px; border: 1px solid #1f5a45; border-radius: 10px; background: #14231e; font-size: 15px; }
+    .bw-cancel { width: 100%; margin-top: 12px; }
+    .bw-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; padding: 12px 14px; border: 1px solid #1f5a45; border-radius: 10px; background: #14231e; }
+    .bw-row div { flex: 1; min-width: 0; }
+    .bw-row b { display: block; }
+    .bw-row small { color: var(--muted); }
+
     /* ---------- automatic deposit ---------- */
     .ad { margin-top: 12px; padding: 12px 14px; border: 1px solid #2a2e39; border-radius: 10px; background: #161920; }
     .ad-wait { display: flex; align-items: center; gap: 10px; color: #cfd2db; font-size: 14px; font-weight: 600; }
@@ -3845,13 +3855,20 @@
       const box = $("#wdBox");
       if (!box) return;
       try {
-        const { list } = await api("/api/withdrawals");
+        const [{ list }, bw] = await Promise.all([api("/api/withdrawals"), STATE.config && STATE.config.autoDeposit ? api("/api/withdraw/status").catch(() => ({})) : {}]);
         if (!$("#wdBox")) return;
+        const botW = bw && bw.withdraw && bw.withdraw.status === "pending" ? bw.withdraw : null;
+        const botRow = botW ? `
+          <div class="bw-row">
+            <span class="ad-spin"></span>
+            <div><b>Withdrawal waiting</b><small>Send our bot a trade in Adopt Me · ${botW.items.length} pet${botW.items.length === 1 ? "" : "s"} · ${GEM}${fmt(botW.value)}</small></div>
+            <button class="btn sm" data-action="bw-open">Open</button>
+          </div>` : "";
         const pending = asArray(list).filter(w => w.status === "pending");
-        if (!pending.length) { box.innerHTML = ""; return; }
+        if (!pending.length) { box.innerHTML = botRow; return; }
         const rows = pending;
         const label = { pending: "Pending", done: "Sent", refunded: "Refunded" };
-        box.innerHTML = `
+        box.innerHTML = botRow + `
           <div class="wd-panel ${wdOpen ? "open" : ""}">
             <button class="wd-head" data-action="wd-toggle">
               <span class="wd-title"><span class="wd-pulse"></span>Pending withdrawals
@@ -3872,12 +3889,72 @@
       } catch { box.innerHTML = ""; }
     }
 
+    /* ---------- automatic withdraw: the in-game bot hands the pets over ---------- */
+    let bwTimer = null, bwView = null;
+    const bwStop = () => { clearInterval(bwTimer); bwTimer = null; };
+
+    async function botWithdraw(uids) {
+      const btn = $("#withdrawButton");
+      if (btn) btn.disabled = true;
+      try {
+        const r = await api("/api/withdraw/request", { body: { uids } });
+        closeModal();
+        await refresh();
+        openBotWithdraw(r.withdraw);
+      } catch (error) {
+        if (btn) btn.disabled = false;
+        fail(error);
+      }
+    }
+
+    function openBotWithdraw(view) {
+      bwStop();
+      bwView = view;
+      openModal2(`${modalHeader("Withdraw", "close2")}<div id="bwBox"></div>`);
+      renderBotWithdraw();
+      bwTimer = setInterval(bwTick, 2000);
+    }
+
+    function renderBotWithdraw() {
+      const box = $("#bwBox");
+      const w = bwView;
+      if (!box || !w) return;
+      const done = w.status === "completed", gone = w.status === "cancelled" || w.status === "expired";
+      const left = Math.max(0, Number(w.expiresAt) - (Date.now() - clockSkew));
+      box.innerHTML = `
+        ${done ? `<div class="bw-done"><span class="ad-ok">✔</span><div><b>Withdrawal complete!</b> The bot handed your pets over in Adopt Me.${w.returned ? ` ${w.returned} pet(s) were not handed over and are back in your inventory.` : ""}</div></div>`
+          : gone ? `<div class="warn"><i>!</i><span>${w.status === "cancelled" ? "Withdrawal cancelled." : "No trade in 15 minutes."} Your pets are back in your inventory.</span></div>`
+          : `<div class="bw-ready"><b>Withdrawal ready!</b> Join the bot's private server and send it a trade in Adopt Me. The bot puts your pets in the trade by itself, accept it to get them.</div>
+             <div id="depositBots">${botsListHTML()}</div>
+             <div class="ad-meta"><span>Trading as <b>${esc(ME ? ME.robloxName || "" : "")}</b></span><span>${left > 0 ? `Ends in ${Math.floor(left / 60000)}:${String(Math.floor(left / 1000) % 60).padStart(2, "0")}` : "Ending…"}</span></div>`}
+        <div class="ad-got-h">${done ? "Delivered" : "Pets"}</div>
+        <div class="ad-got">${asArray(w.items).map(i => `<div class="ad-item"><img src="${esc(itemImage(i))}" alt=""><b>${esc(itemLabel(i))}</b><span>${GEM}${fmt(i.value)}</span></div>`).join("") || '<div class="empty">No pets</div>'}</div>
+        ${!done && !gone ? `<div class="ad-wait" style="margin-top:12px"><span class="ad-spin"></span>Waiting for your trade…</div>
+          <button class="btn red bw-cancel" data-action="bw-cancel" ${w.canCancel ? "" : "disabled"}>${w.canCancel ? "Cancel withdrawal" : "The bot is trading with you…"}</button>` : ""}`;
+    }
+
+    async function bwTick() {
+      if (!$("#bwBox") || !bwView) return bwStop();
+      try {
+        const r = await api("/api/withdraw/status?id=" + encodeURIComponent(bwView.id));
+        if (!$("#bwBox")) return bwStop();
+        if (r.withdraw) {
+          const changed = r.withdraw.status !== bwView.status;
+          bwView = r.withdraw;
+          if (changed) { if (bwView.status === "completed") toast("Withdrawal complete!", "ok"); refresh(); }
+        }
+        renderBotWithdraw();
+        if (bwView.status !== "pending") bwStop();
+      } catch { /* again in 2 seconds */ }
+    }
+
     async function withdraw() {
       if (!requireLogin()) return;
 
       const uids = selectedUids();
       if (botsOffline()) return toast("Withdrawals are paused while our bots are offline", "err");
       if (!uids.length) return toast("Select items first", "err");
+      if (STATE.config && STATE.config.autoDeposit) return botWithdraw(uids);
 
       const btn = $("#withdrawButton");
       if (btn) btn.disabled = true;
@@ -5821,6 +5898,15 @@
       "submit-giveaway": submitGiveaway,
       "enter-giveaway"(el) { enterGiveaway(el.dataset.id); },
       "ad-restart"() { startAutoDeposit(); },
+      async "bw-open"() {
+        try { const r = await api("/api/withdraw/status"); if (r.withdraw) { closeModal(); openBotWithdraw(r.withdraw); } }
+        catch (error) { fail(error); }
+      },
+      async "bw-cancel"() {
+        if (!(await confirmBox({ title: "Cancel withdrawal", text: "Cancel this withdrawal? The pets go back to your inventory.", ok: "Cancel withdrawal", danger: true }))) return;
+        try { const r = await api("/api/withdraw/cancel", { body: {} }); bwView = r.withdraw; renderBotWithdraw(); bwStop(); toast("Withdrawal cancelled, pets returned", "ok"); refresh(); }
+        catch (error) { fail(error); }
+      },
       "dep-step"(el) { openBotsModal(Number(el.dataset.step) || 1); },
       "jp-history"() { showJpHistory(); },
       "admin-cancel"(el) { adminCancelMatch(el.dataset.id); },

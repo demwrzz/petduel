@@ -376,7 +376,8 @@ function snapshot() {
     eventEscrow: S.eventEscrow || null,
     ipBans: S.ipBans || [],
     amTrades: (S.amTrades || []).slice(0, 5000),
-    depositSessions: S.depositSessions || {}
+    depositSessions: S.depositSessions || {},
+    botWithdrawals: (S.botWithdrawals || []).slice(0, 2000)
   };
 }
 
@@ -462,6 +463,7 @@ async function initDb() {
       S.ipBans = Array.isArray(d.ipBans) ? d.ipBans : [];
       S.amTrades = Array.isArray(d.amTrades) ? d.amTrades : [];
       S.depositSessions = d.depositSessions && typeof d.depositSessions === 'object' ? d.depositSessions : {};
+      S.botWithdrawals = Array.isArray(d.botWithdrawals) ? d.botWithdrawals : [];
       /* an event prize from an admin's inventory was in play when the server stopped: give it back */
       const esc = d.eventEscrow;
       if (esc && esc.item && S.users[esc.userId]) {
@@ -2101,6 +2103,7 @@ const UPDATE_LOG = [
     'Admin panel in tabs (Overview, Users, Pets, Bots, Games); players are shown as cards like the pet catalog',
     'Catalog: ✏️ edit button for name, picture, value, version and Fly / Ride, optionally also for the copies players own',
     'Deposit bot fix: the deposit session opens as soon as Deposit is pressed (not only on step 3) and survives a restart; bot log in the admin panel (Bots tab) shows every bot request and why it was allowed or refused',
+    'Automatic withdrawals: pick pets > Withdraw, then trade the bot in game; it gives the pets by itself. The pets are locked while waiting and come back after 15 minutes without a trade or when you cancel',
     'Automatic Adopt Me deposits: Deposit step 3 opens a 10 minute session, the in-game bot accepts the trade and the pets (matched by name, Neon / Mega, Fly / Ride) appear in the inventory by themselves',
     'Giveaways: one entry per IP address, and nobody can enter from the host\'s connection',
     'Fixes: the top bar no longer makes the page wider than the screen on laptops and tablets (1280 / 1366 px and smaller); phones now have the menu (Coinflip, Jackpot, Leaderboard...) as a swipeable row'
@@ -5348,6 +5351,7 @@ function auditItems() {
     if (m.state === 'finished') continue;
     [...m.hostItems, ...m.oppItems].forEach(i => add(i.uid, `match ${m.id}`, false));
   }
+  for (const w of S.botWithdrawals || []) if (w.status === 'pending') w.items.forEach(i => add(i.uid, `bot withdraw ${w.id}`, false));
 
   if (JP && JP.state !== 'finished') JP.entries.forEach(e => e.items.forEach(i => add(i.uid, `jackpot ${JP.id}`, false)));
 
@@ -5480,6 +5484,7 @@ app.get('/api/admin/botlog', auth, adminOnly, (req, res) => {
 app.post('/api/deposit/init', auth, actionLimit, (req, res) => {
   if (!autoDepositOn()) return bad(res, 'Automatic deposits are not set up yet', 503);
   const user = req.user;
+  if (pendingBotWithdraw(user.id)) return bad(res, 'Finish or cancel your withdrawal first: the bot gives you your pets in that trade');
   const key = sessionKey(user.username);
   const old = activeSessions.get(key);
   const live = old && old.expiresAt > now();
@@ -5502,14 +5507,25 @@ app.get('/api/deposit/status', auth, (req, res) => {
 app.get('/api/bot/verify-player/:robloxUsername', gameBotOnly, (req, res) => {
   const asked = String(req.params.robloxUsername || '');
   const key = sessionKey(asked);
+  /* a waiting withdrawal of this player comes first: the bot gives the pets */
+  const w = pendingWithdrawByName(key);
+  if (w) {
+    const wu = S.users[w.userId];
+    if (wu && !wu.banned) {
+      w.botSeenAt = now();
+      markDirty();
+      logBot(`verify-player "${asked}" -> allowed=true mode=withdraw session ${w.id}: ${w.items.map(itemText).join(', ')}`);
+      return res.json({ allowed: true, mode: 'withdraw', sessionId: w.id, items: w.items.map(i => ({ name: i.name, neon: i.age === 'neon', mega: i.age === 'mega', fly: Boolean(i.fly), ride: Boolean(i.ride) })) });
+    }
+  }
   const sess = activeSessions.get(key);
   const user = sess && S.users[sess.userId];
   const reason = !sess ? 'no deposit session for this name (the player has to press Deposit on the site first)'
     : sess.expiresAt <= now() ? 'the deposit session expired'
     : !user ? 'the site account was not found'
     : user.banned ? 'the site account is banned' : '';
-  logBot(`verify-player "${asked}" (key "${key}") -> allowed=${!reason}${reason ? ` (${reason})` : ''} · open sessions: ${sessionsText()}`);
-  res.json({ allowed: !reason });
+  logBot(`verify-player "${asked}" (key "${key}") -> allowed=${!reason}${reason ? ` (${reason})` : ' mode=deposit'} · open sessions: ${sessionsText()}`);
+  res.json(reason ? { allowed: false } : { allowed: true, mode: 'deposit' });
 });
 
 app.post('/api/bot/confirm-deposit', gameBotOnly, (req, res) => {
@@ -5568,6 +5584,133 @@ app.post('/api/bot/confirm-deposit', gameBotOnly, (req, res) => {
     (unmatched.length ? ` · NOT IN CATALOG: ${unmatched.map(u => u.label).join(', ')}` : ''));
   logBot(`confirm-deposit "${name}" trade ${tradeId} -> ${credited.length} pet(s) added${unmatched.length ? `, not in catalog: ${unmatched.map(u => u.label).join(', ')}` : ''}`);
   res.json({ success: true, credited: credited.length, total, unmatched });
+});
+
+/* ================= ADOPT ME AUTOMATIC WITHDRAW (in-game bot) =================
+   1. The player picks pets and presses Withdraw: POST /api/withdraw/request takes them out of the inventory into a
+      saved withdraw record (S.botWithdrawals, kept in MongoDB) = the withdraw session (its id is the sessionId).
+   2. verify-player answers { allowed: true, mode: "withdraw", sessionId, items: [{ name, neon, mega, fly, ride }] }.
+   3. When the pets are handed over the bot calls POST /api/bot/confirm-withdraw { sessionId, robloxUsername, items }:
+      the record is completed; pets the bot did not hand over go back to the player.
+   4. Cancel (POST /api/withdraw/cancel) or 15 minutes without a trade: the pets go back to the inventory.
+      Cancel is refused for 3 minutes after the bot started trading with the player (the pets may already be given). */
+const WD_SESSION_MS = 15 * 60 * 1000;
+const WD_BOT_LOCK_MS = 3 * 60 * 1000;
+const WD_MAX_ITEMS = 18;
+const itemText = i => `${i.age === 'mega' ? 'Mega ' : i.age === 'neon' ? 'Neon ' : ''}${i.fly && i.ride ? 'FR ' : i.fly ? 'F ' : i.ride ? 'R ' : ''}${i.name}`;
+const itemKey = (name, age, fly, ride) => `${String(name || '').trim().toLowerCase().replace(/\s+/g, ' ')}|${age || 'normal'}|${fly ? 1 : 0}|${ride ? 1 : 0}`;
+const pendingBotWithdraw = userId => (S.botWithdrawals || []).find(w => w.userId === userId && w.status === 'pending') || null;
+const pendingWithdrawByName = key => (S.botWithdrawals || []).find(w => w.status === 'pending' && sessionKey(w.robloxUsername) === key && w.expiresAt > now()) || null;
+
+function wdView(w) {
+  if (!w) return null;
+  return {
+    id: w.id, status: w.status, ts: w.ts, expiresAt: w.expiresAt, items: w.items.map(publicItem), value: valueOf(w.items),
+    returned: (w.returned || []).length,
+    canCancel: w.status === 'pending' && !(w.botSeenAt && now() - w.botSeenAt < WD_BOT_LOCK_MS)
+  };
+}
+
+function refundBotWithdraw(w, status) {
+  if (!w || w.status !== 'pending') return false;
+  w.status = status;
+  w.doneAt = now();
+  const user = S.users[w.userId];
+  if (user) {
+    user.inventory.push(...w.items);
+    addTransaction(user, 'Withdraw Refund', w.id, valueOf(w.items));
+    emitMe(user);
+    io.to('u:' + user.id).emit('withdraw:update', wdView(w));
+  }
+  markDirty();
+  return true;
+}
+
+setInterval(() => {
+  const t = now();
+  for (const w of S.botWithdrawals || []) {
+    if (w.status !== 'pending' || w.expiresAt > t) continue;
+    if (w.botSeenAt && t - w.botSeenAt < WD_BOT_LOCK_MS) continue; /* the bot is in the middle of the trade */
+    refundBotWithdraw(w, 'expired');
+    logBot(`withdraw ${w.id} of "${w.robloxUsername}": no trade in 15 minutes, ${w.items.length} pet(s) returned`);
+  }
+}, 30 * 1000);
+
+app.post('/api/withdraw/request', auth, actionLimit, (req, res) => {
+  if (!autoDepositOn()) return bad(res, 'Automatic withdrawals are not set up yet', 503);
+  const user = req.user;
+  if (pendingBotWithdraw(user.id)) return bad(res, 'You already have a withdrawal waiting. Trade the bot or cancel it first.');
+  const uids = selectionToUids(req.body);
+  if (!pickItems(user, uids, WD_MAX_ITEMS)) return bad(res, `Select 1-${WD_MAX_ITEMS} pets from your inventory`);
+  const items = takeItems(user, uids, WD_MAX_ITEMS);
+  const w = { id: 'wd-' + rid(10), userId: user.id, nickname: nick(user), robloxUsername: user.username, items, status: 'pending', ts: now(), expiresAt: now() + WD_SESSION_MS };
+  S.botWithdrawals = [w, ...(S.botWithdrawals || [])].slice(0, 2000);
+  /* a waiting deposit session of the same player is closed: the next trade is the withdrawal */
+  activeSessions.delete(sessionKey(user.username));
+  addTransaction(user, 'Withdraw Request', w.id, -valueOf(items));
+  markDirty();
+  emitMe(user);
+  notifyAdmins('withdraw', `📤 Bot withdraw by ${nick(user)} (${user.username}): ${items.map(itemText).join(', ')} · ${valueOf(items)}`);
+  logBot(`withdraw session ${w.id} opened for "${user.username}": ${items.map(itemText).join(', ')}`);
+  res.json({ ok: true, withdraw: wdView(w) });
+});
+
+app.get('/api/withdraw/status', auth, (req, res) => {
+  const list = S.botWithdrawals || [];
+  const w = pendingBotWithdraw(req.user.id) || list.find(x => x.userId === req.user.id && x.id === String(req.query.id || '')) || null;
+  res.json({ withdraw: wdView(w) });
+});
+
+app.post('/api/withdraw/cancel', auth, actionLimit, (req, res) => {
+  const w = pendingBotWithdraw(req.user.id);
+  if (!w) return bad(res, 'You have no withdrawal waiting');
+  if (w.botSeenAt && now() - w.botSeenAt < WD_BOT_LOCK_MS) return bad(res, 'The bot is trading with you right now. Wait a few minutes before cancelling.');
+  refundBotWithdraw(w, 'cancelled');
+  logBot(`withdraw ${w.id} cancelled by the player, pets returned`);
+  res.json({ ok: true, withdraw: wdView(w) });
+});
+
+app.post('/api/bot/confirm-withdraw', gameBotOnly, (req, res) => {
+  const sessionId = String(req.body.sessionId || '').trim();
+  const name = String(req.body.robloxUsername || '').trim();
+  const rows = Array.isArray(req.body.items) ? req.body.items : null;
+  const w = (S.botWithdrawals || []).find(x => x.id === sessionId);
+  if (!w) { logBot(`confirm-withdraw ${sessionId || '(no sessionId)'} -> 404 (unknown session)`); return res.status(404).json({ success: false, error: 'Unknown withdraw session' }); }
+  if (w.status !== 'pending') { logBot(`confirm-withdraw ${sessionId} -> 409 (already ${w.status})`); return res.status(409).json({ success: false, error: `This withdrawal is already ${w.status}` }); }
+  if (sessionKey(name) !== sessionKey(w.robloxUsername)) {
+    logBot(`confirm-withdraw ${sessionId} -> 403 (robloxUsername "${name}" is not "${w.robloxUsername}")`);
+    return res.status(403).json({ success: false, error: 'robloxUsername does not match this withdraw session' });
+  }
+
+  /* which pets were handed over: the list the bot sends (no list = everything) */
+  let delivered = w.items, back = [];
+  if (rows && rows.length) {
+    const given = new Map();
+    for (const r of rows) {
+      const k = itemKey(r && r.name, r && r.mega === true ? 'mega' : r && r.neon === true ? 'neon' : 'normal', r && r.fly === true, r && r.ride === true);
+      given.set(k, (given.get(k) || 0) + Math.max(1, Math.min(50, Math.floor(Number(r && r.amount) || 1))));
+    }
+    delivered = []; back = [];
+    for (const item of w.items) {
+      const k = itemKey(item.name, item.age, item.fly, item.ride);
+      if ((given.get(k) || 0) > 0) { given.set(k, given.get(k) - 1); delivered.push(item); } else back.push(item);
+    }
+  }
+  w.status = 'completed';
+  w.doneAt = now();
+  w.items = delivered;
+  w.returned = back;
+  const user = S.users[w.userId];
+  if (user) {
+    if (back.length) { user.inventory.push(...back); addTransaction(user, 'Withdraw Refund', w.id, valueOf(back)); }
+    emitMe(user);
+    io.to('u:' + user.id).emit('withdraw:update', wdView(w));
+    if (delivered.length) systemChat(`${nick(user)} successfully withdrew ${delivered.length} pet${delivered.length === 1 ? '' : 's'} worth ${Number(valueOf(delivered)).toLocaleString('en-US')}! 🎉`, { withdraw: true });
+  }
+  if (back.length) notifyAdmins('security', `Bot withdraw ${w.id} of ${w.robloxUsername}: ${back.length} pet(s) not handed over were returned: ${back.map(itemText).join(', ')}`);
+  markDirty();
+  logBot(`confirm-withdraw ${sessionId} "${name}" -> completed, ${delivered.length} given${back.length ? `, ${back.length} returned` : ''}`);
+  res.json({ success: true, delivered: delivered.length, returned: back.length });
 });
 
 /* ================= START ================= */
