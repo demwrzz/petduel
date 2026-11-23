@@ -212,6 +212,20 @@
     }
     .banner h1 { margin: 0 0 5px; color: var(--orange); font-size: 20px; }
     .banner p { margin: 0; color: #bab4a5; font-size: 13px; }
+    /* ---------- automatic deposit ---------- */
+    .ad { margin-top: 12px; padding: 12px 14px; border: 1px solid #2a2e39; border-radius: 10px; background: #161920; }
+    .ad-wait { display: flex; align-items: center; gap: 10px; color: #cfd2db; font-size: 14px; font-weight: 600; }
+    .ad-spin { flex: none; width: 18px; height: 18px; border: 3px solid #323844; border-top-color: var(--green); border-radius: 50%; animation: spin 1s linear infinite; }
+    .ad-ok { display: grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 50%; color: #04120b; background: var(--green); font-weight: 900; }
+    .ad-meta { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; color: var(--muted); font-size: 12px; font-weight: 700; }
+    .ad-meta b { color: #fff; }
+    .ad-got-h { margin: 12px 0 6px; color: var(--muted); font-size: 12px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; }
+    .ad-got { display: grid; gap: 6px; max-height: 220px; overflow-y: auto; }
+    .ad-item { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border: 1px solid #1f5a45; border-radius: 9px; background: #14231e; animation: enter .35s both; }
+    .ad-item img { width: 34px; height: 34px; object-fit: contain; }
+    .ad-item b { flex: 1; font-size: 14px; }
+    .ad-item span { display: flex; align-items: center; color: var(--green); font-weight: 800; }
+
     /* ---------- typing hero ---------- */
     .hero {
       position: relative; overflow: hidden; margin-bottom: 14px; padding: 22px 24px; border: 1px solid #22503f; border-radius: 12px;
@@ -3993,12 +4007,52 @@
         return;
       }
 
+      const auto = Boolean(STATE.config && STATE.config.autoDeposit);
       openModal2(`
         ${modalHeader("Deposit bot", "close2")}
         ${steps}
         <div id="depositBots">${botsListHTML()}</div>
-        <p class="hint">Remember: at least <b>6 food items</b> in every trade. Your pets appear in your inventory once an admin confirms them.</p>
+        ${auto ? `<div class="ad" id="adBox">
+            <div class="ad-wait" id="adWait"><span class="ad-spin"></span>Waiting for your trade… Your pets appear here automatically.</div>
+            <div class="ad-meta"><span>Trading as <b>${esc(ME ? ME.robloxName || "" : "")}</b></span><span id="adLeft"></span></div>
+            <div id="adGot"></div>
+          </div>` : ""}
+        <p class="hint">Remember: at least <b>6 food items</b> in every trade. ${auto ? "Pets that are in our catalog are added to your inventory automatically." : "Your pets appear in your inventory once an admin confirms them."}</p>
         <div class="dep-nav"><button class="btn gray" data-action="dep-step" data-step="2">Back</button></div>`);
+      if (auto) startAutoDeposit();
+    }
+
+    /* automatic deposit: a 10 minute session; the window shows every pet the bot adds */
+    let adTimer = null, adSince = 0, adSession = null, adCount = -1;
+    const adStop = () => { clearInterval(adTimer); adTimer = null; };
+    async function startAutoDeposit() {
+      adStop();
+      try { adSession = await api("/api/deposit/init", { body: {} }); }
+      catch (error) { const w = $("#adWait"); if (w) w.textContent = error.message; return; }
+      adSince = Number(adSession.startedAt) || Date.now();
+      adCount = -1;
+      adTick();
+      adTimer = setInterval(adTick, 2000);
+    }
+    async function adTick() {
+      if (!$("#adBox")) return adStop();
+      let st;
+      try { st = await api("/api/deposit/status?since=" + adSince); } catch { return; }
+      if (!$("#adBox")) return adStop();
+      if (st.session) adSession = st.session;
+      const left = Math.max(0, Number(adSession && adSession.expiresAt) - (Date.now() - clockSkew));
+      $("#adLeft").textContent = left > 0 ? `Open for ${Math.ceil(left / 60000)} min` : "Session ended";
+      const got = asArray(st.received);
+      if (adCount >= 0 && got.length > adCount) { toast(`Deposit received: ${got.length - adCount} pet${got.length - adCount === 1 ? "" : "s"}!`, "ok"); refresh(); }
+      adCount = got.length;
+      $("#adGot").innerHTML = got.length ? `<div class="ad-got-h">Received</div><div class="ad-got">${got.map(i => `
+        <div class="ad-item"><img src="${esc(itemImage(i))}" alt=""><b>${esc(itemLabel(i))}</b><span>${GEM}${fmt(i.value)}</span></div>`).join("")}</div>` : "";
+      if (!st.hasPendingSession) {
+        adStop();
+        $("#adWait").innerHTML = 'The deposit session ended. <button class="btn sm" data-action="ad-restart">Start again</button>';
+      } else if (got.length) {
+        $("#adWait").innerHTML = '<span class="ad-ok">✔</span>Received! You can send the bot another trade right away.';
+      }
     }
 
     /* ---------- Create / Join ---------- */
@@ -5764,6 +5818,7 @@
 
       "submit-giveaway": submitGiveaway,
       "enter-giveaway"(el) { enterGiveaway(el.dataset.id); },
+      "ad-restart"() { startAutoDeposit(); },
       "dep-step"(el) { openBotsModal(Number(el.dataset.step) || 1); },
       "jp-history"() { showJpHistory(); },
       "admin-cancel"(el) { adminCancelMatch(el.dataset.id); },

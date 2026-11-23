@@ -374,7 +374,8 @@ function snapshot() {
     chat: S.chat.slice(-60),
     bots: S.bots.map(b => ({ id: b.id, username: b.username, link: b.link, online: b.online !== false, role: botRole(b) })),
     eventEscrow: S.eventEscrow || null,
-    ipBans: S.ipBans || []
+    ipBans: S.ipBans || [],
+    amTrades: (S.amTrades || []).slice(0, 5000)
   };
 }
 
@@ -458,6 +459,7 @@ async function initDb() {
       savedJackpot = d.jackpot || null;
       S.jpHistory = Array.isArray(d.jpHistory) ? d.jpHistory : [];
       S.ipBans = Array.isArray(d.ipBans) ? d.ipBans : [];
+      S.amTrades = Array.isArray(d.amTrades) ? d.amTrades : [];
       /* an event prize from an admin's inventory was in play when the server stopped: give it back */
       const esc = d.eventEscrow;
       if (esc && esc.item && S.users[esc.userId]) {
@@ -709,7 +711,7 @@ app.get('/api/whereami', async (req, res) => {
 app.use((req, res, next) => {
   if (!(S.ipBans || []).length || req.path === '/health') return next();
   const ip = clientIp(req.headers, req.ip);
-  if (!ipBanned(ip) || hasStaffCookie(req.headers.cookie) || reqHasBotKey(req) || (req.query.staff && req.query.staff === staffKey())) return next();
+  if (!ipBanned(ip) || hasStaffCookie(req.headers.cookie) || reqHasBotKey(req) || gameBotSecretOk(req) || (req.query.staff && req.query.staff === staffKey())) return next();
   if (req.path.startsWith('/api/')) return res.status(403).json({ error: 'You are banned from Pet Duel', ipBanned: true });
   return res.status(403).type('html').send(BANNED_PAGE);
 });
@@ -720,7 +722,7 @@ app.use(async (req, res, next) => {
     return res.redirect('/');
   }
   if (!blockList().length || req.path === '/health' || req.path === '/api/whereami') return next();
-  if (hasStaffCookie(req.headers.cookie) || reqHasBotKey(req)) return next();
+  if (hasStaffCookie(req.headers.cookie) || reqHasBotKey(req) || gameBotSecretOk(req)) return next();
   if (await blockedCountry(req.headers, req.ip)) {
     if (req.path.startsWith('/api/')) return res.status(451).json({ error: 'Pet Duel is not available in your country' });
     return res.status(451).type('html').send(BLOCKED_PAGE);
@@ -945,7 +947,7 @@ const maintenanceOn = () => Boolean(S.settings.maintenance);
 const MAINT_OPEN = ['/auth/', '/captcha', '/me'];
 
 app.use('/api', (req, res, next) => {
-  if (!maintenanceOn() || reqHasBotKey(req)) return next();
+  if (!maintenanceOn() || reqHasBotKey(req) || gameBotSecretOk(req)) return next();
   const user = userFromToken(tokenFromRequest(req));
   if (user && isAdmin(user)) return next();
 
@@ -1302,7 +1304,8 @@ function buildState() {
       range: RANGE, maxItems: MAX_ITEMS, ranks: RANKS,
       tax: Number(S.settings.taxPercent) || 0,
       captcha: { mode: TURNSTILE_SECRET && TURNSTILE_SITE_KEY ? 'turnstile' : 'builtin', siteKey: TURNSTILE_SITE_KEY },
-      robloxLogin: oauthOn()
+      robloxLogin: oauthOn(),
+      autoDeposit: autoDepositOn()
     }
   };
 }
@@ -2095,6 +2098,7 @@ const UPDATE_LOG = [
     'IP bans: ban an IP by hand or every IP a player used with one button; banned IPs see a "You are banned" page and cannot connect',
     'Admin panel in tabs (Overview, Users, Pets, Bots, Games); players are shown as cards like the pet catalog',
     'Catalog: ✏️ edit button for name, picture, value, version and Fly / Ride, optionally also for the copies players own',
+    'Automatic Adopt Me deposits: Deposit step 3 opens a 10 minute session, the in-game bot accepts the trade and the pets (matched by name, Neon / Mega, Fly / Ride) appear in the inventory by themselves',
     'Giveaways: one entry per IP address, and nobody can enter from the host\'s connection',
     'Fixes: the top bar no longer makes the page wider than the screen on laptops and tablets (1280 / 1366 px and smaller); phones now have the menu (Coinflip, Jackpot, Leaderboard...) as a swipeable row'
   ] },
@@ -5372,6 +5376,119 @@ app.use((err, req, res, next) => {
 /* one failing request must never take the whole site down */
 process.on('unhandledRejection', err => console.error('Unhandled rejection:', err && err.message ? err.message : err));
 process.on('uncaughtException', err => console.error('Uncaught exception:', err && err.stack ? err.stack : err));
+
+/* ================= ADOPT ME AUTOMATIC DEPOSIT (in-game bot) =================
+   1. Deposit, step 3: POST /api/deposit/init opens a 10 minute session for the player's Roblox name
+      (renewed after every deposit, so they can trade again in the same server).
+   2. The in-game bot asks GET /api/bot/verify-player/:robloxUsername  -> { allowed: true | false }
+   3. After the trade: POST /api/bot/confirm-deposit { tradeId, robloxUsername, items: [{ name, neon, mega, fly, ride, imageAssetId }] }
+      Each pet is matched with the catalog by name + version (Normal / Neon / Mega) + Fly / Ride and added to the
+      inventory with the catalog value and picture. Pets that are not in the catalog (and food) are not added; admins
+      get a notification. Each tradeId is handled once (409 on repeats, also after a restart).
+   4. The deposit window polls GET /api/deposit/status every 2 seconds and shows the new pets.
+   Both bot routes need the header x-bot-secret = the Railway variable BOT_SECRET_KEY. */
+
+const DEPOSIT_SESSION_MS = 10 * 60 * 1000;
+const DEPOSIT_GRACE_MS = 5 * 60 * 1000;      /* a trade started just before the end can still be confirmed */
+const activeSessions = new Map();            /* robloxUsername (lower case) -> { userId, robloxUsername, startedAt, expiresAt } */
+const sessionKey = name => String(name || '').trim().toLowerCase();
+const autoDepositOn = () => Boolean(E.BOT_SECRET_KEY);
+
+function gameBotSecretOk(req) {
+  const key = String(E.BOT_SECRET_KEY || '');
+  const got = String(req.headers['x-bot-secret'] || '');
+  if (!key || !got) return false;
+  return crypto.timingSafeEqual(crypto.createHash('sha256').update(got).digest(), crypto.createHash('sha256').update(key).digest());
+}
+
+/* middleware for the in-game bot routes */
+function gameBotOnly(req, res, next) {
+  if (!autoDepositOn()) return bad(res, 'BOT_SECRET_KEY is not set on the server', 503);
+  if (!gameBotSecretOk(req)) return bad(res, 'Forbidden', 403);
+  next();
+}
+
+const tradeDone = id => (S.amTrades || []).includes(id);
+function rememberTrade(id) { S.amTrades = [id, ...(S.amTrades || []).filter(x => x !== id)].slice(0, 5000); }
+
+setInterval(() => {
+  const t = now();
+  for (const [k, sess] of activeSessions) if (sess.expiresAt + DEPOSIT_GRACE_MS < t) activeSessions.delete(k);
+}, 60 * 1000);
+
+const sessionView = sess => (sess ? { startedAt: sess.startedAt, expiresAt: sess.expiresAt } : null);
+
+app.post('/api/deposit/init', auth, actionLimit, (req, res) => {
+  if (!autoDepositOn()) return bad(res, 'Automatic deposits are not set up yet', 503);
+  const user = req.user;
+  const key = sessionKey(user.username);
+  const old = activeSessions.get(key);
+  const live = old && old.expiresAt > now();
+  const sess = { userId: user.id, robloxUsername: user.username, startedAt: live ? old.startedAt : now(), expiresAt: now() + DEPOSIT_SESSION_MS };
+  activeSessions.set(key, sess);
+  res.json({ status: 'ready', robloxUsername: user.username, ...sessionView(sess) });
+});
+
+app.get('/api/deposit/status', auth, (req, res) => {
+  const sess = activeSessions.get(sessionKey(req.user.username));
+  const live = sess && sess.expiresAt > now() ? sess : null;
+  const since = Number(req.query.since) || 0;
+  res.json({
+    hasPendingSession: Boolean(live), session: sessionView(live),
+    received: req.user.inventory.filter(i => i.depositedAt && i.depositedAt >= since).map(publicItem)
+  });
+});
+
+app.get('/api/bot/verify-player/:robloxUsername', gameBotOnly, (req, res) => {
+  const sess = activeSessions.get(sessionKey(req.params.robloxUsername));
+  const user = sess && S.users[sess.userId];
+  res.json({ allowed: Boolean(sess && sess.expiresAt > now() && user && !user.banned) });
+});
+
+app.post('/api/bot/confirm-deposit', gameBotOnly, (req, res) => {
+  const tradeId = String(req.body.tradeId || '').trim();
+  const name = String(req.body.robloxUsername || '').trim();
+  const rows = Array.isArray(req.body.items) ? req.body.items : null;
+  if (!/^[\w:.\-]{1,100}$/.test(tradeId)) return bad(res, 'tradeId is missing or invalid');
+  if (tradeDone(tradeId)) return res.status(409).json({ success: false, error: 'This trade was already processed', tradeId });
+  if (!name || !rows || rows.length > 100) return bad(res, 'robloxUsername and items (max 100) are required');
+
+  const key = sessionKey(name);
+  const sess = activeSessions.get(key);
+  if (!sess || sess.expiresAt + DEPOSIT_GRACE_MS < now()) return res.status(403).json({ success: false, error: 'No active deposit session for this player' });
+  const user = S.users[sess.userId];
+  if (!user) return res.status(404).json({ success: false, error: 'Player not found on the site' });
+
+  /* catalog index: name + version + fly + ride */
+  const keyOf = (n, age, fly, ride) => `${normName(n)}|${age}|${fly ? 1 : 0}|${ride ? 1 : 0}`;
+  const byKey = new Map(S.catalog.map(c => [keyOf(c.name, c.age || 'normal', c.fly, c.ride), c]));
+  const credited = [], unmatched = [];
+  const at = now();
+  for (const r of rows) {
+    const itemName = String((r && r.name) || '').trim().slice(0, 80);
+    if (!itemName) continue;
+    const age = r.mega === true ? 'mega' : r.neon === true ? 'neon' : 'normal';
+    const fly = r.fly === true, ride = r.ride === true;
+    const asset = /^\d{1,20}$/.test(String(r.imageAssetId || '')) ? String(r.imageAssetId) : '';
+    const c = byKey.get(keyOf(itemName, age, fly, ride));
+    const label = `${age === 'mega' ? 'Mega ' : age === 'neon' ? 'Neon ' : ''}${fly && ride ? 'FR ' : fly ? 'F ' : ride ? 'R ' : ''}${itemName}`;
+    if (!c) { unmatched.push({ name: itemName, age, fly, ride, label }); continue; }
+    user.inventory.push({ ...newItem(c), depositedAt: at, tradeId, ...(asset ? { assetId: asset } : {}) });
+    credited.push({ name: c.name, age, fly, ride, value: c.value, label });
+  }
+
+  rememberTrade(tradeId);
+  sess.expiresAt = now() + DEPOSIT_SESSION_MS;     /* the session stays open for another trade */
+  const total = round2(credited.reduce((t, c) => t + c.value, 0));
+  if (credited.length) addTransaction(user, 'Deposit', tradeId, total);
+  markDirty();
+  emitMe(user);
+  io.to('u:' + user.id).emit('deposit:done', { credited: credited.length, total });
+  notifyAdmins('withdraw', `📥 Bot deposit by ${nick(user)} (${user.username}): ${credited.map(c => c.label).join(', ') || 'no catalog pets'} · ${total}` +
+    (unmatched.length ? ` · NOT IN CATALOG: ${unmatched.map(u => u.label).join(', ')}` : ''));
+  console.log(`[DEPOSIT] ${user.username} trade ${tradeId}: ${credited.length} added, ${unmatched.length} not in catalog`);
+  res.json({ success: true, credited: credited.length, total, unmatched });
+});
 
 /* ================= START ================= */
 
