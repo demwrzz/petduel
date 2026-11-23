@@ -376,9 +376,7 @@ function snapshot() {
     eventEscrow: S.eventEscrow || null,
     ipBans: S.ipBans || [],
     amTrades: (S.amTrades || []).slice(0, 5000),
-    depositSessions: S.depositSessions || {},
-    assetMap: S.assetMap || {},
-    pendingDeposits: (S.pendingDeposits || []).slice(0, 1000)
+    depositSessions: S.depositSessions || {}
   };
 }
 
@@ -464,8 +462,6 @@ async function initDb() {
       S.ipBans = Array.isArray(d.ipBans) ? d.ipBans : [];
       S.amTrades = Array.isArray(d.amTrades) ? d.amTrades : [];
       S.depositSessions = d.depositSessions && typeof d.depositSessions === 'object' ? d.depositSessions : {};
-      S.assetMap = d.assetMap && typeof d.assetMap === 'object' ? d.assetMap : {};
-      S.pendingDeposits = Array.isArray(d.pendingDeposits) ? d.pendingDeposits : [];
       /* an event prize from an admin's inventory was in play when the server stopped: give it back */
       const esc = d.eventEscrow;
       if (esc && esc.item && S.users[esc.userId]) {
@@ -1426,8 +1422,7 @@ app.get('/api/bot/withdrawals', botOnly, (req, res) => {
   }) });
 });
 
-/* the in-game deposit bot (x-bot-secret) uses the /api/bot/catalog route further down; the Discord bot uses this one */
-app.get('/api/bot/catalog', (req, res, next) => (req.headers['x-bot-secret'] ? next('route') : next()), botOnly, (req, res) => {
+app.get('/api/bot/catalog', botOnly, (req, res) => {
   const q = String(req.query.q || '').toLowerCase();
   res.json({ list: S.catalog.filter(c => !q || c.name.toLowerCase().includes(q)).sort((a, b) => b.value - a.value).slice(0, 25)
     .map(c => ({ id: c.id, label: `${c.age === 'mega' ? 'Mega ' : c.age === 'neon' ? 'Neon ' : ''}${c.name}${c.fly ? ' F' : ''}${c.ride ? ' R' : ''} (${c.value})` })) });
@@ -2105,7 +2100,6 @@ const UPDATE_LOG = [
     'IP bans: ban an IP by hand or every IP a player used with one button; banned IPs see a "You are banned" page and cannot connect',
     'Admin panel in tabs (Overview, Users, Pets, Bots, Games); players are shown as cards like the pet catalog',
     'Catalog: ✏️ edit button for name, picture, value, version and Fly / Ride, optionally also for the copies players own',
-    'Deposit bot: "Slot" items are named by their picture (Roblox image asset id). Unknown pictures wait in the admin Pets tab; name them once and the waiting pets go to the players. GET /api/bot/catalog gives the bot every pet with its image id',
     'Deposit bot fix: the deposit session opens as soon as Deposit is pressed (not only on step 3) and survives a restart; bot log in the admin panel (Bots tab) shows every bot request and why it was allowed or refused',
     'Automatic Adopt Me deposits: Deposit step 3 opens a 10 minute session, the in-game bot accepts the trade and the pets (matched by name, Neon / Mega, Fly / Ride) appear in the inventory by themselves',
     'Giveaways: one entry per IP address, and nobody can enter from the host\'s connection',
@@ -3997,15 +3991,6 @@ app.post('/api/admin/catalog/update', auth, adminOnly, (req, res) => {
     item.fly = Boolean(req.body.fly);
     item.ride = Boolean(req.body.ride);
   }
-  /* Roblox image asset ids of this pet (comma separated): the bot names "Slot" items with them */
-  if (req.body.assetIds !== undefined) {
-    const ids = String(req.body.assetIds || '').split(/[\s,;]+/).map(assetIdOf).filter(Boolean).slice(0, 20);
-    const map = { ...(S.assetMap || {}) };
-    for (const [a, n] of Object.entries(map)) if (normName(n) === normName(item.name) && !ids.includes(a)) delete map[a];
-    for (const a of ids) map[a] = item.name;
-    S.assetMap = map;
-    creditPending();
-  }
   item.value = value;
   /* optional: the same change for the copies players already own */
   let changed = 0;
@@ -4224,19 +4209,6 @@ function adminUI() {
       <h4 style="margin:16px 0 8px">📦 Catalog</h4>
       <button id="cat-open" class="btn" style="width:100%;min-height:52px;font-size:15px">📦 Open Catalog <span id="cat-count"></span></button>
 
-      <h4 style="margin:16px 0 8px">🧩 Unknown pets from the deposit bot</h4>
-      <div style="padding:14px;border-radius:12px;border:1px solid #343842">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
-          <span id="as-state" class="hint" style="margin:0"></span><span style="flex:1"></span>
-          <button id="as-retry" class="btn gray sm">Give waiting pets again</button>
-          <button id="as-refresh" class="btn gray sm">Refresh</button>
-        </div>
-        <div id="as-list"></div>
-        <datalist id="as-names"></datalist>
-        <p class="hint" style="margin:8px 0 0">The bot sees "Slot" for every pet; the picture (image asset id) says which pet it is. Name each picture once: the pets waiting for it go to the players right away, and the next deposits are named automatically. Mark food / toys as <b>Not a pet</b>.</p>
-        <details style="margin-top:8px"><summary class="hint" style="cursor:pointer">Known pictures (<span id="as-known-n">0</span>)</summary><div id="as-known" style="margin-top:6px"></div></details>
-      </div>
-
       <style>
         #cat-panel { position: fixed; inset: 0; z-index: 170; display: flex; align-items: flex-end; justify-content: center; padding: 18px;
           background: rgba(5, 6, 10, 0); pointer-events: none; transition: background .3s; }
@@ -4347,7 +4319,7 @@ function adminUI() {
     const head = modal.querySelector('.mh');
     const TABS = [['overview', '🏠 Overview'], ['users', '👥 Users'], ['pets', '🐾 Pets'], ['bots', '🤖 Bots'], ['games', '🎲 Games']];
     const byTitle = [['Pending Withdrawals', 'overview'], ['Deposit bots', 'bots'], ['Withdraw bots', 'bots'], ['Coinflip tax', 'games'], ['Bounty', 'games'],
-      ['Events', 'games'], ['Announcement', 'overview'], ['Catalog', 'pets'], ['Unknown pets', 'pets'], ['Users', 'users'], ['IP bans', 'users'], ['Update log', 'overview']];
+      ['Events', 'games'], ['Announcement', 'overview'], ['Catalog', 'pets'], ['Users', 'users'], ['IP bans', 'users'], ['Update log', 'overview']];
     const boxes = Object.fromEntries(TABS.map(([k]) => { const d = document.createElement('div'); d.className = 'adm-tab'; d.dataset.tab = k; return [k, d]; }));
     let cur = 'overview';
     for (const el of [...modal.children]) {
@@ -4471,7 +4443,6 @@ function adminUI() {
     usersCache = data.users;
     renderUsers();
     renderIpBans(data.ipBans || []);
-    loadAssets();
     $('g-users').innerHTML = data.users.map(u => `<option value="${esc(u.username)}"></option>`).join('');
 
     const prevItem = $('ev-item').value;
@@ -4729,55 +4700,6 @@ function adminUI() {
     } catch (err) { toast(err.message, 'err'); }
   };
 
-  /* image asset ids of the deposit bot */
-  let assetNames = {};
-  async function loadAssets() {
-    try {
-      const r = await api('/api/admin/assets');
-      assetNames = {};
-      for (const k of r.known) if (k.name !== '#ignore') (assetNames[k.name.toLowerCase().replace(/[^a-z0-9]/g, '')] ||= []).push(k.assetId);
-      $('as-state').textContent = r.unknown.length ? `${r.pending} pet(s) waiting for ${r.unknown.length} picture(s)` : 'Nothing waiting';
-      $('as-names').innerHTML = [...new Set(catalogCache.map(c => c.name))].map(n => `<option value="${esc(n)}"></option>`).join('');
-      $('as-list').innerHTML = r.unknown.length ? r.unknown.map(u => `
-        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid #2a2e39;flex-wrap:wrap">
-          ${u.thumb ? `<img src="${esc(u.thumb)}" alt="" style="width:56px;height:56px;object-fit:contain;border-radius:8px;background:#0e1016">` : '<span style="width:56px;height:56px;display:grid;place-items:center;border-radius:8px;background:#0e1016">?</span>'}
-          <div style="flex:1;min-width:180px">
-            <b>${u.assetId ? 'Image ' + esc(u.assetId) : 'No image id'}</b> · ${u.waiting} waiting (${esc(u.versions.join(', '))})
-            <div class="hint" style="margin:2px 0 0">${u.name ? `Named <b>${esc(u.name)}</b>, but this version is not in the catalog · ` : ''}name "${esc(u.rawName || 'Slot')}" · raw ${esc(u.rawImage || '-')} · ${esc(u.players.join(', '))}</div>
-          </div>
-          ${u.assetId ? `<input class="in" list="as-names" data-as-name="${esc(u.assetId)}" placeholder="Pet name" value="${esc(u.name || '')}" style="width:180px">
-          <button class="btn sm" data-as-save="${esc(u.assetId)}">Save</button>
-          <button class="btn gray sm" data-as-ignore="${esc(u.assetId)}">Not a pet</button>` : ''}
-        </div>`).join('') : '<p class="hint" style="margin:0">No unknown pictures. 🎉</p>';
-      $('as-known-n').textContent = r.known.length;
-      $('as-known').innerHTML = r.known.map(k => `
-        <div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-top:1px solid #2a2e39">
-          ${k.thumb ? `<img src="${esc(k.thumb)}" alt="" style="width:32px;height:32px;object-fit:contain">` : ''}
-          <code>${esc(k.assetId)}</code> = <b>${k.name === '#ignore' ? 'not a pet' : esc(k.name)}</b><span style="flex:1"></span>
-          <button class="btn gray sm" data-as-remove="${esc(k.assetId)}">Remove</button>
-        </div>`).join('') || '<p class="hint">None yet</p>';
-    } catch (err) { $('as-state').textContent = err.message; }
-  }
-  $('as-refresh').onclick = loadAssets;
-  $('as-retry').onclick = async () => {
-    try { const r = await api('/api/admin/assets/retry', { method: 'POST', body: {} }); toast(`${r.given} pet(s) given, ${r.left} still waiting`, 'ok'); loadAssets(); }
-    catch (err) { toast(err.message, 'err'); }
-  };
-  overlay.addEventListener('click', async e => {
-    const sv = e.target.closest('[data-as-save]'), ig = e.target.closest('[data-as-ignore]'), rm = e.target.closest('[data-as-remove]');
-    if (!sv && !ig && !rm) return;
-    try {
-      if (sv) {
-        const name = overlay.querySelector(`[data-as-name="${sv.dataset.asSave}"]`).value;
-        const r = await api('/api/admin/assetmap', { method: 'POST', body: { assetId: sv.dataset.asSave, name } });
-        toast(`Saved as ${r.name}${r.given ? `, ${r.given} waiting pet(s) given` : ''}`, 'ok');
-      }
-      if (ig) { await api('/api/admin/assetmap', { method: 'POST', body: { assetId: ig.dataset.asIgnore, ignore: true } }); toast('Marked as not a pet', 'ok'); }
-      if (rm) { await api('/api/admin/assetmap', { method: 'POST', body: { assetId: rm.dataset.asRemove, remove: true } }); toast('Removed', 'ok'); }
-      loadAssets();
-    } catch (err) { toast(err.message, 'err'); }
-  });
-
   /* the edit window of one catalog item */
   function editCatalogItem(c) {
     if (!c) return;
@@ -4793,8 +4715,6 @@ function adminUI() {
         <label class="hint">Name</label><input class="in" id="ce-name" maxlength="40" value="${esc(c.name)}" style="width:100%;margin-bottom:8px">
         <label class="hint">Image URL</label><input class="in" id="ce-img" value="${esc(c.image)}" style="width:100%;margin-bottom:8px">
         <label class="hint">Value</label><input class="in" id="ce-val" type="number" min="0" step="0.01" value="${esc(c.value)}" style="width:100%;margin-bottom:8px">
-        <label class="hint">Roblox image asset ID(s) of this pet, comma separated (the deposit bot uses them to name "Slot" items)</label>
-        <input class="in" id="ce-asset" placeholder="e.g. 1234567890" value="${esc((assetNames[normName(c.name)] || []).join(', '))}" style="width:100%;margin-bottom:8px">
         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
           <select class="in" id="ce-age">${['normal', 'neon', 'mega'].map(a => `<option value="${a}" ${(c.age || 'normal') === a ? 'selected' : ''}>${a[0].toUpperCase() + a.slice(1)}</option>`).join('')}</select>
           <label><input type="checkbox" id="ce-fly" ${c.fly ? 'checked' : ''}> Fly</label>
@@ -4813,7 +4733,7 @@ function adminUI() {
         const body = {
           id: c.id, name: box.querySelector('#ce-name').value, image: box.querySelector('#ce-img').value, value: box.querySelector('#ce-val').value,
           age: box.querySelector('#ce-age').value, fly: box.querySelector('#ce-fly').checked, ride: box.querySelector('#ce-ride').checked,
-          applyToOwned: box.querySelector('#ce-own').checked, assetIds: box.querySelector('#ce-asset').value
+          applyToOwned: box.querySelector('#ce-own').checked
         };
         const r = await api('/api/admin/catalog/update', { method: 'POST', body });
         toast(r.changed ? `Saved, ${r.changed} owned copies updated` : 'Saved', 'ok');
@@ -5486,7 +5406,7 @@ process.on('uncaughtException', err => console.error('Uncaught exception:', err 
    1. Deposit, step 3: POST /api/deposit/init opens a 10 minute session for the player's Roblox name
       (renewed after every deposit, so they can trade again in the same server).
    2. The in-game bot asks GET /api/bot/verify-player/:robloxUsername  -> { allowed: true | false }
-   3. After the trade: POST /api/bot/confirm-deposit { tradeId, robloxUsername, items: [{ name, neon, mega, fly, ride, imageAssetId }] }
+   3. After the trade: POST /api/bot/confirm-deposit { tradeId, robloxUsername, items: [{ name, neon, mega, fly, ride }] }
       Each pet is matched with the catalog by name + version (Normal / Neon / Mega) + Fly / Ride and added to the
       inventory with the catalog value and picture. Pets that are not in the catalog (and food) are not added; admins
       get a notification. Each tradeId is handled once (409 on repeats, also after a restart).
@@ -5553,126 +5473,6 @@ setInterval(() => {
 
 const sessionView = sess => (sess ? { startedAt: sess.startedAt, expiresAt: sess.expiresAt } : null);
 
-/* ---------- Roblox image asset ids -> pet names ----------
-   In the trade window Adopt Me names every slot "Slot"; the picture (rbxassetid://123...) tells which pet it is.
-   S.assetMap { assetId: 'Pet name' | '#ignore' } is filled by: real names the bot reads, the admin (catalog ✏️ or the
-   "Unknown pets" list in the Pets tab). Pets the site cannot name yet wait in S.pendingDeposits and are given to the
-   player as soon as the admin names the picture (or adds the missing version to the catalog). */
-const IGNORED = '#ignore';
-const assetIdOf = v => { const m = String(v || '').match(/(\d{3,20})(?!.*\d)/); return m ? m[1] : ''; };
-const genericName = n => ['', 'slot', 'item', 'pet', 'unknown', 'none'].includes(normName(n)) || /^slot\d*$/i.test(String(n || '').trim());
-const variantLabel = v => `${v.age === 'mega' ? 'Mega ' : v.age === 'neon' ? 'Neon ' : ''}${v.fly && v.ride ? 'FR ' : v.fly ? 'F ' : v.ride ? 'R ' : ''}`;
-function learnAsset(asset, name) {
-  if (!asset || !name) return;
-  S.assetMap = { ...(S.assetMap || {}), [asset]: name };
-  markDirty();
-  logBot(`learned: image ${asset} = ${name}`);
-}
-function holdDeposit(x) {
-  S.pendingDeposits = [{ id: rid(8), asset: x.asset, rawImage: x.rawImage, rawName: x.rawName, age: x.age, fly: x.fly, ride: x.ride,
-    userId: x.user.id, username: x.user.username, tradeId: x.tradeId, reason: x.reason, ts: now() }, ...(S.pendingDeposits || [])].slice(0, 1000);
-  markDirty();
-}
-/* give every waiting pet that can be named and found in the catalog now */
-function creditPending() {
-  const keyOf = (n, age, fly, ride) => `${normName(n)}|${age}|${fly ? 1 : 0}|${ride ? 1 : 0}`;
-  const byKey = new Map(S.catalog.map(c => [keyOf(c.name, c.age || 'normal', c.fly, c.ride), c]));
-  const left = [], given = new Map();
-  for (const p of S.pendingDeposits || []) {
-    const mapped = p.asset ? (S.assetMap || {})[p.asset] : '';
-    if (mapped === IGNORED) continue;
-    const name = mapped || (genericName(p.rawName) ? '' : p.rawName);
-    const c = name && byKey.get(keyOf(name, p.age, p.fly, p.ride));
-    const user = S.users[p.userId];
-    if (!c || !user) { left.push(p); continue; }
-    user.inventory.push({ ...newItem(c), depositedAt: now(), tradeId: p.tradeId, ...(p.asset ? { assetId: p.asset } : {}) });
-    addTransaction(user, 'Deposit', p.tradeId, c.value);
-    given.set(user, (given.get(user) || 0) + 1);
-  }
-  S.pendingDeposits = left;
-  for (const [user, n] of given) { emitMe(user); io.to('u:' + user.id).emit('deposit:done', { credited: n }); }
-  const total = [...given.values()].reduce((t, n) => t + n, 0);
-  if (total) logBot(`${total} waiting pet(s) given to ${given.size} player(s)`);
-  markDirty();
-  return total;
-}
-
-/* Roblox thumbnails of image ids, for the admin list (cached) */
-const thumbCache = new Map();
-async function assetThumbs(ids) {
-  const need = ids.filter(id => !thumbCache.has(id)).slice(0, 100);
-  if (need.length) {
-    try {
-      const r = await fetch(`https://thumbnails.roblox.com/v1/assets?assetIds=${need.join(',')}&returnPolicy=PlaceHolder&size=150x150&format=Png&isCircular=false`, { signal: AbortSignal.timeout(8000) });
-      const d = await r.json();
-      for (const x of d.data || []) if (x.imageUrl) thumbCache.set(String(x.targetId), x.imageUrl);
-    } catch { /* no pictures this time */ }
-  }
-  return Object.fromEntries(ids.map(id => [id, thumbCache.get(id) || '']));
-}
-
-/* the in-game bot: every catalog pet with its image asset id (null when the site does not know it yet) */
-app.get('/api/bot/catalog', gameBotOnly, (req, res) => {
-  const byName = new Map();
-  for (const [asset, name] of Object.entries(S.assetMap || {})) {
-    if (name === IGNORED) continue;
-    const k = normName(name);
-    if (!byName.has(k)) byName.set(k, []);
-    byName.get(k).push(asset);
-  }
-  const seen = new Set(), items = [];
-  for (const c of S.catalog) {
-    const k = normName(c.name);
-    if (seen.has(k)) continue;
-    seen.add(k);
-    const ids = byName.get(k) || [];
-    items.push({ name: c.name, imageAssetId: ids[0] || null, imageAssetIds: ids });
-  }
-  res.json({ items, ignored: Object.entries(S.assetMap || {}).filter(([, n]) => n === IGNORED).map(([a]) => a) });
-});
-
-/* admin: unknown pictures from the bot, the known ones, and naming them */
-app.get('/api/admin/assets', auth, adminOnly, async (req, res) => {
-  const unknown = new Map();
-  for (const p of S.pendingDeposits || []) {
-    const key = p.asset || '';
-    if (!unknown.has(key)) unknown.set(key, { assetId: p.asset, rawImage: p.rawImage, rawName: p.rawName, waiting: 0, players: new Set(), reason: p.reason, versions: new Set() });
-    const u = unknown.get(key);
-    u.waiting++; u.players.add(p.username); u.versions.add(variantLabel(p).trim() || 'Normal');
-  }
-  const list = [...unknown.values()].map(u => ({ ...u, players: [...u.players], versions: [...u.versions], name: u.assetId ? (S.assetMap || {})[u.assetId] || '' : '' }));
-  const known = Object.entries(S.assetMap || {}).map(([assetId, name]) => ({ assetId, name }));
-  const thumbs = await assetThumbs([...new Set([...list.map(u => u.assetId), ...known.map(k => k.assetId)].filter(Boolean))]);
-  res.json({ unknown: list.map(u => ({ ...u, thumb: thumbs[u.assetId] || '' })), known: known.map(k => ({ ...k, thumb: thumbs[k.assetId] || '' })), pending: (S.pendingDeposits || []).length });
-});
-
-app.post('/api/admin/assetmap', auth, adminOnly, (req, res) => {
-  const asset = assetIdOf(req.body.assetId);
-  if (!asset) return bad(res, 'Enter an image asset id');
-  if (req.body.remove) {
-    S.assetMap = { ...(S.assetMap || {}) };
-    delete S.assetMap[asset];
-    markDirty();
-    return res.json({ ok: true });
-  }
-  if (req.body.ignore) {
-    learnAsset(asset, IGNORED);
-    S.pendingDeposits = (S.pendingDeposits || []).filter(p => p.asset !== asset);
-    markDirty();
-    return res.json({ ok: true, given: 0 });
-  }
-  const name = String(req.body.name || '').trim();
-  const c = S.catalog.find(x => normName(x.name) === normName(name));
-  if (!c) return bad(res, 'Pick a pet name from the catalog');
-  learnAsset(asset, c.name);
-  const given = creditPending();
-  res.json({ ok: true, name: c.name, given });
-});
-
-app.post('/api/admin/assets/retry', auth, adminOnly, (req, res) => {
-  res.json({ ok: true, given: creditPending(), left: (S.pendingDeposits || []).length });
-});
-
 app.get('/api/admin/botlog', auth, adminOnly, (req, res) => {
   res.json({ on: autoDepositOn(), sessions: sessionsText(), log: botLog });
 });
@@ -5730,39 +5530,30 @@ app.post('/api/bot/confirm-deposit', gameBotOnly, (req, res) => {
   if (!user) return res.status(404).json({ success: false, error: 'Player not found on the site' });
 
   /* catalog index: name + version + fly + ride */
-  const keyOf = (n, age, fly, ride) => `${normName(n)}|${age}|${fly ? 1 : 0}|${ride ? 1 : 0}`;
+  /* the name is compared with trim + lower case (and single spaces), the version must be the same */
+  const nameKey = n => String(n || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const keyOf = (n, age, fly, ride) => `${nameKey(n)}|${age}|${fly ? 1 : 0}|${ride ? 1 : 0}`;
   const byKey = new Map(S.catalog.map(c => [keyOf(c.name, c.age || 'normal', c.fly, c.ride), c]));
   const credited = [], unmatched = [];
   const at = now();
   for (const r of rows) {
-    if (!r || typeof r !== 'object') continue;
-    const rawName = String(r.name || '').trim().slice(0, 80);
-    const age = r.mega === true ? 'mega' : r.neon === true ? 'neon' : 'normal';
-    const fly = r.fly === true, ride = r.ride === true;
-    const asset = assetIdOf(r.imageAssetId) || assetIdOf(r.rawImage);
-    const rawImage = String(r.rawImage || r.imageAssetId || '').slice(0, 120);
-    const mapped = asset ? (S.assetMap || {})[asset] : '';
-    if (mapped === IGNORED) continue;                     /* food / toys the admin marked as "not a pet" */
-    /* the real pet name: from the asset id when it is known, otherwise from the name the bot read (not "Slot") */
-    const petName = mapped || (genericName(rawName) ? '' : rawName);
-    const v = { age, fly, ride };
-    if (!petName) {
-      holdDeposit({ asset, rawImage, rawName, ...v, user, tradeId, reason: 'unknown image' });
-      unmatched.push({ name: rawName || 'Slot', imageAssetId: asset, rawImage, age, fly, ride, label: `${variantLabel(v)}? (asset ${asset || 'none'})` });
-      logBot(`unknown pet in trade ${tradeId}: name "${rawName}", imageAssetId=${asset || '-'}, rawImage=${rawImage || '-'} (${variantLabel(v).trim() || 'Normal'}) -> waiting for the admin (Pets tab)`);
+    const itemName = String((r && r.name) || '').trim().slice(0, 80);
+    const age = r && r.mega === true ? 'mega' : r && r.neon === true ? 'neon' : 'normal';
+    const fly = Boolean(r && r.fly === true), ride = Boolean(r && r.ride === true);
+    const label = `${age === 'mega' ? 'Mega ' : age === 'neon' ? 'Neon ' : ''}${fly && ride ? 'FR ' : fly ? 'F ' : ride ? 'R ' : ''}${itemName || '(no name)'}`;
+    /* "Slot", "PartnerOffer", empty or unknown names are never added */
+    if (!itemName || ['slot', 'partneroffer'].includes(nameKey(itemName).replace(/ /g, ''))) {
+      unmatched.push({ name: itemName, age, fly, ride, label });
+      logBot(`WARNING trade ${tradeId}: "${itemName || '(no name)'}" is not a pet name, nothing added`);
       continue;
     }
-    /* a real name with an image id the site does not know yet: remember it for the next "Slot" */
-    if (asset && !mapped && S.catalog.some(c => normName(c.name) === normName(petName))) learnAsset(asset, petName);
-    const c = byKey.get(keyOf(petName, age, fly, ride));
-    const label = `${variantLabel(v)}${petName}`;
+    const c = byKey.get(keyOf(itemName, age, fly, ride));
     if (!c) {
-      holdDeposit({ asset, rawImage, rawName: petName, ...v, user, tradeId, reason: 'version not in catalog' });
-      unmatched.push({ name: petName, imageAssetId: asset, rawImage, age, fly, ride, label });
-      logBot(`"${label}" (asset ${asset || '-'}) in trade ${tradeId} is not in the catalog in this version -> waiting for the admin`);
+      unmatched.push({ name: itemName, age, fly, ride, label });
+      logBot(`WARNING trade ${tradeId}: "${label}" is not in the catalog (name + version), nothing added`);
       continue;
     }
-    user.inventory.push({ ...newItem(c), depositedAt: at, tradeId, ...(asset ? { assetId: asset } : {}) });
+    user.inventory.push({ ...newItem(c), depositedAt: at, tradeId });
     credited.push({ name: c.name, age, fly, ride, value: c.value, label });
   }
 
