@@ -1117,6 +1117,9 @@
     .max-pick button { min-width: 34px; height: 34px; padding: 0 8px; border-radius: 7px; color: #b6b8c0; background: transparent; font-weight: 800; transition: background .15s, color .15s; }
     .max-pick button:hover { color: #fff; background: #222631; }
     .max-pick button.on { color: #04120b; background: var(--green); }
+    .inventory-item.locked { opacity: .32; filter: grayscale(.8); cursor: not-allowed; }
+    .max-pill.big-pill { color: #ffd86b; border-color: #6b5420; background: #2a2210; }
+    .max-pick button { white-space: nowrap; }
     .max-pill { display: inline-block; margin-top: 3px; padding: 2px 8px; border: 1px solid #1f5a47; border-radius: 6px; color: var(--green); background: #12291f; font-size: 11px; font-weight: 800; }
 
     /* ---------- TOASTS / BOOT ---------- */
@@ -1595,6 +1598,109 @@
     @media (prefers-reduced-motion: reduce) {
       * { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
     }
+
+    /* =====================================================================
+       FRESH LOOK (PS99): deep purple base, glassy header with a rainbow line,
+       rounder cards with soft glow, gradient buttons, playful headings
+       ===================================================================== */
+    :root {
+      --bg: #0d0b1a; --header: rgba(17, 14, 34, .78); --panel: #17142b; --panel-2: #131126;
+      --border: #2c2748; --muted: #9a94b8; --text: #f7f5ff;
+      --purple: #8b5cf6; --pink: #ff4d9d; --cyan: #22d3ee;
+      --rainbow: linear-gradient(90deg, #ff4d6d, #ffa63d, #ffde59, #7cf29a, #4da3ff, #b26bff);
+      --glow: 0 10px 30px -12px rgba(139, 92, 246, .55);
+    }
+    body {
+      background-color: var(--bg);
+      background-image:
+        radial-gradient(900px 600px at -10% -10%, rgba(139, 92, 246, .22), transparent 60%),
+        radial-gradient(800px 600px at 110% 110%, rgba(0, 239, 160, .14), transparent 60%),
+        radial-gradient(600px 400px at 70% 0%, rgba(255, 77, 157, .10), transparent 60%),
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220'%3E%3Cg fill='white' fill-opacity='.025'%3E%3Ccircle cx='40' cy='40' r='9'/%3E%3Ccircle cx='26' cy='24' r='5'/%3E%3Ccircle cx='40' cy='18' r='5'/%3E%3Ccircle cx='54' cy='24' r='5'/%3E%3Ccircle cx='150' cy='140' r='9'/%3E%3Ccircle cx='136' cy='124' r='5'/%3E%3Ccircle cx='150' cy='118' r='5'/%3E%3Ccircle cx='164' cy='124' r='5'/%3E%3C/g%3E%3C/svg%3E");
+      background-size: auto, auto, auto, 220px 220px;
+      background-attachment: fixed;
+    }
+    ::-webkit-scrollbar-thumb { background: #3a3360; }
+
+    /* header: glass + rainbow line */
+    .topbar { border-bottom: 0; background: var(--header); backdrop-filter: blur(14px) saturate(1.3); -webkit-backdrop-filter: blur(14px) saturate(1.3); }
+    .topbar::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--rainbow); opacity: .85; }
+    .logo { font-family: Fredoka, Rubik, sans-serif; letter-spacing: 0; }
+    .nav-item.active { border-bottom-color: transparent; position: relative; }
+    .nav-item.active::after { content: ""; position: absolute; left: 14px; right: 14px; bottom: 0; height: 3px; border-radius: 3px 3px 0 0; background: var(--rainbow); }
+
+    /* buttons */
+    .btn { border-radius: 11px; color: #06130d; background: linear-gradient(135deg, #2bffbc, #00d98f); box-shadow: 0 6px 18px -8px rgba(0, 239, 160, .8), inset 0 -2px 0 rgba(0, 0, 0, .15); }
+    .btn:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); }
+    .btn.gray { border: 1px solid #3a3360; color: #e4e0f7; background: linear-gradient(180deg, #2a2547, #221e3c); box-shadow: none; }
+    .btn.red { background: linear-gradient(135deg, #ff6b7a, #e23c54); box-shadow: 0 6px 18px -8px rgba(255, 89, 104, .8); }
+    .btn.sun { background: linear-gradient(135deg, #ffd166, #ffa63d); }
+    .btn.outline { border-color: var(--green); background: rgba(0, 239, 160, .08); box-shadow: none; }
+
+    /* hero */
+    .hero {
+      border: 1px solid transparent; border-radius: 20px;
+      background:
+        radial-gradient(circle at 88% 30%, rgba(255, 222, 89, .22), transparent 40%),
+        radial-gradient(circle at 70% 120%, rgba(255, 77, 157, .25), transparent 50%),
+        radial-gradient(circle at 0% 0%, rgba(139, 92, 246, .35), transparent 55%),
+        linear-gradient(120deg, #1d1640, #141128 70%) padding-box,
+        var(--rainbow) border-box;
+      box-shadow: var(--glow);
+    }
+    .hero-kicker { color: #c9b8ff; }
+    .hero-type { font-family: Fredoka, Rubik, sans-serif; letter-spacing: 0; }
+    #heroText { background: linear-gradient(90deg, #fff 0%, #ffe9a8 45%, #7cf29a 75%, #4da3ff 100%); -webkit-background-clip: text; background-clip: text; }
+    .hero-caret { background: #ffde59; box-shadow: 0 0 12px #ffde59; }
+    .hero-dog img { filter: drop-shadow(0 6px 14px rgba(255, 222, 89, .35)) drop-shadow(0 4px 8px rgba(0, 0, 0, .45)); }
+
+    /* banners */
+    .banner { border-radius: 16px; }
+    .banner.update { border-color: #3d3170; background: radial-gradient(circle at 92% 30%, rgba(255, 222, 89, .14), transparent 45%), linear-gradient(100deg, #231b4a, #17142b 75%); }
+
+    /* lobby */
+    .match {
+      border-radius: 16px; border-color: var(--border);
+      background: linear-gradient(180deg, #1b1733, #151229);
+      box-shadow: 0 8px 24px -16px rgba(0, 0, 0, .9);
+    }
+    .match:hover { border-color: #4b3f86; transform: translateY(-2px); box-shadow: var(--glow); }
+    .m-av .av, .m-av .m-q { background: #241f42; }
+    .m-vs { font-family: Fredoka, Rubik, sans-serif; background: var(--rainbow); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; letter-spacing: 0; }
+    .m-val .v1 { font-family: Fredoka, Rubik, sans-serif; font-size: 22px; letter-spacing: .2px; }
+    .item-thumb { border-radius: 12px; }
+
+    /* sidebar + chat */
+    .chat { border-radius: 18px; border-color: var(--border); background: linear-gradient(180deg, #1a1631, #141127); }
+    .chat-title { font-family: Fredoka, Rubik, sans-serif; letter-spacing: .3px; }
+    .chat-online, .chat-ico { background: #241f42; }
+    .chat-ico:hover { background: #312a58; }
+    .giveaway-card { border-radius: 14px; }
+
+    /* modals */
+    .modal { border-radius: 20px; border-color: #332c58; background: linear-gradient(180deg, #1a1633, #141128); box-shadow: 0 30px 80px #000c, 0 0 0 1px rgba(139, 92, 246, .08); }
+    .modal h3, .mh h3 { font-family: Fredoka, Rubik, sans-serif; letter-spacing: .3px; }
+
+    /* inventory */
+    .inventory-item { border-radius: 14px; border-color: #2f2952; background: linear-gradient(180deg, #211c3d, #1a1631); }
+    .inventory-item:hover { border-color: #5a4aa3; }
+    .inventory-item.selected { border-color: var(--green) !important; background: linear-gradient(180deg, #173a33, #142a28); box-shadow: 0 0 0 3px rgba(0, 239, 160, .15), 0 10px 24px -12px rgba(0, 239, 160, .7); }
+    .inventory-item img { filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .45)); }
+    .check { border-radius: 8px; }
+
+    .inventory-box { border-radius: 16px; background: #120f24; border: 1px solid #241f42; }
+
+    /* inputs */
+    .control, .in { border-radius: 11px !important; }
+    .max-pick { border-radius: 12px; border-color: #3a3360; background: #17142b; }
+    .max-pick button { border-radius: 9px; }
+    .max-pick button.on { color: #04120b; background: linear-gradient(135deg, #2bffbc, #00d98f); }
+
+    /* footer */
+    .site-footer { border-top: 0; position: relative; }
+    .site-footer::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--rainbow); opacity: .5; }
+    .foot-brand { font-family: Fredoka, Rubik, sans-serif; }
+
   </style>
 </head>
 
@@ -2398,7 +2504,7 @@
         } else {
           value = `<div class="v1" title="${esc(fmt(match.hostValue))}">${GEM}${short(match.hostValue)}</div>
             <div class="v2">${GEM}${short(Math.ceil(low))} - ${short(Math.floor(high))}</div>
-            ${Number(match.maxJoin) ? `<span class="max-pill">Max ${Number(match.maxJoin)} pet${Number(match.maxJoin) === 1 ? "" : "s"}</span>` : ""}`;
+            ${match.bigOnly ? bigPill : ""}`;
         }
 
         const join = (match.state === "waiting"
@@ -2486,7 +2592,7 @@
             <div class="vp-wait">?</div>
             <div class="vw-name muted">Waiting…</div>
             <div class="vw-range">Join with ${GEM}${fmt(Math.ceil(low))} – ${fmt(Math.floor(high))}</div>
-            ${Number(match.maxJoin) ? `<span class="max-pill">Max ${Number(match.maxJoin)} pet${Number(match.maxJoin) === 1 ? "" : "s"}</span>` : ""}
+            ${match.bigOnly ? bigPill : ""}
           </div>`;
         }
 
@@ -3701,9 +3807,10 @@
       $("#grid").innerHTML = items.map((item, idx) => {
         const id = itemId(item);
         const checked = selected.has(id);
+        const locked = !gridAllowed(item);
 
         return `
-          <div class="inventory-item ${checked ? "selected" : ""}" style="--i:${Math.min(idx, 30)}" data-action="pick" data-id="${esc(id)}">
+          <div class="inventory-item ${checked ? "selected" : ""} ${locked ? "locked" : ""}" style="--i:${Math.min(idx, 30)}" data-action="pick" data-id="${esc(id)}" ${locked ? 'title="Huge pets cannot be used in a Titanic & Gems only game"' : ""}>
             ${checked ? '<span class="check">✓</span>' : ""}
             <img src="${esc(itemImage(item))}" alt="">
             <div class="name">${esc(item.name)}</div>
@@ -3741,7 +3848,7 @@
 
       const [low, high] = gridContext.range;
       const EPS = 0.001;
-      const items = gridItems().filter(i => Number(i.value) > 0).sort((a, b) => Number(a.value) - Number(b.value));
+      const items = gridItems().filter(i => Number(i.value) > 0 && gridAllowed(i)).sort((a, b) => Number(a.value) - Number(b.value));
       const n = items.length;
 
       const suffix = new Array(n + 1).fill(0);
@@ -3792,6 +3899,8 @@
         selected.delete(id);
       } else {
         if (selected.size >= gridContext.max) return toast(`You can select up to ${gridContext.max} items`, "err");
+        const it = inventory().find(i => itemId(i) === id);
+        if (it && !gridAllowed(it)) return toast("Titanic & Gems only: Huge pets cannot be used here", "err");
         selected.add(id);
       }
 
@@ -3803,6 +3912,7 @@
       selected.clear();
 
       for (const item of gridItems()) {
+        if (!gridAllowed(item)) continue;
         if (selected.size >= gridContext.max) break;
         selected.add(itemId(item));
       }
@@ -4133,14 +4243,18 @@
     }
 
     /* ---------- Create / Join ---------- */
-    let createMaxJoin = 0;
+    let createBigOnly = false;
+    /* Titanics, Gargantuans and gems: the only things a "Titanic & Gems only" game takes */
+    const isBigItem = i => i.catalogId === "gems" || i.currency === true || /^(shiny |golden |rainbow )*(titanic|gargantuan) /i.test(String(i.name || ""));
+    const bigPill = '<span class="max-pill big-pill">💎 Titanic &amp; Gems only</span>';
+    const gridAllowed = i => !gridContext || !gridContext.allow || gridContext.allow(i);
 
     function showCreate() {
       if (!requireLogin()) return;
 
       selected = new Set();
       createSide = "dog";
-      createMaxJoin = 0;
+      createBigOnly = false;
       viewMatchId = null;
 
       gridContext = {
@@ -4167,10 +4281,10 @@
 
         <div class="modal-footer">
           <span id="createInfo" style="margin-right:auto;align-self:center"></span>
-          <div class="max-pick" id="maxJoin" title="How many pets the opponent may join with">
-            <span>Opponent max pets</span>
-            ${[[0, "Any"], [1, "1"], [2, "2"], [3, "3"], [5, "5"], [10, "10"]].map(([n, l]) =>
-              `<button class="${n === 0 ? "on" : ""}" data-action="max-join" data-n="${n}">${l}</button>`).join("")}
+          <div class="max-pick" id="bigPick" title="Titanic & Gems only: both players can only use Titanics, Gargantuans and gems, no Huge pets">
+            <span>Game</span>
+            <button class="on" data-action="big-only" data-on="0">All pets</button>
+            <button data-action="big-only" data-on="1">💎 Titanic &amp; Gems only</button>
           </div>
           <div class="side-pick" id="sides" title="Pick your side">
             <button class="side-mini selected" data-action="side" data-side="dog" title="Paw">${chip("dog")}</button>
@@ -4188,7 +4302,7 @@
       if (!uids.length) return toast("Select items first", "err");
 
       try {
-        await api("/api/match/create", { body: { uids, side: createSide, maxJoin: createMaxJoin } });
+        await api("/api/match/create", { body: { uids, side: createSide, bigOnly: createBigOnly } });
         closeModal();
         toast("Game created!", "ok");
         await refresh();
@@ -4206,10 +4320,11 @@
 
       const [low, high] = matchRange(Number(match.hostValue || 0));
 
-      const joinMax = Number(match.maxJoin) || 20;
+      const joinMax = 20;
 
       gridContext = {
         max: joinMax,
+        allow: match.bigOnly ? isBigItem : null,
         game: match.game || "ps99",
         range: [low, high],
         info() {
@@ -4218,7 +4333,7 @@
           const t = $("#joinInfo");
 
           if (t) {
-            t.innerHTML = `Your bet ${GEM}${fmt(value)} · Need ${fmt(Math.ceil(low))} – ${fmt(Math.floor(high))}${joinMax < 20 ? ` · max ${joinMax} pet${joinMax === 1 ? "" : "s"}` : ""}`;
+            t.innerHTML = `Your bet ${GEM}${fmt(value)} · Need ${fmt(Math.ceil(low))} – ${fmt(Math.floor(high))}${match.bigOnly ? " · Titanic & Gems only" : ""}`;
             t.style.color = valid ? "var(--green)" : "var(--red)";
           }
         }
@@ -5765,10 +5880,14 @@
 
       info(el) { showInfo(el.dataset.page); },
       "wd-toggle"() { wdOpen = !wdOpen; $(".wd-panel")?.classList.toggle("open", wdOpen); },
-      "max-join"(el) {
-        createMaxJoin = Number(el.dataset.n) || 0;
-        document.querySelectorAll("#maxJoin button").forEach(b => b.classList.toggle("on", b === el));
-        gridContext && gridContext.info && gridContext.info();
+      "big-only"(el) {
+        createBigOnly = el.dataset.on === "1";
+        document.querySelectorAll("#bigPick button").forEach(b => b.classList.toggle("on", b === el));
+        if (gridContext) {
+          gridContext.allow = createBigOnly ? isBigItem : null;
+          if (createBigOnly) for (const i of inventory()) if (!isBigItem(i)) selected.delete(itemId(i));
+          renderGrid();
+        }
       },
       "sort-toggle"() { $("#cfSortBox").classList.toggle("open"); },
       "sort-pick"(el) {

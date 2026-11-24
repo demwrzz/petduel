@@ -817,7 +817,7 @@ async function handleCommand(i) {
     await i.deferReply();
     const { list } = await site('GET', '/api/bot/games');
     return reply(i, { embeds: [embed('🪙 Open coinflips', list.length
-      ? list.map(m => `**${m.host}** · ${gem} ${short(m.value)} · ${m.pets} pet${m.pets === 1 ? '' : 's'}${m.maxJoin ? ` · max ${m.maxJoin} to join` : ''}`).join('\n') + `\n\nJoin on ${SITE}`
+      ? list.map(m => `**${m.host}** · ${gem} ${short(m.value)} · ${m.pets} pet${m.pets === 1 ? '' : 's'}${m.bigOnly ? ' · 💎 Titanic & Gems only' : ''}`).join('\n') + `\n\nJoin on ${SITE}`
       : 'No open games right now. Create one on the site!')] });
   }
 

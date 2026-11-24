@@ -1327,7 +1327,7 @@ function publicMatch(match) {
     oppValue: match.oppValue,
     value: match.hostValue,
     createdAt: match.createdAt,
-    maxJoin: match.maxJoin || 0,
+    bigOnly: Boolean(match.bigOnly),
     countdownEnd: match.startedAt ? match.startedAt + 3000 : null
   };
 
@@ -1479,7 +1479,7 @@ app.get('/api/bot/stats', botOnly, (req, res) => {
 
 app.get('/api/bot/games', botOnly, (req, res) => {
   res.json({ list: Object.values(S.matches).filter(m => m.state === 'waiting').sort((a, b) => b.hostValue - a.hostValue).slice(0, 10)
-    .map(m => ({ id: m.id, host: nick(m.host), value: m.hostValue, pets: m.hostItems.length, maxJoin: m.maxJoin || 0 })) });
+    .map(m => ({ id: m.id, host: nick(m.host), value: m.hostValue, pets: m.hostItems.length, bigOnly: Boolean(m.bigOnly) })) });
 });
 
 app.get('/api/bot/withdrawals', botOnly, (req, res) => {
@@ -1762,9 +1762,9 @@ app.post('/api/match/create', auth, actionLimit, (req, res) => {
   if (!selected) return bad(res, 'Invalid item selection');
   if (valueOf(selected) <= 0) return bad(res, 'Value too low');
 
-  /* optional limit: how many pets the opponent may join with (empty = no limit) */
-  const maxJoinRaw = Math.floor(Number(req.body.maxJoin));
-  const maxJoin = Number.isInteger(maxJoinRaw) && maxJoinRaw >= 1 && maxJoinRaw < MAX_ITEMS ? maxJoinRaw : 0;
+  /* "Titanic & Gems only": both players may only use Titanics, Gargantuans and gems (no Huges) */
+  const bigOnly = req.body.bigOnly === true;
+  if (bigOnly && !selected.every(isBigItem)) return bad(res, 'A Titanic & Gems only game takes only Titanics, Gargantuans and gems, no Huge pets');
 
   const items = takeItems(user, uids, MAX_ITEMS);
   const seed = rid(32);
@@ -1776,7 +1776,7 @@ app.post('/api/match/create', auth, actionLimit, (req, res) => {
     hostItems: items, oppItems: [],
     hostValue: valueOf(items), oppValue: 0,
     createdAt: now(), startedAt: 0, finishedAt: 0,
-    winnerSide: null, winnerId: null, maxJoin
+    winnerSide: null, winnerId: null, bigOnly
   };
 
   S.matches[id] = match;
@@ -1789,7 +1789,7 @@ app.post('/api/match/create', auth, actionLimit, (req, res) => {
       { name: 'Host', value: clip(nick(user), 100), inline: true },
       { name: 'Value', value: fmtV(match.hostValue), inline: true },
       { name: 'Join range', value: `${round2(match.hostValue * (1 - RANGE))} - ${round2(match.hostValue * (1 + RANGE))}`, inline: true },
-      ...(maxJoin ? [{ name: 'Max pets to join', value: String(maxJoin), inline: true }] : []),
+      ...(bigOnly ? [{ name: 'Mode', value: 'Titanic & Gems only', inline: true }] : []),
       { name: `Pets (${items.length})`, value: itemLine(items) }
     ],
     timestamp: new Date().toISOString()
@@ -1806,11 +1806,10 @@ app.post('/api/match/join', auth, actionLimit, (req, res) => {
   if (!match || match.state !== 'waiting') return bad(res, 'This match is no longer available');
   if (match.host.id === user.id) return bad(res, 'You cannot join your own match');
 
-  const joinLimit = match.maxJoin || MAX_ITEMS;
-  if (Array.isArray(uids) && uids.length > joinLimit) return bad(res, `This game allows at most ${joinLimit} pet${joinLimit === 1 ? '' : 's'}`);
-
+  const joinLimit = MAX_ITEMS;
   const selected = pickItems(user, uids, joinLimit);
   if (!selected) return bad(res, 'Invalid item selection');
+  if (match.bigOnly && !selected.every(isBigItem)) return bad(res, 'This is a Titanic & Gems only game: join with Titanics, Gargantuans or gems, no Huge pets');
 
   const value = valueOf(selected);
   const min = match.hostValue * (1 - RANGE);
@@ -3432,13 +3431,24 @@ app.post('/api/admin/catalog', auth, adminOnly, (req, res) => {
    pictures in assets/ps99). Values follow the official RAP of BIG Games (ps99.biggamesapi.io/api/rap) every
    6 hours: catalog items and the pets players own get the new value; new Huges / Titanics / Gargantuans are
    added with the official picture. Items an admin changed by hand (manual) keep their value. */
-const PS99_CATALOG_V = 1;
+const PS99_CATALOG_V = 2;
+const isBigPetName = base => /^(Huge|Titanic|Gargantuan) /i.test(String(base || ''));
 const stableId = k => 'p' + crypto.createHash('md5').update(k).digest('hex').slice(0, 11);
 function loadPs99Catalog() {
   if (S.settings.ps99CatalogV === PS99_CATALOG_V && S.catalog.length) return;
   let list;
   try { list = JSON.parse(require('fs').readFileSync(path.join(__dirname, 'assets', 'ps99-catalog.json'), 'utf8')); }
   catch (error) { console.error('PS99 catalog file could not be read:', error.message); return; }
+  /* v2: only Huges, Titanics and Gargantuans (exclusives and other pets are removed, also from inventories) */
+  const before = S.catalog.length;
+  S.catalog = S.catalog.filter(c => isBigPetName(c.base || ps99Parse(c.name).base));
+  let gone = 0;
+  for (const u of Object.values(S.users)) {
+    const n = u.inventory.length;
+    u.inventory = u.inventory.filter(i => isGems(i) || isBigPetName(i.base || ps99Parse(i.name).base));
+    gone += n - u.inventory.length;
+  }
+  if (before !== S.catalog.length || gone) console.log(`PS99 catalog: ${before - S.catalog.length} non-Huge/Titanic/Gargantuan pets removed from the catalog, ${gone} from inventories`);
   const have = new Map(S.catalog.map(c => [ps99KeyOf(c), c]));
   let added = 0;
   for (const p of list) {
@@ -3579,6 +3589,8 @@ function parseAmount(v) {
   return Math.round(Number(m[1]) * { '': 1, k: 1e3, m: 1e6, b: 1e9, t: 1e12 }[m[2]]);
 }
 const isGems = i => Boolean(i) && i.catalogId === 'gems';
+/* Titanics, Gargantuans and gems: the only things allowed in a "Titanic & Gems only" coinflip */
+const isBigItem = i => isGems(i) || /^(Titanic|Gargantuan) /i.test((i && i.base) || ps99Parse(i && i.name).base);
 /* gems are given as pieces so players can bet part of them: 1B = 10 x 100M. If that would be more than
    100 pieces the piece gets 10x bigger (17.5B = 17 x 1B + 500M, 200B = 20 x 10B); a rest is its own piece */
 function splitGems(value) {
