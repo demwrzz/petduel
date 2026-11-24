@@ -949,8 +949,8 @@ async function handleCommand(i) {
     }
     if (sub === 'gems') {
       const r = await site('POST', '/api/admin/gems', { username: user.nickname, amount: i.options.getString('amount') }, actorOf(i));
-      log(i.guild, '💎 Gems given', `${i.user} gave ${gem} **${fmt(r.item.value)}** gems to **${user.nickname}**`, 0x4da3ff);
-      return reply(i, `💎 Gave ${fmt(r.item.value)} gems to ${user.nickname}.`);
+      log(i.guild, '💎 Gems given', `${i.user} gave ${gem} **${fmt(r.value)}** gems (${r.split}) to **${user.nickname}**`, 0x4da3ff);
+      return reply(i, `💎 Gave ${fmt(r.value)} gems to ${user.nickname} (${r.split}).`);
     }
     if (sub === 'clearpets') {
       const r = await site('POST', '/api/admin/inventory/clear', { id: user.id }, actorOf(i));

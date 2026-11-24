@@ -3579,6 +3579,20 @@ function parseAmount(v) {
   return Math.round(Number(m[1]) * { '': 1, k: 1e3, m: 1e6, b: 1e9, t: 1e12 }[m[2]]);
 }
 const isGems = i => Boolean(i) && i.catalogId === 'gems';
+/* gems are given as pieces so players can bet part of them: 1B = 10 x 100M. If that would be more than
+   100 pieces the piece gets 10x bigger (17.5B = 17 x 1B + 500M, 200B = 20 x 10B); a rest is its own piece */
+function splitGems(value) {
+  let piece = 1e8;
+  while (value / piece > 100) piece *= 10;
+  if (value <= piece) return [value];
+  const n = Math.floor(value / piece), rest = value - n * piece;
+  return [...Array(n).fill(piece), ...(rest > 0 ? [rest] : [])];
+}
+const gemsText = parts => {
+  const c = new Map();
+  for (const v of parts) c.set(v, (c.get(v) || 0) + 1);
+  return [...c].map(([v, n]) => `${n > 1 ? n + ' x ' : ''}${fmtV(v)}`).join(' + ');
+};
 function gemsItem(value) {
   return { uid: rid(12), catalogId: 'gems', name: `${fmtV(value)} Gems`, image: GEMS_IMAGE, value, base: 'Diamonds', variant: 'normal', shiny: false, currency: true };
 }
@@ -3589,13 +3603,13 @@ app.post('/api/admin/gems', auth, adminOnly, (req, res) => {
   if (!user) return bad(res, 'User not found. They must log in once.');
   if (!Number.isFinite(value) || value < 1) return bad(res, 'Write the amount like 17.5b, 500m or 250000000');
   if (value > MAX_GEMS) return bad(res, `At most ${fmtV(MAX_GEMS)} at once`);
-  const item = gemsItem(value);
-  user.inventory.push(item);
+  const parts = splitGems(value);
+  for (const v of parts) user.inventory.push(gemsItem(v));
   addTransaction(user, 'Gems', 'staff', value);
   markDirty();
   emitMe(user);
-  notifyAdmins('gems', `${req.user.username} gave ${fmtV(value)} gems to ${user.username}`);
-  res.json({ ok: true, item, username: user.username });
+  notifyAdmins('gems', `${req.user.username} gave ${fmtV(value)} gems to ${user.username} (${gemsText(parts)})`);
+  res.json({ ok: true, item: { value }, value, pieces: parts.length, split: gemsText(parts), username: user.username });
 });
 
 app.post('/api/admin/grant', auth, adminOnly, (req, res) => {
@@ -4009,7 +4023,14 @@ function adminUI() {
   };
   $('gm-amt').oninput = () => {
     const v = gmParse($('gm-amt').value);
-    $('gm-hint').textContent = v > 0 ? `= ${v.toLocaleString('en-US')} gems (${fmt(v)})` : 'k = thousand, m = million, b = billion, t = trillion.';
+    let parts = '';
+    if (v > 0) {
+      let piece = 1e8;
+      while (v / piece > 100) piece *= 10;
+      const n = Math.floor(v / piece), rest = v - n * piece;
+      parts = v <= piece ? `1 piece` : `${n} x ${fmt(piece)}${rest > 0 ? ' + ' + fmt(rest) : ''}`;
+    }
+    $('gm-hint').textContent = v > 0 ? `= ${v.toLocaleString('en-US')} gems (${fmt(v)}) → ${parts}` : 'k = thousand, m = million, b = billion, t = trillion.';
   };
   const giveGems = async () => {
     const username = $('gm-user').value.trim(), v = gmParse($('gm-amt').value);
@@ -4018,7 +4039,7 @@ function adminUI() {
     if (!(await confirmBox({ title: 'Give gems?', text: `Give ${fmt(v)} gems (${v.toLocaleString('en-US')}) to ${username}?`, ok: 'Give' }))) return;
     try {
       const r = await api('/api/admin/gems', { method: 'POST', body: { username, amount: $('gm-amt').value } });
-      toast(`${fmt(r.item.value)} gems sent to ${r.username}`, 'ok');
+      toast(`${fmt(r.value)} gems sent to ${r.username} (${r.split})`, 'ok');
       $('gm-amt').value = ''; $('gm-amt').oninput();
     } catch (err) { toast(err.message, 'err'); }
   };
@@ -5575,9 +5596,11 @@ app.post('/api/bot/confirm-deposit', gameBotOnly, (req, res) => {
     if (/^diamonds?$/i.test(p.base)) {
       const v = Math.floor(Number(r && (r.amount ?? r._am)) || 0);
       if (v >= 1 && v <= MAX_GEMS) {
-        const g = gemsItem(v);
-        user.inventory.push({ ...g, depositedAt: at, tradeId });
-        credited.push({ name: g.name, value: v, label: g.name });
+        for (const part of splitGems(v)) {
+          const g = gemsItem(part);
+          user.inventory.push({ ...g, depositedAt: at, tradeId });
+          credited.push({ name: g.name, value: part, label: g.name });
+        }
       } else logBot(`WARNING trade ${tradeId}: diamonds without a valid amount, nothing added`);
       continue;
     }
