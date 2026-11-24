@@ -51,5 +51,11 @@
     "Blue Team"
   ],
   "roleIcons": true,
-  "replaceRoleIcons": false
+  "replaceRoleIcons": false,
+  "siteRoles": {
+    "_note": "site role -> Discord role name, given to linked players (empty = off)",
+    "admin": "Admin",
+    "support": "Support",
+    "tester": "Tester"
+  }
 }

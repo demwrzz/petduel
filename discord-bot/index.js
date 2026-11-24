@@ -154,7 +154,8 @@ function findChannel(guild, name) {
 let siteRanks = [];
 
 async function ensureRoles(guild) {
-  const want = [...siteRanks.map(r => ({ name: r.name, color: r.color })), { name: CONFIG.linkedRole, color: '#00EFA0' }];
+  const want = [...siteRanks.map(r => ({ name: r.name, color: r.color })), { name: CONFIG.linkedRole, color: '#00EFA0' },
+    ...(SITE_ROLES.support ? [{ name: SITE_ROLES.support, color: '#ff4fb8' }] : []), ...(SITE_ROLES.tester ? [{ name: SITE_ROLES.tester, color: '#c64bff' }] : [])];
   for (const r of want) {
     if (guild.roles.cache.find(x => x.name === r.name)) continue;
     try { await guild.roles.create({ name: r.name, color: r.color, reason: 'PetDuel rank role' }); }
@@ -373,9 +374,37 @@ async function log(guild, title, description, color) {
 
 /* ---------------- rank roles ---------------- */
 
-async function syncMemberRank(guild, discordId, rank) {
+/* site staff roles -> Discord roles (names in config.json "siteRoles"). The bot only removes a staff role it gave
+   itself, so roles you gave by hand in Discord stay. Missing "Support" / "Tester" roles are created without
+   permissions; an "Admin" role is never created by the bot. */
+const SITE_ROLES = CONFIG.siteRoles || { admin: 'Admin', support: 'Support', tester: 'Tester' };
+const givenSiteRoles = loadJson('site-roles.json', {});
+async function syncSiteRoles(guild, member, u) {
+  const key = `${guild.id}:${member.id}`;
+  const had = new Set(givenSiteRoles[key] || []);
+  const before = [...had].join(',');
+  const want = Object.entries(SITE_ROLES).filter(([k, name]) => name && u[k]).map(([, name]) => name);
+  for (const name of want) {
+    const role = guild.roles.cache.find(r => r.name === name);
+    if (!role) continue;
+    if (!member.roles.cache.has(role.id)) {
+      try { await member.roles.add(role, 'PetDuel site role'); had.add(name); }
+      catch (error) { console.warn(`Could not give ${name} to ${member.user.username}: ${error.message} (move the bot role above it)`); }
+    }
+  }
+  for (const name of [...had]) {
+    if (want.includes(name)) continue;
+    const role = guild.roles.cache.find(r => r.name === name);
+    if (role && member.roles.cache.has(role.id)) await member.roles.remove(role, 'PetDuel site role removed').catch(() => {});
+    had.delete(name);
+  }
+  if ([...had].join(',') !== before) { givenSiteRoles[key] = [...had]; saveJson('site-roles.json', givenSiteRoles); }
+}
+
+async function syncMemberRank(guild, discordId, rank, siteUser) {
   const member = await guild.members.fetch(discordId).catch(() => null);
   if (!member) return;
+  if (siteUser) await syncSiteRoles(guild, member, siteUser);
   const rankNames = siteRanks.map(r => r.name);
   const target = guild.roles.cache.find(r => r.name === rank);
   const linked = guild.roles.cache.find(r => r.name === CONFIG.linkedRole);
@@ -403,7 +432,7 @@ async function syncAllRanks() {
     const { list } = await site('GET', '/api/bot/linked');
     for (const guild of client.guilds.cache.values()) {
       if (ONLY_GUILD && guild.id !== ONLY_GUILD) continue;
-      for (const u of list) await syncMemberRank(guild, u.discordId, u.rank);
+      for (const u of list) await syncMemberRank(guild, u.discordId, u.rank, u);
     }
   } catch (error) { console.warn('Rank sync failed:', error.message); }
 }

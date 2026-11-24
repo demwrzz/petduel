@@ -1767,7 +1767,7 @@
       <button class="cl-staff" data-action="login">Staff login</button>
     </div>
   </div>
-  <div class="maint-bar" id="maintBar" hidden>🔒 Maintenance mode is ON: only admins can see the site. Players see the closed screen.</div>
+  <div class="maint-bar" id="maintBar" hidden>🔒 Maintenance mode is ON: only admins and players with maintenance access can see the site. Games played now are not posted to Discord.</div>
 
   <div id="boot">
     <div class="loader"></div>
@@ -3370,11 +3370,11 @@
         } else ME = null;
 
         /* maintenance: everyone except admins only sees the closed screen */
-        const closed = Boolean(STATE.maintenance) && !(ME && ME.isAdmin);
+        const closed = Boolean(STATE.maintenance) && !(ME && (ME.isAdmin || ME.maintAccess));
         $("#closed").hidden = !closed;
         $("#closedText").textContent = STATE.maintenanceText || "";
         document.body.classList.toggle("site-closed", closed);
-        $("#maintBar").hidden = !(STATE.maintenance && ME && ME.isAdmin);
+        $("#maintBar").hidden = !(STATE.maintenance && ME && (ME.isAdmin || ME.maintAccess));
         if (!closed && ME && !ME.nickname && !$("#nickCard")) showNickname();
 
         if (closed) {

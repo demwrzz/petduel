@@ -173,7 +173,9 @@ function sendWebhook(url, embed, opts = {}) {
     ...(image ? { image: { url: image } } : {}),
     ...(opts.author ? { author: { name: clip(nick(opts.author), 80), ...(avatarOf(opts.author) ? { icon_url: avatarOf(opts.author) } : {}) } } : {})
   };
-  /* the Discord bot gets every event live, even when no webhook URL is set */
+  /* the Discord bot gets every event live, even when no webhook URL is set; while the site is in maintenance
+     (only admins and testers can play) coinflips, jackpots, giveaways and events are tests and are not posted */
+  if (S.settings.maintenance && ['coinflip', 'jackpot', 'giveaway', 'bounty', 'event'].includes(embedKind(embed.title))) return;
   if (typeof io !== 'undefined') io.to('bots').emit('bot:event', { kind: embedKind(embed.title), embed: full, data: opts.data || null });
 }
 
@@ -280,6 +282,7 @@ function meView(user) {
     avatar: user.avatar || null,
     isAdmin: isAdmin(user),
     isSupport: isSupport(user),
+    maintAccess: user.maintAccess === true,
     totalBet: round2(user.totalBet),
     totalWon: round2(user.totalWon),
     totalLost: round2(user.totalLost || 0),
@@ -1014,12 +1017,14 @@ function adminOnly(req, res, next) {
 /* ---------- Maintenance mode: only admins can use the site ----------
    Login, captcha and /api/me stay open so admins can still sign in. */
 const maintenanceOn = () => Boolean(S.settings.maintenance);
+/* admins, and players an admin gave "maintenance access" (testers), can use the site while it is closed */
+const maintAllowed = u => Boolean(u) && (isAdmin(u) || u.maintAccess === true);
 const MAINT_OPEN = ['/auth/', '/captcha', '/me'];
 
 app.use('/api', (req, res, next) => {
   if (!maintenanceOn() || reqHasBotKey(req) || gameBotSecretOk(req)) return next();
   const user = userFromToken(tokenFromRequest(req));
-  if (user && isAdmin(user)) return next();
+  if (user && maintAllowed(user)) return next();
 
   if (req.path === '/state') {
     return res.json({
@@ -1461,7 +1466,8 @@ app.get('/api/bot/user', botOnly, (req, res) => {
 });
 
 app.get('/api/bot/linked', botOnly, (req, res) => {
-  res.json({ list: Object.values(S.users).filter(u => u.discordId).map(u => ({ discordId: u.discordId, rank: rankOf(u.totalBet), nickname: nick(u) })) });
+  res.json({ list: Object.values(S.users).filter(u => u.discordId).map(u => ({ discordId: u.discordId, rank: rankOf(u.totalBet), nickname: nick(u),
+    admin: isAdmin(u), support: u.support === true, tester: u.maintAccess === true })) });
 });
 
 app.get('/api/bot/stats', botOnly, (req, res) => {
@@ -2132,7 +2138,7 @@ app.post('/api/admin/maintenance', auth, adminOnly, (req, res) => {
   if (S.settings.maintenance) {
     /* everyone who is not an admin is sent to the closed screen right away */
     for (const sock of io.sockets.sockets.values()) {
-      if (!(sock.user && isAdmin(sock.user))) {
+      if (!(sock.user && maintAllowed(S.users[sock.user.id] || sock.user))) {
         sock.emit('maintenance', { on: true });
         sock.disconnect(true);
       }
@@ -3066,6 +3072,7 @@ app.get('/api/admin/data', auth, adminOnly, (req, res) => {
       online: socketsByUser.has(u.id), lastSeen: u.lastSeen || 0,
       isAdmin: isAdmin(u),
       support: u.support === true,
+      maintAccess: u.maintAccess === true,
       adminTag: isAdmin(u) && u.adminTag !== false,
       muted: (u.mutedUntil || 0) > now(),
       avatar: u.avatar || null, rank: rankOf(u.totalBet),
@@ -3113,6 +3120,22 @@ function supportOnly(req, res, next) {
   if (!isSupport(req.user)) return bad(res, 'Support access required', 403);
   next();
 }
+
+app.post('/api/admin/maintaccess', auth, adminOnly, (req, res) => {
+  const user = S.users[String(req.body.id || '')];
+  if (!user) return bad(res, 'User not found', 404);
+  if (req.body.on) user.maintAccess = true; else delete user.maintAccess;
+  markDirty();
+  emitMe(user);
+  /* access taken away while the site is closed: that player is sent to the closed screen */
+  if (!req.body.on && maintenanceOn() && !isAdmin(user)) {
+    for (const sock of io.sockets.sockets.values()) {
+      if (sock.user && sock.user.id === user.id) { sock.emit('maintenance', { on: true }); sock.disconnect(true); }
+    }
+  }
+  console.log(`[ADMIN] ${req.user.username} ${req.body.on ? 'gave' : 'removed'} maintenance access for ${user.username}`);
+  res.json({ ok: true });
+});
 
 app.post('/api/admin/support', auth, adminOnly, (req, res) => {
   const user = S.users[String(req.body.id || '')];
@@ -4571,6 +4594,16 @@ function adminUI() {
   };
 
   $('adm-users').onclick = async e => {
+    const mt = e.target.closest('[data-maint]');
+    if (mt) {
+      const on = mt.dataset.state === '1';
+      try {
+        await api('/api/admin/maintaccess', { method: 'POST', body: { id: mt.dataset.maint, on } });
+        toast(on ? 'Maintenance access given: this player can use the site while it is closed' : 'Maintenance access removed', 'ok');
+        await load();
+      } catch (err) { toast(err.message, 'err'); }
+      return;
+    }
     const sp = e.target.closest('[data-support]');
     if (sp) {
       const on = sp.dataset.state === '1';
@@ -4734,6 +4767,7 @@ function adminUI() {
             <button class="btn sm gray" data-stats="${esc(u.id)}">📊 Stats</button>
             ${!u.isAdmin ? `<button class="btn sm gray" data-mute="${esc(u.id)}" data-state="${u.muted ? '0' : '1'}">${u.muted ? '🔊 Unmute' : '🔇 Mute'}</button>` : ''}
             ${!u.isAdmin ? `<button class="btn sm ${u.support ? 'mint' : 'gray'}" data-support="${esc(u.id)}" data-state="${u.support ? '0' : '1'}">${u.support ? '🎧 Support ✓' : '🎧 Support'}</button>` : ''}
+            ${!u.isAdmin ? `<button class="btn sm ${u.maintAccess ? 'mint' : 'gray'}" data-maint="${esc(u.id)}" data-state="${u.maintAccess ? '0' : '1'}" title="Can use the site while it is in maintenance">${u.maintAccess ? '🔧 Maintenance access ✓' : '🔧 Give access on maintenance'}</button>` : ''}
             ${u.isAdmin ? `<button class="btn sm gray" data-tag="${esc(u.id)}" data-state="${u.adminTag ? '0' : '1'}">Tag: ${u.adminTag ? 'ON' : 'OFF'}</button>` : ''}
             <button class="btn sm gray" data-role="${esc(u.id)}" data-state="${u.isAdmin ? '0' : '1'}">${u.isAdmin ? 'Remove admin' : '👑 Admin'}</button>
             ${u.items ? `<button class="btn sm red" data-clearinv="${esc(u.id)}" data-name="${esc(u.nickname || u.username)}" data-count="${u.items}" data-val="${esc(fmt(u.value))}">🗑 Pets</button>` : ''}
@@ -4972,7 +5006,7 @@ io.use((socket, next) => {
   socket.token = socket.handshake.auth && socket.handshake.auth.token;
   socket.isBot = validBotKey(socket.handshake.auth && socket.handshake.auth.botKey);
   socket.user = socket.isBot ? null : userFromToken(socket.token);
-  if (maintenanceOn() && !socket.isBot && !(socket.user && isAdmin(socket.user))) return next(new Error('maintenance'));
+  if (maintenanceOn() && !socket.isBot && !(socket.user && maintAllowed(S.users[socket.user.id] || socket.user))) return next(new Error('maintenance'));
   next();
 });
 
