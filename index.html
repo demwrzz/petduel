@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Pet Duel | Adopt Me pet coinflip</title>
+  <title>Pet Duel | Pet Simulator 99 coinflip</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='%2300efa0'/%3E%3Ccircle cx='50' cy='50' r='38' fill='%23101218'/%3E%3Cellipse cx='50' cy='62' rx='14' ry='11' fill='%2300efa0'/%3E%3Cellipse cx='33' cy='46' rx='6' ry='8' fill='%2300efa0'/%3E%3Cellipse cx='45' cy='36' rx='6' ry='8' fill='%2300efa0'/%3E%3Cellipse cx='57' cy='36' rx='6' ry='8' fill='%2300efa0'/%3E%3Cellipse cx='69' cy='46' rx='6' ry='8' fill='%2300efa0'/%3E%3C/svg%3E">
 
   <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&family=Fredoka:wght@600;700&display=swap" rel="stylesheet">
@@ -382,7 +382,7 @@
       display: grid; place-items: center; width: 17px; height: 17px; border-radius: 50%; border: 2px solid var(--panel);
       color: #fff; font-size: 9px; font-style: normal; font-weight: 800; line-height: 1;
     }
-    .tb .M { background: #a855f7; } .tb .N { background: #22c55e; } .tb .F { background: #3b82f6; } .tb .R { background: #ec4899; }
+    .tb .G { background: #f5b301; color: #2b1d00; } .tb .RB { background: linear-gradient(135deg, #ff4d6d, #ffb347, #7cf29a, #4da3ff, #b26bff); } .tb .S { background: #67e8f9; color: #06323a; }
 
     /* pet tooltip (hover or tap) */
     .pet-tip {
@@ -822,10 +822,9 @@
 
     .tg { display: flex; justify-content: center; gap: 3px; margin-top: 3px; }
     .tg i { padding: 1px 5px; border-radius: 3px; color: #fff; font-size: 9px; font-style: normal; font-weight: 800; }
-    .tg .M { background: #a855f7; }
-    .tg .N { background: #22c55e; color: #04230f; }
-    .tg .F { background: #3b82f6; }
-    .tg .R { background: #ef4444; }
+    .tg .G { background: #f5b301; color: #2b1d00; }
+    .tg .RB { background: linear-gradient(135deg, #ff4d6d, #ffb347, #7cf29a, #4da3ff, #b26bff); }
+    .tg .S { background: #67e8f9; color: #06323a; }
 
     .modal-footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 
@@ -1750,9 +1749,9 @@
       <section class="content" id="homeContent">
         <div id="bountyStrip"></div>
         <div id="eventStrip"></div>
-        <div class="hero" aria-label="Pet Duel: Adopt Me PvP Duels">
+        <div class="hero" aria-label="Pet Duel: Pet Simulator 99 PvP Duels">
           <div class="hero-kicker">PETDUEL</div>
-          <div class="hero-type"><span id="heroText"></span><i class="hero-caret"></i><span class="hero-dog" aria-hidden="true"><span class="flip"><img src="/assets/xmas-dog.png" alt=""></span></span></div>
+          <div class="hero-type"><span id="heroText"></span><i class="hero-caret"></i><span class="hero-dog" aria-hidden="true"><span class="flip"><img src="/assets/ps99-cat.png" alt=""></span></span></div>
         </div>
 
         <div class="banner" id="banner">
@@ -1799,7 +1798,7 @@
       <div class="foot-brand">PET<span>DUEL</span></div>
       <p class="foot-fun"><b>For entertainment only.</b> Gems and values on Pet Duel have no monetary value. Nothing is sold for real money and nothing can be cashed out or exchanged for real money.</p>
       <p class="foot-warn"><b>18+ only.</b> Deposits are at your own risk: bot accounts can be banned and pets can be lost. You are responsible for following the laws of your country; do not use Pet Duel where it is not allowed. Not available in Turkey.</p>
-      <p>Pet Duel is an independent project. It is not affiliated with, endorsed by, sponsored by, or in any way associated with Adopt Me!, Uplift Games or Roblox Corporation. All game names, logos, pet images and trademarks belong to their respective owners.</p>
+      <p>Pet Duel is an independent project. It is not affiliated with, endorsed by, sponsored by, or in any way associated with Pet Simulator 99, BIG Games or Roblox Corporation. All game names, logos, pet images and trademarks belong to their respective owners.</p>
       <p class="foot-links"><a data-action="info" data-page="tos">Terms of Service</a> · <a data-action="info" data-page="privacy">Privacy Policy</a> · <a data-action="info" data-page="fair">Provably Fair</a> · <a data-action="info" data-page="faq">FAQ</a></p>
     </footer>
   </div>
@@ -1908,7 +1907,12 @@
       "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
     })[c]);
 
-    const fmt = value => Number(value || 0).toLocaleString("en-US", { maximumFractionDigits: 2 });
+    /* PS99 values are diamonds: 28930000000 -> 28.93B */
+    const fmt = value => {
+      const n = Number(value || 0), a = Math.abs(n);
+      for (const [d, u] of [[1e12, "T"], [1e9, "B"], [1e6, "M"], [1e3, "K"]]) if (a >= d) return (n / d).toLocaleString("en-US", { maximumFractionDigits: 2 }) + u;
+      return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
+    };
 
     function short(n) {
       n = Number(n || 0);
@@ -1995,12 +1999,18 @@
       return `<span class="pa ${size}">${avatar(user, size, ring)}<span class="badge">${chip(side)}</span></span>`;
     }
 
-    function tags(item) {
+    /* PS99 versions: the name already says "Shiny Rainbow Huge Cat"; G / R / S badges under the picture */
+    const petVariant = i => i.variant || (/(^|\s)golden\s/i.test(i.name || "") ? "golden" : /(^|\s)rainbow\s/i.test(i.name || "") ? "rainbow" : "normal");
+    const petShiny = i => i.shiny !== undefined ? Boolean(i.shiny) : /^shiny\s/i.test(i.name || "");
+    function variantBadges(i) {
       let r = "";
-      if (item.age === "mega" || item.mega) r += '<i class="M">M</i>';
-      if (item.age === "neon" || item.neon) r += '<i class="N">N</i>';
-      if (item.fly) r += '<i class="F">F</i>';
-      if (item.ride) r += '<i class="R">R</i>';
+      if (petVariant(i) === "golden") r += '<i class="G">G</i>';
+      if (petVariant(i) === "rainbow") r += '<i class="RB">R</i>';
+      if (petShiny(i)) r += '<i class="S">S</i>';
+      return r;
+    }
+    function tags(item) {
+      const r = variantBadges(item);
       return r ? `<div class="tg">${r}</div>` : "";
     }
 
@@ -2035,29 +2045,18 @@
       return [value * (1 - t), value * (1 + t)];
     }
 
-    const isMega = i => i.age === "mega" || i.mega;
-    const isNeon = i => !isMega(i) && (i.age === "neon" || i.neon);
-
-    /* "Mega Polar Bear", "Neon Shadow Dragon (Fly Ride)" */
-    function itemLabel(i) {
-      const pre = isMega(i) ? "Mega " : isNeon(i) ? "Neon " : "";
-      const pot = [i.fly ? "Fly" : "", i.ride ? "Ride" : ""].filter(Boolean).join(" ");
-      return pre + (i.name || "") + (pot ? ` (${pot})` : "");
-    }
+    /* "Shiny Rainbow Huge Cat": the name already holds the version */
+    const itemLabel = i => i.name || "";
 
     function thumbBadges(i) {
-      let r = "";
-      if (isMega(i)) r += '<i class="M">M</i>';
-      else if (isNeon(i)) r += '<i class="N">N</i>';
-      if (i.fly) r += '<i class="F">F</i>';
-      if (i.ride) r += '<i class="R">R</i>';
+      const r = variantBadges(i);
       return r ? `<span class="tb">${r}</span>` : "";
     }
 
     function thumbs(items, max = 6) {
       const arr = byValue(items);
       let html = arr.slice(0, max).map(i => `
-        <div class="item-thumb ${isMega(i) ? "g-mega" : isNeon(i) ? "g-neon" : ""}" data-tip="${esc(itemLabel(i))}" data-tip-value="${esc(fmt(i.value))}">
+        <div class="item-thumb ${petVariant(i) === "rainbow" ? "g-mega" : petVariant(i) === "golden" ? "g-neon" : ""}" data-tip="${esc(itemLabel(i))}" data-tip-value="${esc(fmt(i.value))}">
           <img src="${esc(itemImage(i))}" alt="">
           ${thumbBadges(i)}
         </div>`).join("");
@@ -3399,7 +3398,7 @@
 
     /* ---------- typing hero: types a phrase, waits, deletes it, types the next ---------- */
     (function heroTyping() {
-      const phrases = ["Adopt Me PvP Duels", "Lowest Tax", "petduel.win", "Coinflip & Jackpot", "Provably Fair"];
+      const phrases = ["PS99 PvP Duels", "Lowest Tax", "petduel.win", "Coinflip & Jackpot", "Provably Fair"];
       const el = document.getElementById("heroText");
       const caret = document.querySelector(".hero-caret");
       if (!el) return;
@@ -3665,7 +3664,7 @@
             <option value="name">Name</option>
           </select>
 
-          <select class="control" disabled><option>Adopt Me</option></select>
+          <select class="control" disabled><option>Pet Simulator 99</option></select>
         </div>
 
         <div class="inventory-box">
@@ -3861,7 +3860,7 @@
         const botRow = botW ? `
           <div class="bw-row">
             <span class="ad-spin"></span>
-            <div><b>Withdrawal waiting</b><small>Send our bot a trade in Adopt Me · ${botW.items.length} pet${botW.items.length === 1 ? "" : "s"} · ${GEM}${fmt(botW.value)}</small></div>
+            <div><b>Withdrawal waiting</b><small>Send our bot a trade in Pet Simulator 99 · ${botW.items.length} pet${botW.items.length === 1 ? "" : "s"} · ${GEM}${fmt(botW.value)}</small></div>
             <button class="btn sm" data-action="bw-open">Open</button>
           </div>` : "";
         const pending = asArray(list).filter(w => w.status === "pending");
@@ -3922,9 +3921,9 @@
       const done = w.status === "completed", gone = w.status === "cancelled" || w.status === "expired";
       const left = Math.max(0, Number(w.expiresAt) - (Date.now() - clockSkew));
       box.innerHTML = `
-        ${done ? `<div class="bw-done"><span class="ad-ok">✔</span><div><b>Withdrawal complete!</b> The bot handed your pets over in Adopt Me.${w.returned ? ` ${w.returned} pet(s) were not handed over and are back in your inventory.` : ""}</div></div>`
+        ${done ? `<div class="bw-done"><span class="ad-ok">✔</span><div><b>Withdrawal complete!</b> The bot handed your pets over in Pet Simulator 99.${w.returned ? ` ${w.returned} pet(s) were not handed over and are back in your inventory.` : ""}</div></div>`
           : gone ? `<div class="warn"><i>!</i><span>${w.status === "cancelled" ? "Withdrawal cancelled." : "No trade in 15 minutes."} Your pets are back in your inventory.</span></div>`
-          : `<div class="bw-ready"><b>Withdrawal ready!</b> Join the bot's private server and send it a trade in Adopt Me. The bot puts your pets in the trade by itself, accept it to get them.</div>
+          : `<div class="bw-ready"><b>Withdrawal ready!</b> Join the bot's private server and send it a trade in Pet Simulator 99. The bot puts your pets in the trade by itself, accept it to get them.</div>
              <div id="depositBots">${botsListHTML()}</div>
              <div class="ad-meta"><span>Trading as <b>${esc(ME ? ME.robloxName || "" : "")}</b></span><span>${left > 0 ? `Ends in ${Math.floor(left / 60000)}:${String(Math.floor(left / 1000) % 60).padStart(2, "0")}` : "Ending…"}</span></div>`}
         <div class="ad-got-h">${done ? "Delivered" : "Pets"}</div>
@@ -3973,7 +3972,7 @@
             <h2>Withdraw successful!</h2>
             <p>
               Your request${req.value ? ` for <b>${GEM}${fmt(req.value)}</b>` : ""} has been received.<br>
-              ${req.bot ? "Join the bot's private server, it will send your pets in Adopt Me shortly." : "An admin will send your items to you in Adopt Me shortly."}
+              ${req.bot ? "Join the bot's private server, it will send your pets in Pet Simulator 99 shortly." : "An admin will send your items to you in Pet Simulator 99 shortly."}
               ${req.id ? `<br><span class="muted">Request ID: ${esc(req.id)}</span>` : ""}
             </p>
             ${req.bot ? `<div style="margin:0 0 14px;text-align:left">${wdBotHTML(req.bot)}</div>` : ""}
@@ -4053,7 +4052,7 @@
           <div class="dep-risk">
             <div class="dep-risk-ico">!</div>
             <h3>Deposit at your own risk</h3>
-            <p>Depositing pets is <b>at your own risk</b>. Roblox / Adopt Me can ban or restrict trading accounts at any time, and pets on a banned bot can be lost. Pet Duel cannot guarantee that lost pets are replaced.</p>
+            <p>Depositing pets is <b>at your own risk</b>. Roblox / BIG Games can ban or restrict trading accounts at any time, and pets on a banned bot can be lost. Pet Duel cannot guarantee that lost pets are replaced.</p>
             <p>Only deposit pets you are okay with risking. Never deposit pets that are not yours.</p>
             <p style="color:#9aa0ad;font-size:13px">Pet Duel is for entertainment only. Gems and values have no monetary value and nothing can be exchanged for real money.</p>
           </div>
@@ -4072,11 +4071,10 @@
           ${modalHeader("How to deposit", "close2")}
           ${steps}
           <ol class="dep-rules">
-            <li><b>Join the bot's private server</b> in Adopt Me (next step).</li>
+            <li><b>Join the bot's private server</b> in Pet Simulator 99 (next step).</li>
             <li><b>Send the bot a trade</b> with the pets you want to deposit.</li>
-            <li><span class="dep-food">🍔 Add at least <b>6 food items</b> to every trade.</span> This is required for security. Trades without 6 food items are declined.</li>
             <li><b>Check the bot's name</b> before you accept. Scammers copy bot names with tiny changes.</li>
-            <li>Your pets appear in your inventory <b>once an admin confirms</b> the trade.</li>
+            <li>Your pets appear in your inventory <b>as soon as the trade is done</b>.</li>
           </ol>
           <div class="warn"><i>!</i><span>Staff will never DM you asking for pets. Only trade with the bot shown in this window.</span></div>
           <div class="dep-nav">
@@ -4096,7 +4094,7 @@
             <div class="ad-meta"><span>Trading as <b>${esc(ME ? ME.robloxName || "" : "")}</b></span><span id="adLeft"></span></div>
             <div id="adGot"></div>
           </div>` : ""}
-        <p class="hint">Remember: at least <b>6 food items</b> in every trade. ${auto ? "Pets that are in our catalog are added to your inventory automatically." : "Your pets appear in your inventory once an admin confirms them."}</p>
+        <p class="hint">${auto ? "Pets that are in our catalog are added to your inventory automatically." : "Your pets appear in your inventory once an admin confirms them."}</p>
         <div class="dep-nav"><button class="btn gray" data-action="dep-step" data-step="2">Back</button></div>`);
       if (auto) startAutoDeposit();
     }
@@ -4212,7 +4210,7 @@
 
       gridContext = {
         max: joinMax,
-        game: match.game || "adoptme",
+        game: match.game || "ps99",
         range: [low, high],
         info() {
           const value = totalValue(selectedItems());
@@ -4459,85 +4457,12 @@
     /* public update log: only things players see and can be shared openly */
     /* newest first; "note" is the short text shown in the banner in the middle of the home page */
     const PUBLIC_UPDATES = [
-      { v: "3.2", title: "Chat replies and a new profile", note: "You can now reply to messages in the chat, and your profile has a profit graph with 1D / 7D / 30D views!", items: [
-        "Reply to any chat message",
-        "New profile window with a profit graph (1D, 3D, 7D, 30D, All) and your transactions",
-        "Withdrawals that are sent show up in the chat"
-      ] },
-      { v: "3.1", title: "New profiles and leaderboard", note: "Check out the new player cards with a profit graph, and the new leaderboard with a top 3 podium!", items: [
-        "New player card: animated stats and a graph of your last games",
-        "New leaderboard: top 3 podium, Top Profit, Top Wager and Least Profit",
-        "Values are now shown in a bigger scale, like 55K and 1.2M"
-      ] },
-      { v: "3.0", title: "Better events and jackpot history", note: "The wheel and word scramble events got a big upgrade, and you can now see every past jackpot round in the jackpot history!", items: [
-        "Jackpot history: every finished round with the winner, the pot, the chances and the seed to verify it",
-        "Wheel event: smooth spin that slows down onto the eliminated player, lights and a winner celebration",
-        "Word scramble: tap the letters to spell, shuffle, hints over time and a live guess counter"
-      ] },
-      { v: "2.9", title: "Bigger giveaways", note: "Giveaways can now run for days, and you can see every pet's name and value right on the giveaway card!", items: [
-        "Giveaways can run for minutes, hours or days",
-        "See each pet's picture, name and value on the giveaway card",
-        "Giveaways keep running even if the site restarts"
-      ] },
-      { v: "2.8", title: "Nicknames", note: "Pick your own nickname! Everyone on Pet Duel now sees your nickname instead of your Roblox name.", items: [
-        "Choose a nickname: it is shown in the chat, in games and on the leaderboard",
-        "Your Roblox name stays private",
-        "Change it from your profile (once every 7 days)"
-      ] },
-      { v: "2.7", needs: "robloxLogin", title: "Sign in with Roblox", note: "You can now log in with your Roblox account in one click, no code in your bio needed!", items: [
-        "Sign in with Roblox: one click, no code needed",
-        "The bio code login still works too"
-      ] },
-      { v: "2.6", title: "New login", note: "Logging in is now one simple screen: username, accept the terms, captcha and you're in. Works great on phones too!", items: [
-        "Brand new login screen with the captcha built in",
-        "Full screen login on phones",
-        "Copy button for your verification code"
-      ] },
-      { v: "2.5", title: "Smoother wallet", note: "Your balance now counts up when you win and only pending withdrawals are shown in your wallet. Good luck!", items: [
-        "Your wallet balance counts up (or down) smoothly when it changes",
-        "The wallet only lists withdrawals that are still pending",
-        "The latest update is now shown right here on the home page"
-      ] },
-      { v: "2.4", title: "Pet limits and withdraw status", note: "Limit how many pets your opponent can join with, and follow your withdrawals in the wallet.", items: [
-        "When you create a coinflip you can limit how many pets your opponent may join with",
-        "See your pending withdrawals right in your wallet",
-        "Shorter page buttons in your transaction history"
-      ] },
-      { v: "2.3", title: "Smoother and shinier", items: [
-        "Animated sort menu and a Create Coinflip button",
-        "Pick your coin side right next to Create Game",
-        "The event and jackpot pages no longer jump around on phones",
-        "Look out for the glowing purple Owner tag in chat"
-      ] },
-      { v: "2.2", title: "New coinflip lobby", items: [
-        "Games are shown as Player vs Player with all pets in one row",
-        "Sort games by value (high to low, low to high) or newest",
-        "Terms of Service, Provably Fair and FAQ pages",
-        "This update log, open for everyone"
-      ] },
-      { v: "2.1", title: "Match window and countdown", items: [
-        "A big VS in the match window while waiting for an opponent",
-        "Smooth 3-2-1 countdown as soon as someone joins",
-        "Mega / Neon / Fly / Ride badges under every pet",
-        "Hover or tap a pet to see its full name and value",
-        'Live "Online now" status on profiles'
-      ] },
-      { v: "2.0", title: "Deposit bots and a fresh look", items: [
-        "Several deposit bots, each with an Online / Offline status",
-        "New font and a paw print background"
-      ] },
-      { v: "1.9", title: "Chat and profiles", items: [
-        "Place a bet to unlock the chat (keeps spam away)",
-        "See when a player was last online",
-        "Coinflip and jackpot pots shown in the top menu"
-      ] },
-      { v: "1.8", title: "Safer logins", items: [
-        "Captcha when logging in and entering giveaways",
-        "Up to 20 pets per coinflip"
-      ] },
-      { v: "1.x", title: "The basics", items: [
-        "Coinflip, Jackpot, Giveaways, Leaderboard and live chat",
-        "Bounties, wheel and word scramble events with prizes"
+      { v: "6.0", title: "Pet Simulator 99", note: "Pet Duel is now Pet Simulator 99! Deposit your Huges and Titanics and duel.", items: [
+        "Coinflip, jackpot, giveaways and events with Pet Simulator 99 pets",
+        "Every Huge, Titanic and Gargantuan in the catalog, also Golden, Rainbow and Shiny",
+        "Values follow the official PS99 RAP and update by themselves",
+        "Automatic deposits and withdrawals with our in-game bot",
+        "Values are shown short: 15.09B, 604M"
       ] }
     ];
 
@@ -4589,21 +4514,21 @@
             <div class="fun-note"><b>Entertainment only, no monetary value</b>Pet Duel is made for fun. The gems and values shown on the site <b>have no monetary value</b>: they are only used to compare pets with each other. Nothing on Pet Duel is sold for real money, nothing can be bought with real money and nothing can be cashed out or exchanged for real money, crypto or any other currency. Do not buy pets or Robux with real money to use them on Pet Duel.</div>
 
             <h4>1. About Pet Duel</h4>
-            <p>Pet Duel ("we", "us", "the site") is an independent, fan-made entertainment site where players play coinflip, jackpot and giveaway games with Adopt Me pets. Pet Duel is <b>not affiliated with, endorsed by, sponsored by or connected to</b> Roblox Corporation, Uplift Games or Adopt Me. All game names, logos, pet images and trademarks belong to their owners.</p>
+            <p>Pet Duel ("we", "us", "the site") is an independent, fan-made entertainment site where players play coinflip, jackpot and giveaway games with Pet Simulator 99 pets. Pet Duel is <b>not affiliated with, endorsed by, sponsored by or connected to</b> Roblox Corporation, BIG Games or Pet Simulator 99. All game names, logos, pet images and trademarks belong to their owners.</p>
 
             <h4>2. Who may use Pet Duel</h4>
             <ul>
               <li>You must be <b>at least 18 years old</b>, or the age of majority where you live if that is higher. If you are younger, you may not use Pet Duel.</li>
               <li>You are <b>solely responsible</b> for making sure that using Pet Duel is allowed by the laws of your country, state and city. <b>Do not use Pet Duel where it is not allowed.</b> Pet Duel is not offered in, and may not be used from, countries where such games are restricted, including <b>Turkey</b>. Using a VPN or any other tool to get around a country block is a breach of these Terms.</li>
-              <li>You must follow the Roblox Terms of Use and the rules of Adopt Me. Your Roblox account and anything that happens to it is your own responsibility.</li>
+              <li>You must follow the Roblox Terms of Use and the rules of Pet Simulator 99. Your Roblox account and anything that happens to it is your own responsibility.</li>
               <li>One account per person. Accounts may not be shared, sold or transferred.</li>
             </ul>
 
             <h4>3. Pets, deposits and withdrawals</h4>
             <ul>
-              <li><b>Deposits are entirely at your own risk.</b> Roblox or Adopt Me may ban, restrict or reset trading accounts (including our bot accounts) at any time. Pets held by a banned or restricted account can be lost, and <b>we are not obliged to replace or refund them</b>.</li>
+              <li><b>Deposits are entirely at your own risk.</b> Roblox or BIG Games may ban, restrict or reset trading accounts (including our bot accounts) at any time. Pets held by a banned or restricted account can be lost, and <b>we are not obliged to replace or refund them</b>.</li>
               <li>You may only deposit pets that you own and obtained legitimately. Stolen, scammed, duplicated or purchased-with-real-money pets are not allowed and may be removed without compensation.</li>
-              <li>Deposits are confirmed by hand and are only credited after an admin confirms them. Every deposit trade must follow the instructions shown in the Deposit window (including at least 6 food items).</li>
+              <li>Deposits are credited when our bot confirms the trade. Every deposit trade must follow the instructions shown in the Deposit window.</li>
               <li>Only trade with the bot shown in the Deposit window. Staff will never ask you for pets in direct messages. <b>We are not responsible for trades with anyone else</b>, including impostors.</li>
               <li>Withdrawals are sent by hand and can take time. We may delay, refuse or reverse a withdrawal if we suspect abuse, a bug, fraud or a breach of these Terms.</li>
               <li>Pets and gems on your Pet Duel balance are a <b>limited, revocable permission</b> to use them on the site, not your property, and have no monetary value.</li>
@@ -4629,10 +4554,10 @@
             <p>Pet Duel is provided <b>"as is" and "as available"</b>, without any warranty of any kind. We do not promise that the site will be available, error-free, secure or that any data, balance or pet will be kept. The site may be changed, paused or <b>closed at any time</b>, with or without notice.</p>
 
             <h4>7. Limitation of liability</h4>
-            <p>To the maximum extent allowed by law, Pet Duel, its owners, admins and helpers are <b>not liable</b> for any loss or damage of any kind, including lost pets, lost Roblox items, banned or restricted Roblox accounts, lost data or any indirect or consequential loss, arising from your use of the site, trades with our bots, actions of Roblox or Adopt Me, outages, bugs or the closure of the site. Where liability cannot be excluded, it is limited to the smallest amount allowed by law.</p>
+            <p>To the maximum extent allowed by law, Pet Duel, its owners, admins and helpers are <b>not liable</b> for any loss or damage of any kind, including lost pets, lost Roblox items, banned or restricted Roblox accounts, lost data or any indirect or consequential loss, arising from your use of the site, trades with our bots, actions of Roblox or BIG Games, outages, bugs or the closure of the site. Where liability cannot be excluded, it is limited to the smallest amount allowed by law.</p>
 
             <h4>8. Your responsibility</h4>
-            <p>You use Pet Duel at your own risk and you are responsible for your own actions on it. You agree to take responsibility for, and hold Pet Duel and its owners and admins harmless from, any claim, loss or problem caused by your breach of these Terms, of the Roblox / Adopt Me rules or of any law that applies to you.</p>
+            <p>You use Pet Duel at your own risk and you are responsible for your own actions on it. You agree to take responsibility for, and hold Pet Duel and its owners and admins harmless from, any claim, loss or problem caused by your breach of these Terms, of the Roblox / Pet Simulator 99 rules or of any law that applies to you.</p>
 
             <h4>9. Closing the site</h4>
             <p>We may close Pet Duel permanently at any time. If we do, we will try to announce it and give players the chance to withdraw their pets, but we cannot guarantee this, and nothing remains owed after the site closes.</p>
@@ -4688,7 +4613,7 @@
           <details><summary>How do I deposit pets?</summary>Log in, open your Wallet and press Deposit. Join one of the online bots and send it a trade with your pets. They appear in your inventory once an admin confirms the trade.</details>
           <details><summary>How do I withdraw?</summary>Open your Wallet, select the pets you want and press Withdraw. An admin sends them to you in game.</details>
           <details><summary>How does a coinflip work?</summary>Bet up to ${maxItems} pets and pick a side. Another player joins with pets worth about the same (within ${range}%). After a 3 second countdown the coin flips and the winner takes every pet in the game.</details>
-          <details><summary>What do M, N, F and R mean?</summary>M = Mega Neon, N = Neon, F = Fly, R = Ride. Hover or tap a pet to see its full name and value.</details>
+          <details><summary>What do G, R and S mean?</summary>G = Golden, R = Rainbow, S = Shiny. Hover or tap a pet to see its full name and value. Values follow the official Pet Simulator 99 RAP and are shown short (15.09B = 15,090,000,000 diamonds).</details>
           <details><summary>Is it fair?</summary>Yes. Every result is locked in before the game starts and can be checked afterwards. See the Provably Fair page.</details>
           <details><summary>Why can't I chat?</summary>Chat unlocks after your first bet. This keeps bots and spam out.</details>
           <details><summary>A bot is offline, what now?</summary>Use another bot that is online, or wait until it is back. Never trade with an account that is not in the Deposit window.</details>

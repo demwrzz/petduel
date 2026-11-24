@@ -21,11 +21,11 @@ Eski `/` komutları kaldırıldı, bot açılınca Discord'dan da silinir. Komut
 - Herkes: `!help` `!link KOD` `!unlink` `!profile` `!rank` `!leaderboard` `!stats` `!games` `!website` `!coinflip`
 - Yetkili: `!withdrawals` `!clear 20` `!timeout @kişi 30 sebep` `!kick @kişi sebep` `!ban @kişi sebep`
 - Admin: `!site maintenance on|off` `!site say mesaj` `!site bot DedokAmp on|off` `!site block TR`
-  `!player info isim` `!player give isim "Neon Shadow Dragon" qty:3` `!match cancel ID`
-  `!event wheel "Shadow Dragon" 60` `!announce "Başlık" mesaj` `!giveaway start "Shadow Dragon" 60 2` `!ticketpanel`
+  `!player info isim` `!player give isim "Rainbow Huge Cat" qty:3` `!match cancel ID`
+  `!event wheel "Huge Cat" 60` `!announce "Başlık" mesaj` `!giveaway start "Huge Cat" 60 2` `!ticketpanel`
 
 Kurallar:
-- Boşluklu yazılar **"tırnak"** içinde ("Shadow Dragon"). Sonraki zorunlu bilgi yoksa son yazı tırnaksız da olur.
+- Boşluklu yazılar **"tırnak"** içinde ("Huge Cat"). Sonraki zorunlu bilgi yoksa son yazı tırnaksız da olur.
 - Üye: **@etiket** ya da ID.
 - İsteğe bağlı ayarlar **isim:değer** şeklinde yazılabilir: `qty:3`, `winners:2`, `everyone:true`.
 - Yanlış yazınca bot doğru kullanımı gösterir. `!giveaway` yazınca tüm alt komutları listeler.

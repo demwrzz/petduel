@@ -42,7 +42,12 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 const loadJson = (file, fallback) => { try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, file), 'utf8')); } catch { return fallback; } };
 const saveJson = (file, data) => fs.writeFileSync(path.join(DATA_DIR, file), JSON.stringify(data, null, 2));
 
-const fmt = n => Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 2 });
+/* PS99 values are diamonds: 28930000000 -> 28.93B */
+const fmt = n => {
+  const v = Number(n || 0), a = Math.abs(v);
+  for (const [d, u] of [[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'K']]) if (a >= d) return (v / d).toLocaleString('en-US', { maximumFractionDigits: 2 }) + u;
+  return v.toLocaleString('en-US', { maximumFractionDigits: 2 });
+};
 const short = n => {
   n = Number(n || 0);
   const a = Math.abs(n), s = n < 0 ? '-' : '';
@@ -60,7 +65,7 @@ const ago = ts => {
   if (m < 1440) return `${Math.floor(m / 60)} h ago`;
   return `${Math.floor(m / 1440)} d ago`;
 };
-const petLabel = p => `${p.age === 'mega' ? 'Mega ' : p.age === 'neon' ? 'Neon ' : ''}${p.name}${p.fly ? ' F' : ''}${p.ride ? ' R' : ''}`;
+const petLabel = p => p.name;
 const embed = (title, description) => {
   const e = new EmbedBuilder().setColor(COLOR).setFooter({ text: 'PetDuel · petduel.win' }).setTimestamp();
   if (title) e.setTitle(title);
@@ -221,7 +226,7 @@ async function setupGuild(guild) {
     if (!CONFIG.postInfoMessages) { await registerCommands(guild); console.log(`Ready in "${guild.name}".`); return; }
     await postOnce(findChannel(guild, CH.openTicket), ticketPanel());
     await postOnce(findChannel(guild, CH.website), {
-      embeds: [embed('🌐 petduel.win', `**Adopt Me PvP duels**: coinflip, jackpot, giveaways and events.\n\n👉 **${SITE}**\n\nLink your account with \`!link\` (get the code on the site: Profile > Link Discord) to get your rank role!`)],
+      embeds: [embed('🌐 petduel.win', `**Pet Simulator 99 PvP duels**: coinflip, jackpot, giveaways and events.\n\n👉 **${SITE}**\n\nLink your account with \`!link\` (get the code on the site: Profile > Link Discord) to get your rank role!`)],
       components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setLabel('Open Pet Duel').setStyle(ButtonStyle.Link).setURL(SITE))]
     });
     await postOnce(findChannel(guild, CH.rules), { embeds: [embed('📜 Server Rules', [
@@ -232,7 +237,7 @@ async function setupGuild(guild) {
       '5. You must be 18+ and allowed to use Pet Duel where you live.',
       '6. Staff will **never** DM you asking for pets or your password.',
       '',
-      '⚠️ Pet Duel is not responsible for item losses due to rollbacks, bans or trade restrictions by Adopt Me moderators or Roblox. **Deposit and play at your own risk.**',
+      '⚠️ Pet Duel is not responsible for item losses due to rollbacks, bans or trade restrictions by Pet Simulator 99 / BIG Games moderators or Roblox. **Deposit and play at your own risk.**',
       '🎮 Pet Duel is for entertainment only. Gems and values have no monetary value.'
     ].join('\n'))] });
     await postOnce(findChannel(guild, CH.howToPlay), { embeds: [embed('🎮 How to play', [
@@ -577,7 +582,7 @@ async function catalogChoices(focused) {
 }
 
 /* ---------------- prefix commands ----------------
-   "!giveaway start "Shadow Dragon" 60 2" works like /giveaway start with the same options in the same order.
+   "!giveaway start "Huge Cat" 60 2" works like /giveaway start with the same options in the same order.
    Users: @mention or ID. Yes / no: true, false, on, off, yes, no. Text with spaces: in "quotes"; the last text
    option takes the rest of the message. Permissions are the same as the old / commands had. */
 const OPT = { SUB: 1, GROUP: 2, STRING: 3, INTEGER: 4, BOOLEAN: 5, USER: 6, CHANNEL: 7, ROLE: 8, NUMBER: 10 };
@@ -736,12 +741,12 @@ async function handleCommand(i) {
       '**Admins**',
       ['site maintenance|say|bot|block', 'player info|mute|ban|give|clearpets', 'match cancel', 'event wheel|scramble|cancel', 'announce', 'giveaway start|end|reroll', 'ticketpanel'].map(c => `\`${P}${c}\``).join(' '),
       '',
-      `Text with spaces goes in "quotes", members as @mention, optional options as name:value. Examples: \`${P}giveaway start "Shadow Dragon" 60 2\` · \`${P}player give laura "Neon Shadow Dragon" qty:3\``
+      `Text with spaces goes in "quotes", members as @mention, optional options as name:value. Examples: \`${P}giveaway start "Huge Cat" 60 2\` · \`${P}player give laura "Rainbow Huge Cat" qty:3\``
     ].join('\n'))] });
   }
 
   if (name === 'website') {
-    return reply(i, { embeds: [embed('🌐 petduel.win', `Play Adopt Me PvP duels: **${SITE}**`)], components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setLabel('Open Pet Duel').setStyle(ButtonStyle.Link).setURL(SITE))] }, false);
+    return reply(i, { embeds: [embed('🌐 petduel.win', `Play Pet Simulator 99 PvP duels: **${SITE}**`)], components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setLabel('Open Pet Duel').setStyle(ButtonStyle.Link).setURL(SITE))] }, false);
   }
 
   if (name === 'coinflip') {

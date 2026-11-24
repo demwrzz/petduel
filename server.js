@@ -46,7 +46,7 @@ const S = {
   announcement: null,
   notifications: [],
   bounties: [],
-  settings: { taxPercent: 0, taxReceiver: 'auto', taxIdx: 0, elveUrl: '' },
+  settings: { taxPercent: 0, taxReceiver: 'auto', taxIdx: 0 },
   updateNotes: [],
   jpHistory: [],
   /* deposit bots, managed in the admin panel: { id, username, link, online } */
@@ -112,11 +112,34 @@ function notifyAdmins(type, text) {
 /* ---------- Discord webhooks ---------- */
 const clip = (v, n = 1000) => String(v ?? '').slice(0, n);
 
-const itemLine = items => clip(
-  items.map(i =>
-    `${i.name}${i.age && i.age !== 'normal' ? ' (' + i.age + ')' : ''}${i.fly ? ' F' : ''}${i.ride ? ' R' : ''} - ${i.value}`
-  ).join('\n') || '-'
-);
+/* 28930000000 -> "28.93B" (PS99 values are in diamonds) */
+const fmtV = v => {
+  const n = Number(v || 0), a = Math.abs(n);
+  for (const [d, u] of [[1e12, 'T'], [1e9, 'B'], [1e6, 'M'], [1e3, 'K']]) if (a >= d) return +(n / d).toFixed(2) + u;
+  return String(Math.round(n * 100) / 100);
+};
+
+/* PS99 pets: base name ("Huge Cat") + variant (normal / golden / rainbow) + shiny. The catalog name already
+   holds the variant ("Shiny Rainbow Huge Cat"), so labels are just the name. */
+const PS99_VARIANTS = ['normal', 'golden', 'rainbow'];
+function ps99Parse(name) {
+  let base = String(name || '').trim().replace(/\s+/g, ' ');
+  let shiny = false, variant = 'normal';
+  for (let k = 0; k < 3; k++) {
+    if (/^shiny /i.test(base)) { shiny = true; base = base.slice(6); }
+    else if (/^golden /i.test(base)) { variant = 'golden'; base = base.slice(7); }
+    else if (/^(rainbow|rb) /i.test(base)) { variant = 'rainbow'; base = base.replace(/^(rainbow|rb) /i, ''); }
+  }
+  return { base, variant, shiny };
+}
+const ps99Key = (base, variant, shiny) => `${String(base || '').trim().toLowerCase().replace(/\s+/g, ' ')}|${PS99_VARIANTS.includes(variant) ? variant : 'normal'}|${shiny ? 1 : 0}`;
+const ps99KeyOf = c => {
+  const parsed = ps99Parse(c.name);
+  return ps99Key(c.base || parsed.base, c.variant || parsed.variant, c.shiny !== undefined ? c.shiny : parsed.shiny);
+};
+const ps99FullName = (base, variant, shiny) => `${shiny ? 'Shiny ' : ''}${variant === 'golden' ? 'Golden ' : variant === 'rainbow' ? 'Rainbow ' : ''}${base}`;
+
+const itemLine = items => clip(items.map(i => `${i.name} - ${fmtV(i.value)}`).join('\n') || '-');
 
 /* pictures for embeds: only public https images are sent to Discord */
 const httpsUrl = v => (typeof v === 'string' && /^https:\/\/[^\s"'<>]{4,500}$/.test(v) ? v : null);
@@ -165,8 +188,9 @@ function isAdmin(user) {
 }
 
 /* 12 ranks, based on total wagered value. "icon" picks the badge shape on the site. */
-/* all values on the site are x1000 (a 117 pet is now 117,000); rank limits follow the same scale */
-const VALUE_SCALE = 1000;
+/* PS99: values are diamonds (a Huge Cat is ~15,000,000,000). Rank limits are x1,000,000; the stats saved from
+   the old x1000 scale are moved over once (x1000) by scaleAllValues, so nobody loses their rank. */
+const VALUE_SCALE = 1000000;
 const RANKS = [
   { name: 'Rookie',      min: 0,       color: '#8d909a', icon: 'medal' },
   { name: 'Bronze',      min: 500,     color: '#cd7f32', icon: 'medal' },
@@ -267,8 +291,8 @@ function meView(user) {
 
 function newItem(c) {
   return {
-    uid: rid(12), catalogId: c.id, name: c.name, image: c.image,
-    value: c.value, age: c.age, fly: c.fly, ride: c.ride
+    uid: rid(12), catalogId: c.id, name: c.name, image: c.image, value: c.value,
+    base: c.base || ps99Parse(c.name).base, variant: c.variant || ps99Parse(c.name).variant, shiny: c.shiny !== undefined ? Boolean(c.shiny) : ps99Parse(c.name).shiny
   };
 }
 
@@ -425,6 +449,43 @@ async function purgeMM2(d) {
   return d;
 }
 
+/* Pet Duel is Pet Simulator 99 only now. Once, everything from Adopt Me is removed: the Adopt Me catalog,
+   every pet in inventories, games, giveaways, jackpot, withdrawals, history and transactions. Player stats
+   (total bet / won / profit, ranks) stay. The whole data is saved first as backup-before-adoptme-delete;
+   if that backup fails nothing is removed. Bots stay but go offline until they get a PS99 join link. */
+async function purgeAdoptMe(d) {
+  if (!d || (d.settings && d.settings.adoptMePurged)) return d;
+  try {
+    await mongoColl.updateOne({ _id: 'backup-before-adoptme-delete' }, { $setOnInsert: { data: d, savedAt: new Date() } }, { upsert: true });
+  } catch (error) {
+    console.error('[ADOPT ME DELETE] backup failed, nothing was removed:', error.message);
+    return d;
+  }
+  let items = 0;
+  for (const u of Object.values(d.users || {})) {
+    items += (u.inventory || []).length;
+    u.inventory = [];
+    u.tx = [];
+  }
+  d.catalog = [];
+  d.matches = {};
+  d.giveaways = {};
+  d.history = [];
+  d.jpHistory = [];
+  d.withdrawals = [];
+  d.jackpot = null;
+  d.bounties = [];
+  d.eventEscrow = null;
+  d.depositSessions = {};
+  d.botWithdrawals = [];
+  d.bots = (d.bots || []).map(b => ({ ...b, online: false, needsLink: true }));
+  d.settings = { ...(d.settings || {}), adoptMePurged: true };
+  for (const k of ['valueSource', 'elveUrl', 'ps99CatalogV']) delete d.settings[k];
+  dirty = true;
+  console.log(`[ADOPT ME DELETE] Adopt Me removed: ${items} pets taken out of inventories; backup saved as backup-before-adoptme-delete`);
+  return d;
+}
+
 async function initDb() {
   if (!MONGODB_URI) {
     console.warn('MONGODB_URI not set: data is memory-only and resets on restart.');
@@ -441,7 +502,7 @@ async function initDb() {
     dbRev = doc && doc.rev ? doc.rev : 0;
 
     if (doc && doc.data) {
-      const d = await purgeMM2(doc.data);
+      const d = await purgeAdoptMe(await purgeMM2(doc.data));
       S.users = Object.assign(Object.create(null), d.users || {});
       Object.values(S.users).forEach(ensureUser);
       S.sessions = Object.assign(Object.create(null), d.sessions || {});
@@ -453,7 +514,7 @@ async function initDb() {
       S.announcement = d.announcement || null;
       S.notifications = d.notifications || [];
       S.bounties = d.bounties || [];
-      S.settings = { taxPercent: 0, taxReceiver: 'auto', taxIdx: 0, elveUrl: '', ...(d.settings || {}) };
+      S.settings = { taxPercent: 0, taxReceiver: 'auto', taxIdx: 0, ...(d.settings || {}) };
       S.bots = Array.isArray(d.bots) ? d.bots : [];
       botsFromDb = Array.isArray(d.bots);
       S.updateNotes = d.updateNotes || [];
@@ -612,8 +673,8 @@ function publicWdBot(ref, full = false) {
   return { username: full ? name : maskName(name), avatar: p.avatar || null, link: b ? b.link : '', online: b ? b.online !== false : false };
 }
 
-/* players only see the start and the last letter of a bot's name (ltcspace -> ltcs***e) */
-const maskName = n => (n.length <= 5 ? n.slice(0, 2) + '***' + n.slice(-1) : n.slice(0, 4) + '***' + n.slice(-1));
+/* bot names are shown in full so players can find the bot in game */
+const maskName = n => n;
 const publicBots = (full = false) => S.bots.map(b => {
   const p = botProfiles.get(b.username.toLowerCase()) || {};
   const name = p.username || b.username;
@@ -1383,7 +1444,7 @@ function botUserView(u) {
     id: u.id, nickname: nick(u), robloxName: u.username, avatar: u.avatar || null,
     rank: rankOf(u.totalBet), totalBet: round2(u.totalBet), totalWon: round2(u.totalWon), totalLost: round2(u.totalLost || 0), profit: round2(u.profit),
     items: u.inventory.length, inventoryValue: round2(valueOf(u.inventory)),
-    topPets: [...u.inventory].sort((a, b) => b.value - a.value).slice(0, 5).map(i => ({ name: i.name, age: i.age, fly: i.fly, ride: i.ride, value: i.value })),
+    topPets: [...u.inventory].sort((a, b) => b.value - a.value).slice(0, 5).map(i => ({ name: i.name, value: i.value })),
     online: socketsByUser.has(u.id), lastSeen: u.lastSeen || 0, banned: Boolean(u.banned), muted: (u.mutedUntil || 0) > now(),
     isAdmin: isAdmin(u), discordId: u.discordId || null,
     pendingWithdrawals: S.withdrawals.filter(w => w.user.id === u.id && w.status === 'pending').map(w => ({ id: w.id, value: w.value, items: w.items.length, ts: w.ts }))
@@ -1424,14 +1485,14 @@ app.get('/api/bot/withdrawals', botOnly, (req, res) => {
   res.json({ list: S.withdrawals.filter(w => w.status === 'pending').slice(0, 25).map(w => {
     const u = S.users[w.user.id];
     return { id: w.id, nickname: nick(u || w.user), robloxName: u ? u.username : w.user.username, value: w.value, ts: w.ts,
-      items: w.items.map(i => `${i.age === 'mega' ? 'Mega ' : i.age === 'neon' ? 'Neon ' : ''}${i.name}${i.fly ? ' F' : ''}${i.ride ? ' R' : ''}`) };
+      items: w.items.map(i => i.name) };
   }) });
 });
 
 app.get('/api/bot/catalog', botOnly, (req, res) => {
   const q = String(req.query.q || '').toLowerCase();
   res.json({ list: S.catalog.filter(c => !q || c.name.toLowerCase().includes(q)).sort((a, b) => b.value - a.value).slice(0, 25)
-    .map(c => ({ id: c.id, label: `${c.age === 'mega' ? 'Mega ' : c.age === 'neon' ? 'Neon ' : ''}${c.name}${c.fly ? ' F' : ''}${c.ride ? ' R' : ''} (${c.value})` })) });
+    .map(c => ({ id: c.id, label: `${c.name} (${fmtV(c.value)})` })) });
 });
 
 app.post('/api/bot/say', botOnly, (req, res) => {
@@ -1646,7 +1707,7 @@ function finishMatch(match) {
     fields: [
       { name: 'Winner', value: clip(nick(winner), 100), inline: true },
       { name: 'Loser', value: clip(nick(loser), 100), inline: true },
-      { name: 'Pot', value: String(round2(match.hostValue + match.oppValue)), inline: true },
+      { name: 'Pot', value: fmtV(match.hostValue + match.oppValue), inline: true },
       { name: clip(`${nick(match.host)} (${match.hostSide}) - ${match.hostValue}`, 250), value: itemLine(match.hostItems) },
       { name: clip(`${nick(match.opp)} - ${match.oppValue}`, 250), value: itemLine(match.oppItems) },
       { name: 'Winning side', value: String(match.winnerSide), inline: true },
@@ -1725,7 +1786,7 @@ app.post('/api/match/create', auth, actionLimit, (req, res) => {
     color: 0x4da3ff,
     fields: [
       { name: 'Host', value: clip(nick(user), 100), inline: true },
-      { name: 'Value', value: String(match.hostValue), inline: true },
+      { name: 'Value', value: fmtV(match.hostValue), inline: true },
       { name: 'Join range', value: `${round2(match.hostValue * (1 - RANGE))} - ${round2(match.hostValue * (1 + RANGE))}`, inline: true },
       ...(maxJoin ? [{ name: 'Max pets to join', value: String(maxJoin), inline: true }] : []),
       { name: `Pets (${items.length})`, value: itemLine(items) }
@@ -1817,7 +1878,7 @@ app.post('/api/admin/match/cancel', auth, adminOnly, (req, res) => {
 const systemChat = (text, extra = {}) => pushChat({ id: rid(4), user: { username: 'PetDuel', avatar: null }, system: true, text, ts: now(), ...extra });
 
 /* every 30 minutes: the deposit risk reminder */
-const RISK_TEXT = 'PetDuel is not responsible for any item losses due to rollbacks, bans, or trade restrictions applied by Adopt Me moderators or Roblox. Deposit and play at your own risk.';
+const RISK_TEXT = 'PetDuel is not responsible for any item losses due to rollbacks, bans, or trade restrictions applied by Pet Simulator 99 / BIG Games moderators or Roblox. Deposit and play at your own risk.';
 setInterval(() => {
   if (maintenanceOn()) return;
   const last = S.chat[S.chat.length - 1];
@@ -1874,7 +1935,7 @@ function endGiveaway(id) {
           { name: 'Host', value: clip(nick(g.host), 100), inline: true },
           { name: 'Winner', value: clip(nick(winner), 100), inline: true },
           { name: 'Entrants', value: String(eligible.length), inline: true },
-          { name: 'Value', value: String(g.value), inline: true },
+          { name: 'Value', value: fmtV(g.value), inline: true },
           { name: 'Items', value: itemLine(g.items) }
         ],
         timestamp: new Date().toISOString()
@@ -1933,10 +1994,10 @@ app.post('/api/giveaway/create', auth, actionLimit, (req, res) => {
     color: 0x00efa0,
     fields: [
       { name: 'Host', value: clip(nick(user), 100), inline: true },
-      { name: 'Value', value: String(g.value), inline: true },
+      { name: 'Value', value: fmtV(g.value), inline: true },
       { name: 'Mode', value: mode, inline: true },
       { name: 'Ends', value: `<t:${Math.floor(g.endsAt / 1000)}:R>`, inline: true },
-      { name: 'Min total bet', value: String(g.minBet), inline: true },
+      { name: 'Min total bet', value: fmtV(g.minBet), inline: true },
       { name: 'Min rank', value: g.minRank || 'None', inline: true },
       { name: 'Items', value: itemLine(g.items) }
     ],
@@ -1978,7 +2039,7 @@ app.post('/api/giveaway/enter', auth, actionLimit, async (req, res) => {
   if (g.entrants.includes(user.id)) return bad(res, 'Already entered');
   const wagered = user.totalBet;
 
-  if (wagered < g.minBet) return bad(res, `You need ${g.minBet} total bet to enter`);
+  if (wagered < g.minBet) return bad(res, `You need ${fmtV(g.minBet)} total bet to enter`);
 
   if (g.minRank && rankIndex(g.minRank) >= 0 && rankIndex(rankOf(wagered)) < rankIndex(g.minRank)) {
     return bad(res, `You need the ${g.minRank} rank (or higher) to enter`);
@@ -2101,190 +2162,12 @@ app.post('/api/admin/tax', auth, adminOnly, (req, res) => {
 });
 
 const UPDATE_LOG = [
-  { version: '5.0', title: 'Adopt Me only, IP bans, easier admin panel', changes: [
-    'MM2 is removed from Pet Duel; on the first start every MM2 item, catalog item, bot, game, giveaway, withdrawal and transaction is removed (a full backup is kept in the database as backup-before-mm2-delete)',
-    'IP bans: ban an IP by hand or every IP a player used with one button; banned IPs see a "You are banned" page and cannot connect',
-    'Admin panel in tabs (Overview, Users, Pets, Bots, Games); players are shown as cards like the pet catalog',
-    'Catalog: ✏️ edit button for name, picture, value, version and Fly / Ride, optionally also for the copies players own',
-    'Deposit bot fix: the deposit session opens as soon as Deposit is pressed (not only on step 3) and survives a restart; bot log in the admin panel (Bots tab) shows every bot request and why it was allowed or refused',
-    'Automatic withdrawals: pick pets > Withdraw, then trade the bot in game; it gives the pets by itself. The pets are locked while waiting and come back after 15 minutes without a trade or when you cancel',
-    'Automatic Adopt Me deposits: Deposit step 3 opens a 10 minute session, the in-game bot accepts the trade and the pets (matched by name, Neon / Mega, Fly / Ride) appear in the inventory by themselves',
-    'Giveaways: one entry per IP address, and nobody can enter from the host\'s connection',
-    'Fixes: the top bar no longer makes the page wider than the screen on laptops and tablets (1280 / 1366 px and smaller); phones now have the menu (Coinflip, Jackpot, Leaderboard...) as a swipeable row'
-  ] },
-  { version: '4.6', title: 'Support: mute only', changes: [
-    'Support members can only mute (up to 24 h); withdrawals are handled by admins only (site and Discord)',
-    'Every Support mute / unmute shows up in the admin notification bell with who, whom, how long and the reason',
-    'Optional "Delete messages" box when muting: off keeps the player\'s chat messages, on removes them',
-    'Pet values: exact pet names only, amvgg fields read directly, import corrects the values of pets already in the catalog',
-    'Events: pick the prize from your own inventory (it comes back to you if nobody wins, the event is cancelled or the server restarts) or from the catalog',
-    'A Christmas dog walks to the end of the typing text at the top of the site',
-    'Separate withdraw bots: the admin panel has Deposit bots and Withdraw bots; each withdraw request gets an online withdraw bot that players see in their wallet'
-  ] },
-  { version: '4.5', title: 'Support team and amvgg values', changes: [
-    'Support role: admins give / remove it in the admin panel. Support members get a blue SUPPORT tag and a Support Panel (mark withdrawals as sent, mute up to 24 h)',
-    'Pet values from amvgg.com (default) or elvebredd.com: type a pet name to fill all 12 versions, or import every pet at once (x1000, versions already in the catalog are skipped)'
-  ] },
-  { version: '4.4', title: 'Webhooks removed', changes: [
-    'Discord webhooks are removed: the PetDuel Discord bot posts coinflips, jackpots, giveaways, events and withdraw requests itself'
-  ] },
-  { version: '4.3', title: 'Discord bot connection', changes: [
-    'The PetDuel Discord bot connects with a secret key (only its hash is in the code): it can use every admin action, gets every site event live and is not affected by the country block or maintenance',
-    'Players link their Discord account: Profile > Link Discord gives a code for /link in Discord'
-  ] },
-  { version: '4.2', title: 'Chat replies, system messages, new profile', changes: [
-    'Chat: reply to messages; system messages come from "PetDuel" with the logo and a glowing green SYSTEM tag',
-    'Every 30 minutes a deposit-risk reminder is posted in the chat (not repeated if nobody wrote since)',
-    'When an admin marks a withdrawal as sent, the chat shows "X successfully withdrew N pets worth V"',
-    'Profile opens as a window: stats, profit graph with 1D / 3D / 7D / 30D / All, and the transaction table with pages'
-  ] },
-  { version: '4.1', title: 'Values x1000, new profile card and leaderboard', changes: [
-    'Every value on the site is multiplied by 1000 once (catalog, inventories, games, stats, history, giveaways, withdrawals); rank limits and elvebredd lookups use the same scale',
-    'Lobby shows short values (55K, 1.2M)',
-    'Player card: animated stats and a profit graph of the last games; leaderboard with a top 3 podium and Top Profit / Top Wager / Least Profit'
-  ] },
-  { version: '4.0', title: 'Admins cancel games', changes: [
-    'Admins can cancel any coinflip that is waiting or counting down (lobby and match window); pets go back to both players and a chat message is posted'
-  ] },
-  { version: '3.9', title: 'Default bot fix', changes: [
-    'DedokAmp is no longer added back automatically: the default bot is only created once on a brand-new database, so removed bots stay removed'
-  ] },
-  { version: '3.8', title: 'Jackpot history, new wheel and scramble', changes: [
-    'Public jackpot history (last 100 rounds, saved): winner, pot, chance, players, seed and roll to verify',
-    'Wheel event: smooth spin that slows down onto the eliminated player, ticking pointer, rim lights, avatars, elimination flash, winner screen with confetti',
-    'Word scramble: flip-in tiles, tap letters to spell, shuffle, time bar, hints (first letter at 50%, last at 75%), live guess counter, confetti for the winner'
-  ] },
-  { version: '3.7', title: 'Jackpot survives restarts', changes: [
-    'The running jackpot round is saved and continues after a restart (waiting, countdown or rolling); the winner is the same because it comes from the round seed'
-  ] },
-  { version: '3.6', title: 'Games and chat survive restarts', changes: [
-    'Open coinflips and the last 60 chat messages are saved in the database: a restart / deploy no longer cancels games or clears the chat',
-    'Games that were already joined when the server restarted are played to the end with their original (provably fair) result'
-  ] },
-  { version: '3.5', title: 'No withdrawals while bots are offline', changes: [
-    'Withdraw requests are refused while every deposit bot is offline; the wallet shows a notice and disables the button'
-  ] },
-  { version: '3.4', title: 'Country block in the admin panel', changes: [
-    'Admin panel: Country block box (Block Turkey / any codes / Unblock all), saved in the database; BLOCK_COUNTRIES in Railway still works too'
-  ] },
-  { version: '3.3', title: 'Entertainment-only notices, better country detection', changes: [
-    '"For entertainment only, gems have no monetary value" in the footer, Terms of Service, FAQ, login and deposit screens',
-    'Country block falls back to an IP lookup when Cloudflare sends no country; /api/whereami shows what the server sees'
-  ] },
-  { version: '3.2', title: 'Country block', changes: [
-    'BLOCK_COUNTRIES (e.g. TR) shows visitors from those countries a "not available in your country" page (uses Cloudflare CF-IPCountry); API and live connection are blocked too',
-    'STAFF_KEY: open /?staff=KEY once and a cookie lets staff in from a blocked country'
-  ] },
-  { version: '3.1', title: 'Safer deposit flow, giveaway delete', changes: [
-    'Deposit is 3 steps: 1) "Deposit at your own risk" with an I acknowledge checkbox, 2) trade rules incl. at least 6 food items per trade, 3) the bot (masked name, shown big) and the Join private server button',
-    'Admins see a delete button on every giveaway card; pets go back to the host unless unticked'
-  ] },
-  { version: '3.0', title: 'Long giveaways', changes: [
-    'Giveaway duration has no practical limit: days, hours and minutes in Advanced mode; Easy mode also has 1 hour and 1 day',
-    'Giveaways are saved in the database and survive restarts / deploys (before, a restart returned the items to the host)',
-    'Giveaway card shows every pet with its picture, name, badges and value; the timer shows days and hours'
-  ] },
-  { version: '2.9', title: 'Nicknames, masked bot names, delete all pets', changes: [
-    'Every player must choose a site nickname (3-16 letters, numbers or _, unique) before playing; it is shown everywhere instead of the Roblox name (chat, games, leaderboard, webhooks). Can be changed once every 7 days',
-    'Admin users list shows nickname + Roblox name; search, Give Items and bounties accept either',
-    'Admin: "Delete all pets" button next to every player who has pets',
-    'Deposit bots are shown masked to players (ltcspace -> ltcs***e); admins still see the full name'
-  ] },
-  { version: '2.8', title: 'Maintenance mode', changes: [
-    'Admin panel: Close / Open the site. While closed only admins can use the site; everyone else sees a big PET DUEL "officially closed" screen with an optional message',
-    'Players are disconnected right away and come back automatically when the site is opened again; admins see a red maintenance bar'
-  ] },
-  { version: '2.7', title: 'Sign in with Roblox', changes: [
-    'Official Roblox OAuth login (one click, no code) next to the bio code login; shown once ROBLOX_CLIENT_ID and ROBLOX_CLIENT_SECRET are set',
-    'PKCE + state check; the session token is handed over with a one-time ticket, never in a URL'
-  ] },
-  { version: '2.6', title: 'New login screen', changes: [
-    'Login is one card: username, terms checkbox, Login button and the captcha inside the card (Turnstile or built-in image)',
-    'Full screen on phones; step 2 shows the code with a Copy button and short instructions; "Use another username" goes back'
-  ] },
-  { version: '2.5', title: 'Wallet counter and update banner', changes: [
-    'Wallet balance counts up / down (starts slow, speeds up, 1-1.8 s) instead of the falling gems',
-    'Wallet only shows pending withdrawals',
-    'Home banner shows a short note about the latest update when there is no admin announcement (admin announcements still win)'
-  ] },
-  { version: '2.4', title: 'Pet limits, withdraw status and Discord pictures', changes: [
-    'Create Coinflip: choose how many pets the opponent may join with (1, 2, 3, 5, 10 or any); the server enforces it',
-    'Wallet: players see their withdraw requests (pending / sent / refunded); the wallet opens with an animation',
-    'Profile history pages are shortened (1 … 4 5 6 … 42) instead of one button per page',
-    'Discord moved to the right end of the menu',
-    'Webhooks: avatar, author and the most valuable pet picture in every embed; new coinflip and withdraw request webhooks; URLs can be pasted at the top of server.js'
-  ] },
-  { version: '2.3', title: 'Owner tag, catalog browser and smoother pages', changes: [
-    'Purple glowing "Owner" tag instead of ADMIN in chat and on profiles',
-    'Admin: Open Catalog shows the whole catalog in an animated window with name search, version filter and sorting',
-    'Animated sort menu in the lobby; "Create Coinflip" button; Discord is the first item in the menu',
-    'Create Coinflip: the side picker is two small coins next to Clear; the match window has no status pill any more',
-    'Phones: the event and jackpot pages no longer jump while you watch'
-  ] },
-  { version: '2.2', title: 'New lobby, info pages and easier pet adding', changes: [
-    'Coinflip lobby rebuilt: Player vs Player, all pets in one row with badges, value and join range on the right, Join / View buttons',
-    'Sort games by value or newest; game count and total value in the toolbar',
-    'Updates (public), Terms of Service, Provably Fair and FAQ next to Discord',
-    'Admin: add a pet with all 12 versions at once; known pets fill their picture automatically; elvebredd fills every value',
-    'Elvebredd parser can no longer freeze the server (this caused the 502 errors)'
-  ] },
-  { version: '2.1', title: 'New match view, countdown and pet tooltips', changes: [
-    'Match window: big VS in the middle while waiting, site logo on top, win chance bars and "Created ... ago"',
-    'New 3-2-1 countdown with a ring that empties smoothly, in the lobby and in the match window',
-    'Open games glow; pets show round M / N / F / R badges and a soft glow for Mega and Neon',
-    'Hover or tap a pet to see its full name and value',
-    'Animated "Online now" on profiles',
-    'Elvebredd lookup stops after 20 seconds and shows a clear error instead of an error page'
-  ] },
-  { version: '2.0', title: 'Deposit bots, elvebredd values and a new look', changes: [
-    'Deposit lists every bot with its Online / Offline status; offline bots cannot be joined',
-    'Admin panel: add / remove deposit bots, change join links and switch each bot online or offline',
-    'Admin panel: type a pet name, pick Normal / Neon / Mega and Fly / Ride, and the value and image are fetched from elvebredd.com',
-    'Rubik font and a paw print background'
-  ] },
-  { version: '1.9', title: 'Simpler site, chat rule and admin search', changes: [
-    'Back to a single game (Adopt Me): everything about the second game and the withdraw wager requirement was removed',
-    'Chat: you need to place a bet before you can write ("Place a bet to chat")',
-    'Admin panel: search players by name, filter online / offline / admins / banned, sort by last seen, bet or value',
-    'Profiles show when a player was last seen',
-    'Coinflip flips as soon as the 3-2-1 countdown ends; the games counter next to History is gone',
-    'Active coinflip value is shown under Coinflip and the jackpot pot under Jackpot in the top menu',
-    'New rank icons and a calmer look'
-  ] },
-  { version: '1.8', title: 'Tax, captcha, auto select and online counter', changes: [
-    'Coinflip tax: admins set a rate (0–20%) and the receiver; taxed items go to an admin account and a bell notification is sent',
-    'Captcha when logging in and when entering a giveaway (Cloudflare Turnstile if configured, built-in image captcha otherwise)',
-    'Join match: "Auto select" picks the smallest items that fit the required value range',
-    'Coinflip item limit raised from 8 to 20; "Select All" removed from create/join and kept in the wallet',
-    'Online counter counts each logged-in player once (not tabs) and is shown only after login',
-    'Admin panel: update log'
-  ] },
-  { version: '1.7', title: 'Security', changes: [
-    'Per-IP rate limits, automatic temporary IP blocks, request timeouts, socket limits and a short cache for the public state',
-    'Content security policy, safer lookups and no stack traces for visitors',
-    'Item audit every 30 seconds: no item id may exist in two places; database revision lock against double instances'
-  ] },
-  { version: '1.6', title: 'Bounty', changes: [
-    'Bounty: admins put a bounty on a player, the first player who beats them wins the prize and everyone sees a congratulation popup'
-  ] },
-  { version: '1.5', title: 'Pet Duel, mobile and jackpot', changes: [
-    'Site renamed to Pet Duel and an independence notice added in the footer',
-    'Mobile: floating chat button, chat opens full screen, menu row with Jackpot, Leaderboard and Discord',
-    'Coinflip animation is the same as the replay; the result is shown when the coin stops',
-    'Jackpot: 60 second rounds, avatars on the ring, provably fair verify button',
-    'Gems fall when the wallet changes; circular item previews; active games value'
-  ] },
-  { version: '1.4', title: 'Moderation, ranks and events', changes: [
-    'Mute (all chat messages of the player are deleted), ban, item delete, stats editing and admin roles with a chat tag option',
-    '30 ranks and a minimum rank for giveaways',
-    'Wheel and word scramble events with an announcement banner',
-    'Tips from the profile card and the admin notification bell'
-  ] },
-  { version: '1.0', title: 'Launch', changes: [
-    'Roblox login, coinflip with provably fair hash, 3D coin, history and replay',
-    'Giveaways, live chat, leaderboard, announcements and admin panel with catalog and item grants',
-    'Manual withdraw requests',
-    'Discord webhooks for giveaways and coinflips'
+  { version: '6.0', title: 'Pet Simulator 99', changes: [
+    'Pet Duel is now a Pet Simulator 99 site: coinflip, jackpot, giveaways and events with PS99 pets',
+    'New catalog with every Huge, Titanic and Gargantuan (Normal, Golden, Rainbow and Shiny) plus valuable exclusives, with pictures',
+    'Values follow the official PS99 RAP and update by themselves every 6 hours',
+    'Automatic deposits and withdrawals with our in-game bot; no extra items needed in the trade',
+    'Values are shown short: 15.09B, 604M'
   ] }
 ];
 
@@ -2529,7 +2412,7 @@ function finishJackpot(j) {
     color: 0xff5968,
     fields: [
       { name: 'Winner', value: clip(nick(winEntry.user), 100), inline: true },
-      { name: 'Pot', value: String(j.total), inline: true },
+      { name: 'Pot', value: fmtV(j.total), inline: true },
       { name: 'Chance', value: `${round2((winEntry.value / j.total) * 100)}%`, inline: true },
       { name: 'Players', value: j.entries.map(e => `${nick(e.user)}: ${e.value}`).join('\n').slice(0, 1000) },
       { name: 'Round / Hash', value: clip(`${j.id}\n${j.hash}`, 300) }
@@ -2637,7 +2520,7 @@ app.post('/api/tip', auth, actionLimit, (req, res) => {
 
 /* ================= WITHDRAW (manual) =================
    Items leave the inventory immediately (so they can't be used in a game
-   or withdrawn twice) and an admin sends them by hand in Adopt Me. */
+   or withdrawn twice) and an admin sends them by hand in Pet Simulator 99. */
 
 app.post('/api/withdraw', auth, actionLimit, (req, res) => {
   const user = req.user;
@@ -2672,7 +2555,7 @@ app.post('/api/withdraw', auth, actionLimit, (req, res) => {
     color: 0xffb52e,
     fields: [
       { name: 'Player', value: clip(nick(user), 100), inline: true },
-      { name: 'Value', value: String(request.value), inline: true },
+      { name: 'Value', value: fmtV(request.value), inline: true },
       { name: `Pets (${items.length})`, value: itemLine(items) }
     ],
     timestamp: new Date().toISOString()
@@ -3103,21 +2986,23 @@ app.post('/api/event/guess', auth, (req, res) => {
 
 /* ================= ADMIN API ================= */
 
+const MAX_VALUE = 1e15;
+const validImage = v => /^(https:\/\/[^\s"'<>]{4,400}|\/assets\/[\w./-]{1,200})$/.test(v);
+
+/* a catalog item from the admin panel: base name + variant + shiny; the full name is built from them */
 function cleanItem(body) {
-  const name = String(body.name || '').trim().slice(0, 40);
+  const parsed = ps99Parse(body.base || body.name);
+  const variant = PS99_VARIANTS.includes(body.variant) ? body.variant : parsed.variant;
+  const shiny = body.shiny !== undefined ? Boolean(body.shiny) : parsed.shiny;
+  const base = parsed.base.slice(0, 60);
   const image = String(body.image || '').trim();
   const value = round2(Number(body.value));
 
-  if (!name) return null;
-  if (!/^https:\/\/[^\s"'<>]{4,400}$/.test(image)) return null;
-  if (!Number.isFinite(value) || value < 0 || value > 1e9) return null;
+  if (!base) return null;
+  if (!validImage(image)) return null;
+  if (!Number.isFinite(value) || value < 0 || value > MAX_VALUE) return null;
 
-  return {
-    name, image, value,
-    age: ['normal', 'neon', 'mega'].includes(body.age) ? body.age : 'normal',
-    fly: Boolean(body.fly),
-    ride: Boolean(body.ride)
-  };
+  return { name: ps99FullName(base, variant, shiny), base, variant, shiny, image, value, category: String(body.category || '').slice(0, 20) || undefined };
 }
 
 /* ================= ADMIN: DEPOSIT BOTS ================= */
@@ -3166,417 +3051,6 @@ app.post('/api/admin/bots/delete', auth, adminOnly, (req, res) => {
   res.json({ ok: true, bots: publicBots(true) });
 });
 
-/* ================= ADMIN: ELVEBREDD VALUE LOOKUP =================
-   The admin types a pet name and picks Normal / Neon / Mega + Fly / Ride; the server reads the
-   value list of elvebredd.com and returns that pet's value and image so it can be added to the catalog.
-   The site has no documented API, so the parser is tolerant: it reads JSON endpoints or the JSON embedded
-   in the page and finds every object that has a name and value fields. If elvebredd changes its site,
-   set the exact data URL in the admin panel (or ELVE_URL in Render > Environment). */
-
-/* value sites: amvgg.com (default) or elvebredd.com, chosen in the admin panel */
-const VALUE_SOURCES = {
-  amvgg: { name: 'amvgg.com', origin: 'https://amvgg.com', urls: [
-    'https://amvgg.com/values/pets', 'https://amvgg.com/api/values/pets', 'https://amvgg.com/api/pets',
-    'https://amvgg.com/api/values', 'https://amvgg.com/api/items', 'https://amvgg.com/values'
-  ] },
-  elvebredd: { name: 'elvebredd.com', origin: 'https://elvebredd.com', urls: [
-    'https://elvebredd.com/api/values', 'https://elvebredd.com/api/pets', 'https://elvebredd.com/api/items',
-    'https://elvebredd.com/values', 'https://elvebredd.com/'
-  ] }
-};
-const valueSource = () => VALUE_SOURCES[S.settings.valueSource] || VALUE_SOURCES.amvgg;
-const ELVE_ORIGIN = 'https://elvebredd.com';
-const ELVE_TTL = 15 * 60 * 1000;
-let elveCache = { ts: 0, pets: [], source: '' };
-let elveLoading = null;
-
-const normName = v => String(v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-
-function numberOf(v) {
-  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
-  if (typeof v !== 'string') return null;
-  const t = v.trim().replace(/,/g, '');
-  if (!/^-?\d+(\.\d+)?$/.test(t)) return null;
-  return Number(t);
-}
-
-const NAME_KEYS = ['name', 'title', 'item_name', 'itemName', 'petName', 'pet_name'];
-const IMAGE_KEYS = ['image', 'img', 'imageUrl', 'image_url', 'imageURL', 'icon', 'picture', 'thumbnail', 'src'];
-
-/* finds every "pet-like" object (a name + at least one numeric value field) anywhere in the data */
-function collectPets(root, base) {
-  const out = [];
-  const seen = new Set();
-
-  const walk = (node, depth) => {
-    if (!node || typeof node !== 'object' || depth > 10 || seen.has(node)) return;
-    seen.add(node);
-    if (Array.isArray(node)) { node.forEach(x => walk(x, depth + 1)); return; }
-
-    const nameKey = NAME_KEYS.find(k => typeof node[k] === 'string' && node[k].trim());
-    if (nameKey) {
-      /* value fields, also nested ones like { neon: { fly_ride: 12 } } (the path becomes "neon.fly_ride") */
-      const VALUE_HINT = /val|price|worth|normal|regular|default|neon|mega|fly|ride|potion|nopot/i;
-      const NOT_VALUE = /(^|[._])(id|rank|demand|trend|count|qty|amount|change|percent|pct|rarity|tier|order|index|sort|time|date|created|updated|stock|score|rating)([._]|$)/i;
-      const values = {};
-      const take = (obj, prefix, depth) => {
-        for (const [k, v] of Object.entries(obj)) {
-          const key = prefix ? `${prefix}.${k}` : k;
-          if (v && typeof v === 'object' && !Array.isArray(v) && depth < 2) { take(v, key, depth + 1); continue; }
-          if (!VALUE_HINT.test(key) || NOT_VALUE.test(key)) continue;
-          const n = numberOf(v);
-          if (n !== null && n >= 0) values[key] = n;
-        }
-      };
-      take(node, '', 0);
-      if (Object.keys(values).length) {
-        let image = '';
-        const imageKey = IMAGE_KEYS.find(k => typeof node[k] === 'string' && node[k].trim());
-        if (imageKey) {
-          try { image = new URL(node[imageKey].trim(), base).href; } catch { image = ''; }
-        }
-        out.push({ name: node[nameKey].trim(), image, values });
-      }
-    }
-    Object.values(node).forEach(v => walk(v, depth + 1));
-  };
-
-  walk(root, 0);
-  return out;
-}
-
-/* Returns the JSON array/object that starts at text[start], using a string-aware bracket scanner.
-   Linear time and capped in length, so a huge page can never lock up the server. */
-function sliceJson(text, start, maxLen = 3 * 1024 * 1024) {
-  const open = text[start];
-  const close = open === '[' ? ']' : '}';
-  let depth = 0, inStr = false, esc = false;
-  const end = Math.min(text.length, start + maxLen);
-  for (let i = start; i < end; i++) {
-    const c = text[i];
-    if (inStr) {
-      if (esc) esc = false;
-      else if (c === '\\') esc = true;
-      else if (c === '"') inStr = false;
-      continue;
-    }
-    if (c === '"') inStr = true;
-    else if (c === '[' || c === '{') depth++;
-    else if (c === ']' || c === '}') {
-      depth--;
-      if (depth === 0) return c === close ? text.slice(start, i + 1) : null;
-    }
-  }
-  return null;
-}
-
-function scriptBodies(text, test) {
-  const out = [];
-  let pos = 0;
-  while (out.length < 50) {
-    const s = text.indexOf('<script', pos);
-    if (s < 0) break;
-    const tagEnd = text.indexOf('>', s);
-    const e = text.indexOf('</script>', tagEnd);
-    if (tagEnd < 0 || e < 0) break;
-    if (test(text.slice(s, tagEnd + 1))) out.push(text.slice(tagEnd + 1, e));
-    pos = e + 9;
-  }
-  return out;
-}
-
-/* tries to read JSON from a response body: plain JSON, Next.js data, or JSON blobs in <script> tags */
-function extractJson(text) {
-  const found = [];
-  const tryParse = t => { try { found.push(JSON.parse(t)); return true; } catch { return false; } };
-
-  const t = text.trim();
-  if ((t.startsWith('{') || t.startsWith('[')) && tryParse(t)) return found;
-
-  for (const body of scriptBodies(text, tag => /__NEXT_DATA__|application\/(ld\+)?json/i.test(tag))) tryParse(body);
-
-  /* Next.js app router streams its data as self.__next_f.push([1,"..."]) chunks */
-  let joined = '';
-  let pos = 0;
-  const marker = 'self.__next_f.push(';
-  while (joined.length < 6 * 1024 * 1024) {
-    const s = text.indexOf(marker, pos);
-    if (s < 0) break;
-    const arr = sliceJson(text, s + marker.length);
-    if (!arr) { pos = s + marker.length; continue; }
-    pos = s + marker.length + arr.length;
-    try { const v = JSON.parse(arr); if (typeof v[1] === 'string') joined += v[1]; } catch { /* ignore */ }
-  }
-
-  /* inside that data, every array of objects that mentions "name" is a candidate */
-  let tries = 0;
-  pos = 0;
-  while (joined && tries < 200) {
-    const s = joined.indexOf('[{', pos);
-    if (s < 0) break;
-    tries++;
-    const arr = sliceJson(joined, s, 1024 * 1024);
-    if (arr && arr.includes('"name"') && tryParse(arr)) pos = s + arr.length;
-    else pos = s + 2;
-  }
-  return found;
-}
-
-async function fetchText(url, ms = 7000) {
-  const response = await fetch(url, {
-    signal: AbortSignal.timeout(ms),
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
-      Accept: 'application/json, text/html;q=0.9, */*;q=0.8'
-    }
-  });
-  if (!response.ok) {
-    const blocked = [401, 403, 429, 503].includes(response.status);
-    throw new Error(blocked ? `blocked by the site (HTTP ${response.status})` : `HTTP ${response.status}`);
-  }
-  const type = response.headers.get('content-type') || '';
-  if (!/json|html|text|javascript/i.test(type)) throw new Error('not a web page');
-  return (await response.text()).slice(0, 6 * 1024 * 1024);
-}
-
-/* ---------- amvgg.com: exact format ----------
-   The values page is a Next.js page; its data comes in self.__next_f.push chunks. Every pet is an object like
-   {"id":"…","name":"Shadow Dragon","regularValue":"3.775","npRegularValue":"4.55","fValue":…,"rValue":…,
-    "neonValue":…,"npNeonValue":…,"nfValue":…,"nrValue":…,"megaValue":…,"npMegaValue":…,"mfValue":…,"mrValue":…}
-   np = no potion, regular / neon / mega = fly ride, f = fly, r = ride. Pictures: /items/<name>.webp */
-const AMV_FIELDS = {
-  'normal-none': 'npRegularValue', 'normal-f': 'fValue', 'normal-r': 'rValue', 'normal-fr': 'regularValue',
-  'neon-none': 'npNeonValue', 'neon-f': 'nfValue', 'neon-r': 'nrValue', 'neon-fr': 'neonValue',
-  'mega-none': 'npMegaValue', 'mega-f': 'mfValue', 'mega-r': 'mrValue', 'mega-fr': 'megaValue'
-};
-
-async function loadAmvgg(deadlineMs, url) {
-  const text = await fetchText(url || 'https://amvgg.com/values/pets', deadlineMs);
-  return parseAmvgg(text);
-}
-
-function parseAmvgg(text) {
-  let joined = '';
-  let pos = 0;
-  const marker = 'self.__next_f.push(';
-  if (!text.includes('self.__next_f.push(')) joined = text;
-  while (joined.length < 8 * 1024 * 1024) {
-    const st = text.indexOf(marker, pos);
-    if (st < 0) break;
-    const arr = sliceJson(text, st + marker.length);
-    if (!arr) { pos = st + marker.length; continue; }
-    pos = st + marker.length + arr.length;
-    try { const v = JSON.parse(arr); if (typeof v[1] === 'string') joined += v[1]; } catch { /* ignore */ }
-  }
-  const pets = new Map();
-  pos = 0;
-  while (pets.size < 5000) {
-    const st = joined.indexOf('{"id":"', pos);
-    if (st < 0) break;
-    const obj = sliceJson(joined, st, 20000);
-    pos = st + 7;
-    if (!obj || !obj.includes('"npRegularValue"')) continue;
-    try {
-      const d = JSON.parse(obj);
-      if (!d.name) continue;
-      const amv = {};
-      for (const [key, field] of Object.entries(AMV_FIELDS)) {
-        const n = numberOf(d[field]);
-        amv[key] = n !== null && n > 0 ? n : null;
-      }
-      /* pets with a single price per age (no potion split on amvgg): that price counts for every potion */
-      for (const age of ['normal', 'neon', 'mega']) {
-        const base = amv[`${age}-fr`];
-        if (base === null) continue;
-        for (const pot of ['none', 'f', 'r']) if (amv[`${age}-${pot}`] === null) amv[`${age}-${pot}`] = base;
-      }
-      const name = String(d.name).trim();
-      pets.set(normName(name), { name, image: `https://amvgg.com/items/${encodeURIComponent(name)}.webp`, values: {}, amv });
-    } catch { /* ignore */ }
-  }
-  if (pets.size < 5) throw new Error('amvgg.com page has no pet data');
-  return [...pets.values()];
-}
-
-async function loadElve(force) {
-  if (!force && elveCache.pets.length && now() - elveCache.ts < ELVE_TTL) return elveCache;
-  if (elveLoading) return elveLoading;
-
-  elveLoading = (async () => {
-    const src = valueSource();
-    const custom = String(S.settings.elveUrl || E.ELVE_URL || '').trim();
-    const queue = custom ? [custom, ...src.urls] : [...src.urls];
-    const tried = new Set();
-    const errors = [];
-
-    /* amvgg: always read its exact format (field names map straight to the 12 versions) */
-    if (src === VALUE_SOURCES.amvgg) {
-      try {
-        const amvUrl = /^https:\/\/(www\.)?amvgg\.com\//.test(custom) ? custom : 'https://amvgg.com/values/pets';
-        const pets = await loadAmvgg(15000, amvUrl);
-        elveCache = { ts: now(), pets, source: amvUrl };
-        return elveCache;
-      } catch (error) {
-        errors.push(`amvgg format: ${error.name === 'TimeoutError' ? 'timed out' : error.message}`);
-      }
-    }
-    /* Cloudflare in front of the site cuts requests after ~100 s, so the whole lookup must stay short */
-    const deadline = now() + 20000;
-
-    while (queue.length && tried.size < 8 && deadline - now() > 1500) {
-      const url = queue.shift();
-      if (tried.has(url)) continue;
-      tried.add(url);
-      try {
-        const text = await fetchText(url, Math.min(7000, deadline - now()));
-        if (text.includes('"npRegularValue"')) {
-          try { const amvPets = parseAmvgg(text); elveCache = { ts: now(), pets: amvPets, source: url }; return elveCache; } catch { /* fall through */ }
-        }
-        const pets = [];
-        for (const data of extractJson(text)) pets.push(...collectPets(data, url));
-
-        if (pets.length >= 5) {
-          const byKey = new Map();
-          for (const p of pets) if (!byKey.has(normName(p.name))) byKey.set(normName(p.name), p);
-          elveCache = { ts: now(), pets: [...byKey.values()], source: url };
-          return elveCache;
-        }
-
-        /* an HTML page: follow the API / JSON links it mentions */
-        const links = text.match(/["'](\/api\/[^"'\s<>]{1,120}|https:\/\/(?:elvebredd|amvgg)\.com\/[^"'\s<>]{1,120}\.json)["']/g) || [];
-        for (const l of links.slice(0, 8)) {
-          try { queue.push(new URL(l.slice(1, -1), url).href); } catch { /* ignore */ }
-        }
-        errors.push(`${url}: no pet data`);
-      } catch (error) {
-        errors.push(`${url.replace(src.origin, '') || '/'}: ${error.name === 'TimeoutError' ? 'timed out' : error.message}`);
-      }
-    }
-    throw new Error(`Could not read ${src.name} values. ` + errors.slice(0, 4).join(' | ') +
-      '. You can still add the item by hand, or paste the exact data URL under "Data source".');
-  })();
-
-  try { return await elveLoading; } finally { elveLoading = null; }
-}
-
-/* sorts a value key into (age, potion), e.g. "nvalue - fly&ride" -> neon + fly&ride */
-function classifyKey(key) {
-  const k = key.toLowerCase();
-  let age = 'normal';
-  if (/mega|^m[\s_.-]*val|^mvalue/.test(k)) age = 'mega';
-  else if (/neon|^n[\s_.-]*val|^nvalue/.test(k)) age = 'neon';
-
-  const fly = /fly|(^|[^a-z])f([^a-z]|$)/.test(k) || /fr$|flyride|fly&ride/.test(k);
-  const ride = /ride|fr$/.test(k) || /(^|[^a-z])r([^a-z]|$)/.test(k.replace(/^r[\s_-]*value/, ''));
-  const potion = fly && ride ? 'fr' : fly ? 'f' : ride ? 'r' : 'none';
-  return { age, potion };
-}
-
-function pickValue(pet, age, fly, ride) {
-  const want = fly && ride ? 'fr' : fly ? 'f' : ride ? 'r' : 'none';
-  const keys = Object.keys(pet.values).map(key => ({ key, ...classifyKey(key) }));
-  const sameAge = keys.filter(k => k.age === age);
-
-  /* fly-only and ride-only usually share a price; use one when the other is missing */
-  const order = want === 'f' ? ['f', 'r'] : want === 'r' ? ['r', 'f'] : [want];
-  for (const p of order) {
-    const hit = sameAge.find(k => k.potion === p);
-    if (hit) return { key: hit.key, value: pet.values[hit.key] };
-  }
-
-  /* a list with a single plain "value" field: only the normal, no-potion price exists */
-  if (age === 'normal' && want === 'none' && keys.length === 1) return { key: keys[0].key, value: pet.values[keys[0].key] };
-  return null;
-}
-
-/* the 12 versions of one pet in the site's scale (null = the value site has no price for it) */
-function petVariants(pet) {
-  if (pet.amv) {
-    const out = {};
-    for (const [key, v] of Object.entries(pet.amv)) out[key] = v === null ? null : round2(v * VALUE_SCALE);
-    return out;
-  }
-  const out = {};
-  for (const age of ['normal', 'neon', 'mega']) {
-    for (const [pot, fly, ride] of [['none', false, false], ['f', true, false], ['r', false, true], ['fr', true, true]]) {
-      const picked = pickValue(pet, age, fly, ride);
-      out[`${age}-${pot}`] = picked ? round2(picked.value * VALUE_SCALE) : null;
-    }
-  }
-  return out;
-}
-
-/* import every pet of the value site into the catalog (values x1000); versions already in the catalog are skipped */
-app.post('/api/admin/values/import', auth, adminOnly, async (req, res) => {
-  let data;
-  try { data = await loadElve(true); } catch (error) { return bad(res, error.message, 502); }
-  const onlyNormal = req.body.mode === 'normal';
-  const have = new Map(S.catalog.map(c => [`${normName(c.name)}|${c.age || 'normal'}|${Boolean(c.fly)}|${Boolean(c.ride)}`, c]));
-  let added = 0, skipped = 0, updated = 0, noImage = 0;
-  for (const pet of data.pets) {
-    if (!/^https:\/\//.test(pet.image)) { noImage++; continue; }
-    const name = pet.name.slice(0, 40);
-    for (const [key, value] of Object.entries(petVariants(pet))) {
-      if (value === null || value <= 0) continue;
-      const [age, pot] = key.split('-');
-      if (onlyNormal && pot !== 'none') continue;
-      const fly = pot === 'f' || pot === 'fr', ride = pot === 'r' || pot === 'fr';
-      const k = `${normName(name)}|${age}|${fly}|${ride}`;
-      const old = have.get(k);
-      if (old) {
-        /* already in the catalog: keep the item, correct its value */
-        if (old.value !== value) { old.value = value; updated++; } else skipped++;
-        continue;
-      }
-      const item = { id: rid(8), name, image: pet.image, value, age, fly, ride };
-      have.set(k, item);
-      S.catalog.push(item);
-      added++;
-    }
-  }
-  markDirty();
-  console.log(`[ADMIN] ${req.user.username} imported ${added} catalog items from ${valueSource().name}`);
-  res.json({ ok: true, added, updated, skipped, pets: data.pets.length, noImage, source: valueSource().name });
-});
-
-app.get('/api/admin/elve', auth, adminOnly, async (req, res) => {
-  const name = String(req.query.name || '').trim().slice(0, 60);
-  if (normName(name).length < 2) return bad(res, 'Enter a pet name');
-
-  let data;
-  try { data = await loadElve(req.query.refresh === '1'); }
-  catch (error) { return bad(res, error.message, 502); }
-
-  const q = normName(name);
-  /* exact name only: "Dragon" never picks "Shadow Dragon" */
-  const exact = data.pets.find(p => normName(p.name) === q);
-  const similar = data.pets
-    .filter(p => normName(p.name) !== q && normName(p.name).includes(q))
-    .slice(0, 8)
-    .map(p => p.name);
-
-  if (!exact) {
-    return bad(res, similar.length ? `No pet named exactly "${name}". Did you mean: ${similar.join(', ')}?` : `No pet named exactly "${name}" on ${valueSource().name}`, 404);
-  }
-
-  const variants = petVariants(exact);
-
-  res.json({
-    ok: true, name: exact.name, image: /^https:\/\//.test(exact.image) ? exact.image : '',
-    variants, source: data.source, similar
-  });
-});
-
-app.post('/api/admin/elve/source', auth, adminOnly, (req, res) => {
-  const url = String(req.body.url || '').trim();
-  if (url && !/^https:\/\/[^\s"'<>]{4,400}$/.test(url)) return bad(res, 'The data URL must start with https://');
-  if (req.body.source && VALUE_SOURCES[req.body.source]) S.settings.valueSource = req.body.source;
-  S.settings.elveUrl = url;
-  elveCache = { ts: 0, pets: [], source: '' };
-  markDirty();
-  res.json({ ok: true });
-});
-
 app.get('/api/admin/ui', auth, adminOnly, (req, res) => {
   res.type('application/javascript').send(`(${adminUI.toString()})();`);
 });
@@ -3605,9 +3079,9 @@ app.get('/api/admin/data', auth, adminOnly, (req, res) => {
     updateLog: UPDATE_LOG,
     updateNotes: S.updateNotes,
     bots: publicBots(true),
-    myInventory: req.user.inventory.map(i => ({ uid: i.uid, name: i.name, image: i.image, value: i.value, age: i.age, fly: i.fly, ride: i.ride })),
-    elveUrl: S.settings.elveUrl || '',
-    valueSource: S.settings.valueSource || 'amvgg',
+    myInventory: req.user.inventory.map(i => ({ uid: i.uid, name: i.name, image: i.image, value: i.value })),
+    rapAt: S.settings.rapAt || 0,
+    rapInfo: S.settings.rapInfo || '',
     maintenance: maintenanceOn(),
     maintenanceText: S.settings.maintenanceText || '',
     blockCountries: (S.settings.blockCountries || []).join(', '),
@@ -3624,7 +3098,7 @@ function markWithdrawSent(w, by) {
   const owner = S.users[w.user.id];
   if (owner) emitMe(owner);
   const n = w.items.length;
-  systemChat(`${nick(owner || w.user)} successfully withdrew ${n} pet${n === 1 ? '' : 's'} worth ${Number(w.value).toLocaleString('en-US')}! 🎉`, { withdraw: true });
+  systemChat(`${nick(owner || w.user)} successfully withdrew ${n} pet${n === 1 ? '' : 's'} worth ${fmtV(w.value)}! 🎉`, { withdraw: true });
 }
 
 app.post('/api/admin/withdraw/done', auth, adminOnly, (req, res) => {
@@ -3731,8 +3205,7 @@ app.get('/api/admin/inventory', auth, adminOnly, (req, res) => {
   res.json({
     username: user.username,
     items: user.inventory.map(i => ({
-      uid: i.uid, name: i.name, image: i.image, value: i.value,
-      age: i.age, fly: i.fly, ride: i.ride
+      uid: i.uid, name: i.name, image: i.image, value: i.value
     }))
   });
 });
@@ -3938,66 +3411,121 @@ app.post('/api/admin/announce', auth, adminOnly, (req, res) => {
 
 app.post('/api/admin/catalog', auth, adminOnly, (req, res) => {
   const item = cleanItem(req.body);
-  if (!item) return bad(res, 'Invalid item. Image must be a valid https:// URL.');
+  if (!item) return bad(res, 'Check the name, the value and the image (a https:// link)');
+  const k = ps99KeyOf(item);
+  const existing = S.catalog.find(c => ps99KeyOf(c) === k);
+  if (existing) {
+    Object.assign(existing, { image: item.image, value: item.value, manual: true });
+    markDirty();
+    return res.json({ ok: true, item: existing, updated: true });
+  }
   item.id = rid(8);
+  item.manual = true;
   S.catalog.push(item);
   markDirty();
   res.json({ ok: true, item });
 });
 
-/* one pet name + picture, many versions (normal / neon / mega × fly / ride): each becomes its own catalog item */
-app.post('/api/admin/catalog/bulk', auth, adminOnly, (req, res) => {
-  const variants = Array.isArray(req.body.variants) ? req.body.variants.slice(0, 12) : [];
-  if (!variants.length) return bad(res, 'Fill the value of at least one version');
-
-  const name = String(req.body.name || '').trim();
-  let image = String(req.body.image || '').trim();
-  if (!image) {
-    const known = S.catalog.find(c => c.name.toLowerCase() === name.toLowerCase());
-    if (known) image = known.image;
+/* ================= PS99 CATALOG + OFFICIAL RAP VALUES =================
+   The catalog starts from assets/ps99-catalog.json (every Huge / Titanic / Gargantuan and valuable exclusives,
+   pictures in assets/ps99). Values follow the official RAP of BIG Games (ps99.biggamesapi.io/api/rap) every
+   6 hours: catalog items and the pets players own get the new value; new Huges / Titanics / Gargantuans are
+   added with the official picture. Items an admin changed by hand (manual) keep their value. */
+const PS99_CATALOG_V = 1;
+const stableId = k => 'p' + crypto.createHash('md5').update(k).digest('hex').slice(0, 11);
+function loadPs99Catalog() {
+  if (S.settings.ps99CatalogV === PS99_CATALOG_V && S.catalog.length) return;
+  let list;
+  try { list = JSON.parse(require('fs').readFileSync(path.join(__dirname, 'assets', 'ps99-catalog.json'), 'utf8')); }
+  catch (error) { console.error('PS99 catalog file could not be read:', error.message); return; }
+  const have = new Map(S.catalog.map(c => [ps99KeyOf(c), c]));
+  let added = 0;
+  for (const p of list) {
+    const k = ps99Key(p.base, p.variant, p.shiny);
+    const c = have.get(k);
+    if (c) { if (!c.manual) Object.assign(c, { value: p.value, image: c.image || p.image, category: p.category }); continue; }
+    const item = { id: stableId(k), name: p.name, base: p.base, variant: p.variant, shiny: p.shiny, category: p.category, image: p.image, value: p.value };
+    S.catalog.push(item); have.set(k, item); added++;
   }
-
-  const items = [];
-  for (const v of variants) {
-    const item = cleanItem({ name, image, value: v.value, age: v.age, fly: v.fly, ride: v.ride });
-    if (!item) return bad(res, 'Check the name, the image URL (must start with https://) and the values');
-    items.push(item);
-  }
-
-  let added = 0, updated = 0;
-  for (const item of items) {
-    const existing = S.catalog.find(c => c.name.toLowerCase() === item.name.toLowerCase() &&
-      c.age === item.age && Boolean(c.fly) === item.fly && Boolean(c.ride) === item.ride);
-    if (existing) {
-      existing.value = item.value;
-      existing.image = item.image;
-      updated++;
-    } else {
-      item.id = rid(8);
-      S.catalog.push(item);
-      added++;
-    }
-  }
+  S.settings.ps99CatalogV = PS99_CATALOG_V;
   markDirty();
-  res.json({ ok: true, added, updated });
+  console.log(`PS99 catalog loaded: ${added} pets added (${S.catalog.length} in the catalog)`);
+}
+
+let rapRunning = false;
+async function refreshRap() {
+  if (rapRunning) throw new Error('A value update is already running');
+  rapRunning = true;
+  try {
+    const r = await fetch('https://ps99.biggamesapi.io/api/rap', { signal: AbortSignal.timeout(60000) });
+    const j = await r.json();
+    if (j.status !== 'ok' || !Array.isArray(j.data)) throw new Error('the PS99 API did not send values');
+    const idx = new Map(S.catalog.map(c => [ps99KeyOf(c), c]));
+    let updated = 0, added = 0, thumbs = null;
+    for (const x of j.data) {
+      const cd = x.configData || {};
+      if (x.category !== 'Pet' || !cd.id || cd.cv) continue;
+      const variant = cd.pt === 1 ? 'golden' : cd.pt === 2 ? 'rainbow' : 'normal';
+      const k = ps99Key(cd.id, variant, cd.sh);
+      const value = Math.round(Number(x.value) || 0);
+      if (value <= 0) continue;
+      const c = idx.get(k);
+      if (c) { if (!c.manual && c.value !== value) { c.value = value; updated++; } continue; }
+      if (!/^(Huge|Titanic|Gargantuan) /.test(cd.id)) continue;
+      if (!thumbs) {
+        thumbs = new Map();
+        try {
+          const cr = await fetch('https://ps99.biggamesapi.io/api/collection/Pets', { signal: AbortSignal.timeout(60000) });
+          for (const pet of (await cr.json()).data || []) thumbs.set(pet.configName, pet.configData || {});
+        } catch { /* new pets wait for the next run */ }
+      }
+      const t = thumbs.get(cd.id);
+      const asset = t && String((variant === 'golden' && t.goldenThumbnail) || t.thumbnail || '').match(/\d+/);
+      if (!asset) continue;
+      const item = { id: stableId(k), name: ps99FullName(cd.id, variant, cd.sh), base: cd.id, variant, shiny: Boolean(cd.sh),
+        category: cd.id.split(' ')[0], image: `https://ps99.biggamesapi.io/image/${asset[0]}`, value };
+      S.catalog.push(item); idx.set(k, item); added++;
+    }
+    /* the pets players own follow the catalog value */
+    const byId = new Map(S.catalog.map(c => [c.id, c.value]));
+    let owned = 0;
+    for (const u of Object.values(S.users)) {
+      let hit = false;
+      for (const i of u.inventory) {
+        const v = byId.get(i.catalogId);
+        if (v !== undefined && i.value !== v) { i.value = v; hit = true; owned++; }
+      }
+      if (hit && socketsByUser.has(u.id)) emitMe(u);
+    }
+    S.settings.rapAt = now();
+    S.settings.rapInfo = `${updated} values changed, ${added} new pets, ${owned} owned pets updated`;
+    markDirty();
+    console.log(`[RAP] ${S.settings.rapInfo}`);
+    return { updated, added, owned };
+  } finally {
+    rapRunning = false;
+  }
+}
+setTimeout(() => refreshRap().catch(e => console.warn('[RAP]', e.message)), 60 * 1000);
+setInterval(() => refreshRap().catch(e => console.warn('[RAP]', e.message)), 6 * 60 * 60 * 1000);
+
+app.post('/api/admin/rap/refresh', auth, adminOnly, async (req, res) => {
+  try { res.json({ ok: true, ...(await refreshRap()), info: S.settings.rapInfo, at: S.settings.rapAt }); }
+  catch (error) { bad(res, `Value update failed: ${error.name === 'TimeoutError' ? 'the PS99 API did not answer in time' : error.message}`, 502); }
 });
 
 /* change a catalog item: the value (box on the card) or everything (the ✏️ edit window) */
 app.post('/api/admin/catalog/update', auth, adminOnly, (req, res) => {
   const item = S.catalog.find(x => x.id === req.body.id);
   const value = round2(Number(req.body.value));
-  if (!item || !Number.isFinite(value) || value < 0 || value > 1e9) return bad(res, 'Invalid value');
-  if (req.body.name !== undefined) {
-    const name = String(req.body.name || '').trim().slice(0, 40);
-    const image = String(req.body.image || '').trim();
-    if (!name) return bad(res, 'Enter a name');
-    if (!/^https:\/\/[^\s"'<>]{4,400}$/.test(image)) return bad(res, 'The image must be a https:// link');
-    item.name = name;
-    item.image = image;
-    item.age = ['normal', 'neon', 'mega'].includes(req.body.age) ? req.body.age : 'normal';
-    item.fly = Boolean(req.body.fly);
-    item.ride = Boolean(req.body.ride);
+  if (!item || !Number.isFinite(value) || value < 0 || value > MAX_VALUE) return bad(res, 'Invalid value');
+  if (req.body.base !== undefined) {
+    const c = cleanItem({ base: req.body.base, variant: req.body.variant, shiny: req.body.shiny, image: req.body.image, value });
+    if (!c) return bad(res, 'Check the name and the image (a https:// link)');
+    Object.assign(item, { name: c.name, base: c.base, variant: c.variant, shiny: c.shiny, image: c.image });
   }
+  if (item.value !== value) item.manual = true;
+  if (req.body.manual === false) delete item.manual;
   item.value = value;
   /* optional: the same change for the copies players already own */
   let changed = 0;
@@ -4006,7 +3534,7 @@ app.post('/api/admin/catalog/update', auth, adminOnly, (req, res) => {
       let hit = false;
       for (const i of u.inventory) {
         if (i.catalogId !== item.id) continue;
-        Object.assign(i, { name: item.name, image: item.image, value: item.value, age: item.age, fly: item.fly, ride: item.ride });
+        Object.assign(i, { name: item.name, image: item.image, value: item.value, base: item.base, variant: item.variant, shiny: item.shiny });
         changed++; hit = true;
       }
       if (hit) emitMe(u);
@@ -4131,35 +3659,28 @@ function adminUI() {
 
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px">
         <div style="background:#f5faff;padding:14px;border-radius:12px;grid-column:1 / -1">
+          <h4 style="margin-bottom:10px">📈 PS99 values</h4>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <button id="rap-go" class="btn sm">🔄 Update values now (official RAP)</button>
+            <span id="rap-msg" class="hint" style="margin:0"></span>
+          </div>
+          <p class="hint">Values come from the official Pet Simulator 99 RAP and update by themselves every 6 hours, also for the pets players own. New Huges, Titanics and Gargantuans are added automatically. A value you change by hand stays as you set it.</p>
+        </div>
+
+        <div style="background:#f5faff;padding:14px;border-radius:12px;grid-column:1 / -1">
           <h4 style="margin-bottom:10px">➕ Add Pet</h4>
-          <div style="display:grid;grid-template-columns:1fr 1fr 70px;gap:8px;align-items:center;margin-bottom:8px">
-            <input id="a-name" class="in" list="a-names" autocomplete="off" placeholder="Pet name (e.g. Shadow Dragon)">
-            <input id="a-img" class="in" placeholder="Image URL (https://...), filled automatically if known">
+          <div style="display:grid;grid-template-columns:2fr 2fr 1fr 70px;gap:8px;align-items:center;margin-bottom:8px">
+            <input id="a-name" class="in" autocomplete="off" placeholder="Pet name (e.g. Huge Cat)">
+            <input id="a-img" class="in" placeholder="Image URL (https://...)">
+            <input id="a-val" class="in" type="number" min="0" placeholder="Value">
             <img id="a-prev" alt="" style="width:64px;height:64px;object-fit:contain;justify-self:center;visibility:hidden">
           </div>
-          <datalist id="a-names"></datalist>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-            <select id="e-site" class="in" style="height:32px;padding:0 8px" title="Value site"><option value="amvgg">amvgg.com</option><option value="elvebredd">elvebredd.com</option></select>
-            <button id="e-fetch" class="btn gray sm">⚡ Get all values</button>
-            <button id="a-clear" class="btn gray sm">Clear</button>
-            <span id="e-msg" class="hint" style="margin:0;align-self:center"></span>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+            <select id="a-var" class="in"><option value="normal">Normal</option><option value="golden">Golden</option><option value="rainbow">Rainbow</option></select>
+            <label><input type="checkbox" id="a-shiny"> Shiny</label>
+            <button id="a-add" class="btn sm">Add / update</button>
           </div>
-          <div style="display:grid;grid-template-columns:70px repeat(4,1fr);gap:6px;margin-bottom:10px">
-            <span></span><small style="text-align:center;font-weight:800">No potion</small><small style="text-align:center;font-weight:800">Fly</small><small style="text-align:center;font-weight:800">Ride</small><small style="text-align:center;font-weight:800">Fly Ride</small>
-            <b style="align-self:center">Normal</b><input class="in" type="number" min="0" step="0.01" data-var="normal-none" placeholder="—" style="width:100%;min-width:0"><input class="in" type="number" min="0" step="0.01" data-var="normal-f" placeholder="—" style="width:100%;min-width:0"><input class="in" type="number" min="0" step="0.01" data-var="normal-r" placeholder="—" style="width:100%;min-width:0"><input class="in" type="number" min="0" step="0.01" data-var="normal-fr" placeholder="—" style="width:100%;min-width:0"><b style="align-self:center">Neon</b><input class="in" type="number" min="0" step="0.01" data-var="neon-none" placeholder="—" style="width:100%;min-width:0"><input class="in" type="number" min="0" step="0.01" data-var="neon-f" placeholder="—" style="width:100%;min-width:0"><input class="in" type="number" min="0" step="0.01" data-var="neon-r" placeholder="—" style="width:100%;min-width:0"><input class="in" type="number" min="0" step="0.01" data-var="neon-fr" placeholder="—" style="width:100%;min-width:0"><b style="align-self:center">Mega</b><input class="in" type="number" min="0" step="0.01" data-var="mega-none" placeholder="—" style="width:100%;min-width:0"><input class="in" type="number" min="0" step="0.01" data-var="mega-f" placeholder="—" style="width:100%;min-width:0"><input class="in" type="number" min="0" step="0.01" data-var="mega-r" placeholder="—" style="width:100%;min-width:0"><input class="in" type="number" min="0" step="0.01" data-var="mega-fr" placeholder="—" style="width:100%;min-width:0">
-          </div>
-          <button id="a-add" class="btn" style="width:100%">Add / update filled variants</button>
-          <p class="hint">Type the pet name once, fill the value of every version you want (leave the rest empty) and press the button: each filled box becomes its own catalog item. If the pet is already in the catalog its picture is filled in for you and existing versions only get their value updated.</p>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid #343842">
-            <button id="imp-all" class="btn sm">📥 Import ALL pets (every version)</button>
-            <button id="imp-normal" class="btn gray sm">📥 Import all pets (normal only)</button>
-            <span id="imp-msg" class="hint" style="margin:0;align-self:center"></span>
-          </div>
-          <p class="hint">Import takes every pet from the selected value site with its picture and value x1000. Pets / versions that are already in the catalog are skipped.</p>
-          <details style="margin-top:6px"><summary class="hint" style="cursor:pointer">Exact data URL (only if the automatic search fails)</summary>
-            <input id="e-src" class="in" style="width:100%;margin:6px 0" placeholder="Optional exact data URL (empty = automatic)">
-            <button id="e-src-save" class="btn gray sm">Save</button>
-          </details>
+          <p class="hint">Write the name without Golden / Rainbow / Shiny and pick the version. If the pet and version are already in the catalog, its picture and value are updated.</p>
         </div>
 
         <div style="background:#f5faff;padding:14px;border-radius:12px">
@@ -4330,7 +3851,7 @@ function adminUI() {
           <div class="cat-top">
             <h3>📦 Catalog <small id="cat-shown" class="hint"></small></h3>
             <input id="cat-q" class="in" placeholder="Search pet name..." autocomplete="off" style="flex:1;min-width:200px;max-width:360px">
-            <select id="cat-age" class="in"><option value="">All versions</option><option value="normal">Normal</option><option value="neon">Neon</option><option value="mega">Mega</option></select>
+            <select id="cat-age" class="in"><option value="">All versions</option><option value="normal">Normal</option><option value="golden">Golden</option><option value="rainbow">Rainbow</option><option value="shiny">Shiny</option></select>
             <select id="cat-sort" class="in"><option value="value">Value: high to low</option><option value="value-asc">Value: low to high</option><option value="name">Name A-Z</option></select>
             <button id="cat-x" class="x">✕</button>
           </div>
@@ -4419,25 +3940,23 @@ function adminUI() {
   $('cat-q').oninput = () => catRender();
   $('cat-age').onchange = () => catRender();
   $('cat-sort').onchange = () => catRender();
-  const varKey = (age, fly, ride) => `${age}-${fly && ride ? 'fr' : fly ? 'f' : ride ? 'r' : 'none'}`;
   const setPreview = () => {
     const v = $('a-img').value.trim();
-    if (/^https:\/\//.test(v)) { $('a-prev').src = v; $('a-prev').style.visibility = 'visible'; }
+    if (/^(https:\/\/|\/assets\/)/.test(v)) { $('a-prev').src = v; $('a-prev').style.visibility = 'visible'; }
     else { $('a-prev').removeAttribute('src'); $('a-prev').style.visibility = 'hidden'; }
   };
   $('a-img').oninput = setPreview;
-
-  /* typing a pet that is already in the catalog fills its picture and current values */
-  $('a-name').onchange = () => {
-    const n = $('a-name').value.trim().toLowerCase();
-    const same = catalogCache.filter(c => c.name.toLowerCase() === n);
-    if (!same.length) return;
-    if (!$('a-img').value.trim()) { $('a-img').value = same[0].image; setPreview(); }
-    for (const c of same) {
-      const box = overlay.querySelector(`[data-var="${varKey(c.age, c.fly, c.ride)}"]`);
-      if (box && box.value === '') box.value = c.value;
-    }
-    $('e-msg').textContent = `${same.length} version(s) already in the catalog`;
+  const rapText = d => { $('rap-msg').textContent = d.rapAt ? `Last update ${new Date(d.rapAt).toLocaleString()}${d.rapInfo ? ': ' + d.rapInfo : ''}` : 'Not updated yet (runs 1 minute after the server starts)'; };
+  $('rap-go').onclick = async () => {
+    $('rap-go').disabled = true;
+    $('rap-msg').textContent = 'Loading the official values…';
+    try {
+      const r = await api('/api/admin/rap/refresh', { method: 'POST', body: {} });
+      toast(`Values updated: ${r.updated} changed, ${r.added} new pets`, 'ok');
+      rapText({ rapAt: r.at, rapInfo: r.info });
+      await load();
+    } catch (err) { $('rap-msg').textContent = err.message; toast(err.message, 'err'); }
+    $('rap-go').disabled = false;
   };
 
   async function load() {
@@ -4458,7 +3977,7 @@ function adminUI() {
             </span>
           </div>
           <div style="margin-top:6px;font-size:12px">
-            ${w.items.map(i => esc(i.name) + (i.age !== 'normal' ? ' (' + esc(i.age) + ')' : '') + (i.fly ? ' F' : '') + (i.ride ? ' R' : '')).join(' · ')}
+            ${w.items.map(i => esc(i.name)).join(' · ')}
           </div>
         </div>`).join('')
       : '<p class="hint">No pending withdrawals.</p>';
@@ -4469,7 +3988,8 @@ function adminUI() {
           <img src="${esc(item.image)}" alt="" style="width:70px;height:70px;object-fit:contain">
           <div style="font-weight:700">${esc(item.name)}</div>
           ${tags(item)}
-          <input class="in" type="number" min="0" step="0.01" value="${esc(item.value)}" data-value-id="${esc(item.id)}" style="width:100%;margin:8px 0">
+          <div style="font-weight:900;color:#4da3ff;margin-top:4px">${esc(fmt(item.value))}${item.manual ? ' ✋' : ''}</div>
+          <input class="in" type="number" min="0" step="1" value="${esc(item.value)}" data-value-id="${esc(item.id)}" style="width:100%;margin:6px 0">
           <div style="display:flex;gap:5px">
             <button class="btn mint sm" data-action="give" data-id="${esc(item.id)}" style="flex:1">Give</button>
             <button class="btn gray sm" data-action="edit" data-id="${esc(item.id)}" title="Edit">✏️</button>
@@ -4483,7 +4003,7 @@ function adminUI() {
       const age = $('cat-age').value;
       const sort = $('cat-sort').value;
       const list = data.catalog
-        .filter(i => (!q || i.name.toLowerCase().includes(q)) && (!age || (i.age || 'normal') === age))
+        .filter(i => (!q || i.name.toLowerCase().includes(q)) && (!age || (age === 'shiny' ? i.shiny : (i.variant || 'normal') === age)))
         .sort((a, b) => sort === 'name' ? a.name.localeCompare(b.name) : sort === 'value-asc' ? a.value - b.value : b.value - a.value);
       $('cat-shown').textContent = `${list.length} / ${data.catalog.length}`;
       $('adm-cat').innerHTML = list.length
@@ -4494,7 +4014,7 @@ function adminUI() {
     catRender();
 
     catalogCache = data.catalog || [];
-    $('a-names').innerHTML = [...new Set(catalogCache.map(c => c.name))].map(n => `<option value="${esc(n)}"></option>`).join('');
+    rapText(data);
     usersCache = data.users;
     renderUsers();
     renderIpBans(data.ipBans || []);
@@ -4502,7 +4022,7 @@ function adminUI() {
 
     const prevItem = $('ev-item').value;
     $('ev-item').innerHTML = data.catalog.length
-      ? data.catalog.map(i => `<option value="${esc(i.id)}">${esc(i.name)} (${fmt(i.value)})</option>`).join('')
+      ? [...data.catalog].sort((a, b) => b.value - a.value).slice(0, 600).map(i => `<option value="${esc(i.id)}">${esc(i.name)} (${fmt(i.value)})</option>`).join('')
       : '<option value="">No catalog items</option>';
     if (prevItem) $('ev-item').value = prevItem;
 
@@ -4520,8 +4040,6 @@ function adminUI() {
     mtOn = Boolean(data.maintenance);
     if (document.activeElement !== $('mt-text')) $('mt-text').value = data.maintenanceText || '';
     renderMaint();
-    $('e-src').value = data.elveUrl || '';
-    $('e-site').value = data.valueSource || 'amvgg';
 
     $('tax-pct').value = data.settings ? data.settings.taxPercent : 0;
     $('tax-rcv').innerHTML = '<option value="auto">Auto (admins in turn)</option>' +
@@ -4802,65 +4320,6 @@ function adminUI() {
     } catch (err) { toast(err.message, 'err'); }
   };
 
-  async function elveFetch() {
-    const name = $('a-name').value.trim();
-    if (!name) { toast('Enter a pet name', 'err'); return; }
-    $('e-msg').textContent = 'Loading values…';
-    $('e-fetch').disabled = true;
-    try {
-      const r = await api('/api/admin/elve?name=' + encodeURIComponent(name));
-      $('a-name').value = r.name;
-      if (r.image) { $('a-img').value = r.image; setPreview(); }
-      let n = 0;
-      overlay.querySelectorAll('[data-var]').forEach(b => { b.value = ''; });
-      for (const [key, value] of Object.entries(r.variants || {})) {
-        const box = overlay.querySelector(`[data-var="${key}"]`);
-        if (box && value !== null) { box.value = value; n++; }
-      }
-      $('e-msg').textContent = `${r.name}: ${n} values filled${r.image ? '' : ' (no picture found, paste the image URL)'}`;
-    } catch (err) {
-      $('e-msg').textContent = err.message;
-      toast(err.message, 'err');
-    } finally {
-      $('e-fetch').disabled = false;
-    }
-  }
-
-  $('e-fetch').onclick = () => elveFetch();
-  $('a-clear').onclick = () => {
-    $('a-name').value = ''; $('a-img').value = ''; setPreview(); $('e-msg').textContent = '';
-    overlay.querySelectorAll('[data-var]').forEach(b => { b.value = ''; });
-  };
-
-  $('e-site').onchange = async () => {
-    try {
-      await api('/api/admin/elve/source', { method: 'POST', body: { url: $('e-src').value, source: $('e-site').value } });
-      toast('Value site: ' + $('e-site').value + '.com', 'ok');
-    } catch (err) { toast(err.message, 'err'); }
-  };
-  const runImport = async mode => {
-    const site = $('e-site').value + '.com';
-    if (!(await confirmBox({ title: 'Import pets', text: `Add every pet from ${site} to the catalog (${mode === 'normal' ? 'normal versions only' : 'all versions'}, values x1000)? Pets already in the catalog keep their item but get the correct value.`, ok: 'Import' }))) return;
-    $('imp-msg').textContent = `Loading ${site}…`;
-    $('imp-all').disabled = $('imp-normal').disabled = true;
-    try {
-      const r = await api('/api/admin/values/import', { method: 'POST', body: { mode } });
-      $('imp-msg').textContent = `${r.pets} pets found on ${r.source}: ${r.added} added, ${r.updated || 0} values corrected, ${r.skipped} already correct${r.noImage ? `, ${r.noImage} without picture skipped` : ''}`;
-      toast(`${r.added} catalog items added`, 'ok');
-      await load();
-    } catch (err) { $('imp-msg').textContent = err.message; toast(err.message, 'err'); }
-    finally { $('imp-all').disabled = $('imp-normal').disabled = false; }
-  };
-  $('imp-all').onclick = () => runImport('all');
-  $('imp-normal').onclick = () => runImport('normal');
-
-  $('e-src-save').onclick = async () => {
-    try {
-      await api('/api/admin/elve/source', { method: 'POST', body: { url: $('e-src').value, source: $('e-site').value } });
-      toast('Data source saved', 'ok');
-    } catch (err) { toast(err.message, 'err'); }
-  };
-
   $('adm-wd').onclick = async e => {
     const b = e.target.closest('[data-wd]');
     if (!b) return;
@@ -4872,19 +4331,12 @@ function adminUI() {
   };
 
   $('a-add').onclick = async () => {
-    const variants = [...overlay.querySelectorAll('[data-var]')]
-      .filter(b => b.value.trim() !== '')
-      .map(b => {
-        const [age, pot] = b.dataset.var.split('-');
-        return { age, fly: pot === 'f' || pot === 'fr', ride: pot === 'r' || pot === 'fr', value: b.value };
-      });
-    if (!variants.length) return toast('Fill the value of at least one version', 'err');
     try {
-      const r = await api('/api/admin/catalog/bulk', {
-        method: 'POST', body: { name: $('a-name').value, image: $('a-img').value, variants }
+      const r = await api('/api/admin/catalog', {
+        method: 'POST', body: { base: $('a-name').value, image: $('a-img').value, value: $('a-val').value, variant: $('a-var').value, shiny: $('a-shiny').checked }
       });
-      toast(`${r.added} added, ${r.updated} updated`, 'ok');
-      $('a-clear').onclick();
+      toast(r.updated ? `${r.item.name} updated` : `${r.item.name} added`, 'ok');
+      $('a-name').value = $('a-img').value = $('a-val').value = ''; $('a-shiny').checked = false; setPreview();
       await load();
     } catch (err) { toast(err.message, 'err'); }
   };
@@ -4901,13 +4353,13 @@ function adminUI() {
           <div style="flex:1"><b style="font-size:17px">Edit pet</b><div class="hint" style="margin:2px 0 0">id ${esc(c.id)}</div></div>
           <button class="btn gray sm" data-ce="x">✕</button>
         </div>
-        <label class="hint">Name</label><input class="in" id="ce-name" maxlength="40" value="${esc(c.name)}" style="width:100%;margin-bottom:8px">
+        <label class="hint">Name (without Golden / Rainbow / Shiny)</label><input class="in" id="ce-name" maxlength="60" value="${esc(c.base || c.name)}" style="width:100%;margin-bottom:8px">
         <label class="hint">Image URL</label><input class="in" id="ce-img" value="${esc(c.image)}" style="width:100%;margin-bottom:8px">
-        <label class="hint">Value</label><input class="in" id="ce-val" type="number" min="0" step="0.01" value="${esc(c.value)}" style="width:100%;margin-bottom:8px">
+        <label class="hint">Value</label><input class="in" id="ce-val" type="number" min="0" step="1" value="${esc(c.value)}" style="width:100%;margin-bottom:8px">
         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
-          <select class="in" id="ce-age">${['normal', 'neon', 'mega'].map(a => `<option value="${a}" ${(c.age || 'normal') === a ? 'selected' : ''}>${a[0].toUpperCase() + a.slice(1)}</option>`).join('')}</select>
-          <label><input type="checkbox" id="ce-fly" ${c.fly ? 'checked' : ''}> Fly</label>
-          <label><input type="checkbox" id="ce-ride" ${c.ride ? 'checked' : ''}> Ride</label>
+          <select class="in" id="ce-var">${['normal', 'golden', 'rainbow'].map(a => `<option value="${a}" ${(c.variant || 'normal') === a ? 'selected' : ''}>${a[0].toUpperCase() + a.slice(1)}</option>`).join('')}</select>
+          <label><input type="checkbox" id="ce-shiny" ${c.shiny ? 'checked' : ''}> Shiny</label>
+          ${c.manual ? '<label title="The automatic RAP update will change this value again"><input type="checkbox" id="ce-auto"> Follow RAP again</label>' : ''}
         </div>
         <label style="display:flex;gap:8px;align-items:center;margin:6px 0 12px"><input type="checkbox" id="ce-own"> Also change the copies players already own</label>
         <div style="display:flex;gap:8px"><button class="btn" data-ce="save" style="flex:1">Save</button><button class="btn gray" data-ce="x">Cancel</button></div>
@@ -4920,8 +4372,9 @@ function adminUI() {
       if (!b) return;
       try {
         const body = {
-          id: c.id, name: box.querySelector('#ce-name').value, image: box.querySelector('#ce-img').value, value: box.querySelector('#ce-val').value,
-          age: box.querySelector('#ce-age').value, fly: box.querySelector('#ce-fly').checked, ride: box.querySelector('#ce-ride').checked,
+          id: c.id, base: box.querySelector('#ce-name').value, image: box.querySelector('#ce-img').value, value: box.querySelector('#ce-val').value,
+          variant: box.querySelector('#ce-var').value, shiny: box.querySelector('#ce-shiny').checked,
+          ...(box.querySelector('#ce-auto') && box.querySelector('#ce-auto').checked ? { manual: false } : {}),
           applyToOwned: box.querySelector('#ce-own').checked
         };
         const r = await api('/api/admin/catalog/update', { method: 'POST', body });
@@ -5592,17 +5045,35 @@ app.use((err, req, res, next) => {
 process.on('unhandledRejection', err => console.error('Unhandled rejection:', err && err.message ? err.message : err));
 process.on('uncaughtException', err => console.error('Uncaught exception:', err && err.stack ? err.stack : err));
 
-/* ================= ADOPT ME AUTOMATIC DEPOSIT (in-game bot) =================
+/* ================= PS99 AUTOMATIC DEPOSIT (in-game bot) =================
    1. Deposit, step 3: POST /api/deposit/init opens a 10 minute session for the player's Roblox name
       (renewed after every deposit, so they can trade again in the same server).
    2. The in-game bot asks GET /api/bot/verify-player/:robloxUsername  -> { allowed: true | false }
-   3. After the trade: POST /api/bot/confirm-deposit { tradeId, robloxUsername, items: [{ name, neon, mega, fly, ride }] }
-      Each pet is matched with the catalog by name + version (Normal / Neon / Mega) + Fly / Ride and added to the
-      inventory with the catalog value and picture. Pets that are not in the catalog (and food) are not added; admins
-      get a notification. Each tradeId is handled once (409 on repeats, also after a restart).
+   3. After the trade: POST /api/bot/confirm-deposit { tradeId, robloxUsername, items: [{ name, pt, sh, amount }] }
+      name = the pet's id in PS99 ("Huge Cat"; a full name like "Shiny Rainbow Huge Cat" also works),
+      pt = 1 golden / 2 rainbow (or golden: true / rainbow: true / variant: "golden"), sh = shiny (or shiny: true),
+      amount = how many of that pet (default 1). Each pet is matched with the catalog by name + variant + shiny and
+      added to the inventory with the catalog value and picture. Pets that are not in the catalog are not added;
+      admins get a notification. Each tradeId is handled once (409 on repeats, also after a restart).
    4. The deposit window polls GET /api/deposit/status every 2 seconds and shows the new pets.
    Both bot routes need the header x-bot-secret = the Railway variable BOT_SECRET (or BOT_SECRET_KEY).
    They are open to requests from anywhere (no CORS / origin check): the secret is the only key. */
+
+/* one pet row from the bot -> { base, variant, shiny, label } */
+function rowPet(r) {
+  const parsed = ps99Parse((r && (r.name || r.id)) || '');
+  const v = String((r && r.variant) || '').toLowerCase();
+  const variant = r && (r.pt === 2 || r.rainbow === true || v === 'rainbow') ? 'rainbow'
+    : r && (r.pt === 1 || r.golden === true || v === 'golden') ? 'golden' : parsed.variant;
+  const shiny = Boolean(r && (r.sh === true || r.shiny === true)) || parsed.shiny;
+  return { base: parsed.base.slice(0, 80), variant, shiny, label: ps99FullName(parsed.base || '(no name)', variant, shiny) };
+}
+/* one pet for the bot to hand over */
+function botItem(i) {
+  const p = i.base ? { base: i.base, variant: i.variant || 'normal', shiny: Boolean(i.shiny) } : ps99Parse(i.name);
+  return { name: p.base, id: p.base, pt: p.variant === 'golden' ? 1 : p.variant === 'rainbow' ? 2 : 0, sh: p.shiny,
+    variant: p.variant, shiny: p.shiny, golden: p.variant === 'golden', rainbow: p.variant === 'rainbow', fullName: i.name, amount: 1 };
+}
 
 const DEPOSIT_SESSION_MS = 10 * 60 * 1000;
 const DEPOSIT_GRACE_MS = 5 * 60 * 1000;      /* a trade started just before the end can still be confirmed */
@@ -5984,7 +5455,7 @@ app.get('/api/bot/verify-player/:robloxUsername', gameBotOnly, (req, res) => {
       w.botSeenAt = now();
       markDirty();
       logBot(`verify-player "${asked}" -> allowed=true mode=withdraw session ${w.id}: ${w.items.map(itemText).join(', ')}`);
-      return res.json({ allowed: true, mode: 'withdraw', sessionId: w.id, items: w.items.map(i => ({ name: i.name, neon: i.age === 'neon', mega: i.age === 'mega', fly: Boolean(i.fly), ride: Boolean(i.ride) })) });
+      return res.json({ allowed: true, mode: 'withdraw', sessionId: w.id, items: w.items.map(botItem) });
     }
   }
   const sess = activeSessions.get(key);
@@ -6014,32 +5485,30 @@ app.post('/api/bot/confirm-deposit', gameBotOnly, (req, res) => {
   const user = S.users[sess.userId];
   if (!user) return res.status(404).json({ success: false, error: 'Player not found on the site' });
 
-  /* catalog index: name + version + fly + ride */
-  /* the name is compared with trim + lower case (and single spaces), the version must be the same */
-  const nameKey = n => String(n || '').trim().toLowerCase().replace(/\s+/g, ' ');
-  const keyOf = (n, age, fly, ride) => `${nameKey(n)}|${age}|${fly ? 1 : 0}|${ride ? 1 : 0}`;
-  const byKey = new Map(S.catalog.map(c => [keyOf(c.name, c.age || 'normal', c.fly, c.ride), c]));
+  /* catalog index: base name (trim + lower case + single spaces) + variant + shiny */
+  const byKey = new Map(S.catalog.map(c => [ps99KeyOf(c), c]));
   const credited = [], unmatched = [];
   const at = now();
+  let count = 0;
   for (const r of rows) {
-    const itemName = String((r && r.name) || '').trim().slice(0, 80);
-    const age = r && r.mega === true ? 'mega' : r && r.neon === true ? 'neon' : 'normal';
-    const fly = Boolean(r && r.fly === true), ride = Boolean(r && r.ride === true);
-    const label = `${age === 'mega' ? 'Mega ' : age === 'neon' ? 'Neon ' : ''}${fly && ride ? 'FR ' : fly ? 'F ' : ride ? 'R ' : ''}${itemName || '(no name)'}`;
-    /* "Slot", "PartnerOffer", empty or unknown names are never added */
-    if (!itemName || ['slot', 'partneroffer'].includes(nameKey(itemName).replace(/ /g, ''))) {
-      unmatched.push({ name: itemName, age, fly, ride, label });
-      logBot(`WARNING trade ${tradeId}: "${itemName || '(no name)'}" is not a pet name, nothing added`);
+    const p = rowPet(r);
+    const amount = Math.max(1, Math.min(50, Math.floor(Number(r && (r.amount ?? r._am)) || 1)));
+    const label = `${amount > 1 ? amount + 'x ' : ''}${p.label}`;
+    if (!p.base || ['slot', 'partneroffer'].includes(p.base.toLowerCase().replace(/ /g, ''))) {
+      unmatched.push({ name: p.base, label });
+      logBot(`WARNING trade ${tradeId}: "${p.base || '(no name)'}" is not a pet name, nothing added`);
       continue;
     }
-    const c = byKey.get(keyOf(itemName, age, fly, ride));
+    const c = byKey.get(ps99Key(p.base, p.variant, p.shiny));
     if (!c) {
-      unmatched.push({ name: itemName, age, fly, ride, label });
-      logBot(`WARNING trade ${tradeId}: "${label}" is not in the catalog (name + version), nothing added`);
+      unmatched.push({ name: p.base, variant: p.variant, shiny: p.shiny, label });
+      logBot(`WARNING trade ${tradeId}: "${label}" is not in the catalog (name + variant + shiny), nothing added`);
       continue;
     }
-    user.inventory.push({ ...newItem(c), depositedAt: at, tradeId });
-    credited.push({ name: c.name, age, fly, ride, value: c.value, label });
+    for (let n = 0; n < amount && count < 200; n++, count++) {
+      user.inventory.push({ ...newItem(c), depositedAt: at, tradeId });
+      credited.push({ name: c.name, value: c.value, label: c.name });
+    }
   }
 
   rememberTrade(tradeId);
@@ -6049,16 +5518,17 @@ app.post('/api/bot/confirm-deposit', gameBotOnly, (req, res) => {
   markDirty();
   emitMe(user);
   io.to('u:' + user.id).emit('deposit:done', { credited: credited.length, total });
-  notifyAdmins('withdraw', `📥 Bot deposit by ${nick(user)} (${user.username}): ${credited.map(c => c.label).join(', ') || 'no catalog pets'} · ${total}` +
+  notifyAdmins('withdraw', `📥 Bot deposit by ${nick(user)} (${user.username}): ${credited.map(c => c.label).join(', ') || 'no catalog pets'} · ${fmtV(total)}` +
     (unmatched.length ? ` · NOT IN CATALOG: ${unmatched.map(u => u.label).join(', ')}` : ''));
   logBot(`confirm-deposit "${name}" trade ${tradeId} -> ${credited.length} pet(s) added${unmatched.length ? `, not in catalog: ${unmatched.map(u => u.label).join(', ')}` : ''}`);
   res.json({ success: true, credited: credited.length, total, unmatched });
 });
 
-/* ================= ADOPT ME AUTOMATIC WITHDRAW (in-game bot) =================
+/* ================= PS99 AUTOMATIC WITHDRAW (in-game bot) =================
    1. The player picks pets and presses Withdraw: POST /api/withdraw/request takes them out of the inventory into a
       saved withdraw record (S.botWithdrawals, kept in MongoDB) = the withdraw session (its id is the sessionId).
-   2. verify-player answers { allowed: true, mode: "withdraw", sessionId, items: [{ name, neon, mega, fly, ride }] }.
+   2. verify-player answers { allowed: true, mode: "withdraw", sessionId, items: [{ name, pt, sh, variant, shiny, fullName, amount }] }
+      (name = the PS99 id like "Huge Cat", pt 0 normal / 1 golden / 2 rainbow, sh = shiny).
    3. When the pets are handed over the bot calls POST /api/bot/confirm-withdraw { sessionId, robloxUsername, items }:
       the record is completed; pets the bot did not hand over go back to the player.
    4. Cancel (POST /api/withdraw/cancel) or 15 minutes without a trade: the pets go back to the inventory.
@@ -6066,8 +5536,7 @@ app.post('/api/bot/confirm-deposit', gameBotOnly, (req, res) => {
 const WD_SESSION_MS = 15 * 60 * 1000;
 const WD_BOT_LOCK_MS = 3 * 60 * 1000;
 const WD_MAX_ITEMS = 18;
-const itemText = i => `${i.age === 'mega' ? 'Mega ' : i.age === 'neon' ? 'Neon ' : ''}${i.fly && i.ride ? 'FR ' : i.fly ? 'F ' : i.ride ? 'R ' : ''}${i.name}`;
-const itemKey = (name, age, fly, ride) => `${String(name || '').trim().toLowerCase().replace(/\s+/g, ' ')}|${age || 'normal'}|${fly ? 1 : 0}|${ride ? 1 : 0}`;
+const itemText = i => i.name;
 const pendingBotWithdraw = userId => (S.botWithdrawals || []).find(w => w.userId === userId && w.status === 'pending') || null;
 const pendingWithdrawByName = key => (S.botWithdrawals || []).find(w => w.status === 'pending' && sessionKey(w.robloxUsername) === key && w.expiresAt > now()) || null;
 
@@ -6119,7 +5588,7 @@ app.post('/api/withdraw/request', auth, actionLimit, (req, res) => {
   addTransaction(user, 'Withdraw Request', w.id, -valueOf(items));
   markDirty();
   emitMe(user);
-  notifyAdmins('withdraw', `📤 Bot withdraw by ${nick(user)} (${user.username}): ${items.map(itemText).join(', ')} · ${valueOf(items)}`);
+  notifyAdmins('withdraw', `📤 Bot withdraw by ${nick(user)} (${user.username}): ${items.map(itemText).join(', ')} · ${fmtV(valueOf(items))}`);
   logBot(`withdraw session ${w.id} opened for "${user.username}": ${items.map(itemText).join(', ')}`);
   res.json({ ok: true, withdraw: wdView(w) });
 });
@@ -6156,12 +5625,13 @@ app.post('/api/bot/confirm-withdraw', gameBotOnly, (req, res) => {
   if (rows && rows.length) {
     const given = new Map();
     for (const r of rows) {
-      const k = itemKey(r && r.name, r && r.mega === true ? 'mega' : r && r.neon === true ? 'neon' : 'normal', r && r.fly === true, r && r.ride === true);
-      given.set(k, (given.get(k) || 0) + Math.max(1, Math.min(50, Math.floor(Number(r && r.amount) || 1))));
+      const p = rowPet(r);
+      const k = ps99Key(p.base, p.variant, p.shiny);
+      given.set(k, (given.get(k) || 0) + Math.max(1, Math.min(50, Math.floor(Number(r && (r.amount ?? r._am)) || 1))));
     }
     delivered = []; back = [];
     for (const item of w.items) {
-      const k = itemKey(item.name, item.age, item.fly, item.ride);
+      const k = ps99KeyOf(item);
       if ((given.get(k) || 0) > 0) { given.set(k, given.get(k) - 1); delivered.push(item); } else back.push(item);
     }
   }
@@ -6174,7 +5644,7 @@ app.post('/api/bot/confirm-withdraw', gameBotOnly, (req, res) => {
     if (back.length) { user.inventory.push(...back); addTransaction(user, 'Withdraw Refund', w.id, valueOf(back)); }
     emitMe(user);
     io.to('u:' + user.id).emit('withdraw:update', wdView(w));
-    if (delivered.length) systemChat(`${nick(user)} successfully withdrew ${delivered.length} pet${delivered.length === 1 ? '' : 's'} worth ${Number(valueOf(delivered)).toLocaleString('en-US')}! 🎉`, { withdraw: true });
+    if (delivered.length) systemChat(`${nick(user)} successfully withdrew ${delivered.length} pet${delivered.length === 1 ? '' : 's'} worth ${fmtV(valueOf(delivered))}! 🎉`, { withdraw: true });
   }
   if (back.length) notifyAdmins('security', `Bot withdraw ${w.id} of ${w.robloxUsername}: ${back.length} pet(s) not handed over were returned: ${back.map(itemText).join(', ')}`);
   markDirty();
@@ -6188,6 +5658,7 @@ app.post('/api/bot/confirm-withdraw', gameBotOnly, (req, res) => {
   await initDb();
   ensureDefaultBot();
   scaleAllValues();
+  loadPs99Catalog();
   resumeJackpot();
   auditItems();
   resumeMatches();
