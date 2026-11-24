@@ -332,6 +332,9 @@ function commandList() {
         .addStringOption(o => o.setName('nickname').setDescription('Nickname or Roblox name').setRequired(true))
         .addStringOption(pet)
         .addIntegerOption(o => o.setName('qty').setDescription('How many').setMinValue(1).setMaxValue(50)))
+      .addSubcommand(s => s.setName('gems').setDescription('Give gems (PS99 diamonds), e.g. 17.5b')
+        .addStringOption(o => o.setName('nickname').setDescription('Nickname or Roblox name').setRequired(true))
+        .addStringOption(o => o.setName('amount').setDescription('Amount: 17.5b, 500m, 1t or a number').setRequired(true)))
       .addSubcommand(s => s.setName('clearpets').setDescription('Delete ALL pets of a player')
         .addStringOption(o => o.setName('nickname').setDescription('Nickname or Roblox name').setRequired(true))),
     new SlashCommandBuilder().setName('match').setDescription('Coinflip tools').setDefaultMemberPermissions(ADMIN)
@@ -943,6 +946,11 @@ async function handleCommand(i) {
       await site('POST', '/api/admin/grant', { username: user.nickname, catalogId: i.options.getString('pet'), qty }, actorOf(i));
       log(i.guild, '🎁 Pets given', `${i.user} gave ${qty}x pet \`${i.options.getString('pet')}\` to **${user.nickname}**`, 0x00efa0);
       return reply(i, `✅ Gave ${qty} pet${qty === 1 ? '' : 's'} to ${user.nickname}.`);
+    }
+    if (sub === 'gems') {
+      const r = await site('POST', '/api/admin/gems', { username: user.nickname, amount: i.options.getString('amount') }, actorOf(i));
+      log(i.guild, '💎 Gems given', `${i.user} gave ${gem} **${fmt(r.item.value)}** gems to **${user.nickname}**`, 0x4da3ff);
+      return reply(i, `💎 Gave ${fmt(r.item.value)} gems to ${user.nickname}.`);
     }
     if (sub === 'clearpets') {
       const r = await site('POST', '/api/admin/inventory/clear', { id: user.id }, actorOf(i));

@@ -21,7 +21,7 @@ Eski `/` komutları kaldırıldı, bot açılınca Discord'dan da silinir. Komut
 - Herkes: `!help` `!link KOD` `!unlink` `!profile` `!rank` `!leaderboard` `!stats` `!games` `!website` `!coinflip`
 - Yetkili: `!withdrawals` `!clear 20` `!timeout @kişi 30 sebep` `!kick @kişi sebep` `!ban @kişi sebep`
 - Admin: `!site maintenance on|off` `!site say mesaj` `!site bot DedokAmp on|off` `!site block TR`
-  `!player info isim` `!player give isim "Rainbow Huge Cat" qty:3` `!match cancel ID`
+  `!player info isim` `!player give isim "Rainbow Huge Cat" qty:3` `!player gems isim 17.5b` `!match cancel ID`
   `!event wheel "Huge Cat" 60` `!announce "Başlık" mesaj` `!giveaway start "Huge Cat" 60 2` `!ticketpanel`
 
 Kurallar:
