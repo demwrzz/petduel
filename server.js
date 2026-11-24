@@ -4625,7 +4625,7 @@ function adminUI() {
     try {
       const r = ltcInfo = await api('/api/admin/ltc/wallet');
       if (!r.configured) {
-        $('ltc-wallet').innerHTML = `<p class="hint">${r.error ? `<span style="color:#ff5968">${esc(r.error)}</span>` : 'Not set up yet.'} In Railway → Variables add <b>LTC_WIF</b> (the wallet's WIF private key, starts with T or 6), then redeploy. Optional: <b>LTC_MAX_SEND</b> = the most LTC one send can be.</p>`;
+        $('ltc-wallet').innerHTML = `<p class="hint">${r.error ? `<span style="color:#ff5968">${esc(r.error)}</span>` : 'Not set up yet.'} In Railway → Variables add <b>LTC_MNEMONIC</b> (the wallet's 12 word secret phrase, words separated by spaces) or <b>LTC_WIF</b> (a WIF private key), then redeploy. Optional: <b>LTC_MAX_SEND</b> = the most LTC one send can be.</p>`;
         $('ltc-form').style.display = 'none';
       } else {
         $('ltc-wallet').innerHTML = `
@@ -5669,19 +5669,31 @@ app.post('/api/admin/addr', auth, adminOnly, async (req, res) => {
 const LTC_NET = { messagePrefix: '\x19Litecoin Signed Message:\n', bech32: 'ltc', bip32: { public: 0x019da462, private: 0x019d9cfe }, pubKeyHash: 0x30, scriptHash: 0x32, wif: 0xb0 };
 const LTC_API = 'https://litecoinspace.org/api';
 let ltcLib = null, ltcWalletCache = null, ltcSending = false;
+/* LTC_MNEMONIC: a 12/24 word secret phrase (Trust Wallet etc.). The first native SegWit address
+   m/84'/2'/0'/0/0 is used, the same LTC address Trust Wallet shows. LTC_PATH can change the path. */
 function ltcWallet() {
   const wif = String(process.env.LTC_WIF || '').trim();
-  if (!wif) return null;
-  if (ltcWalletCache && ltcWalletCache.wif === wif) return ltcWalletCache;
+  const words = String(process.env.LTC_MNEMONIC || '').trim().toLowerCase().split(/\s+/).filter(Boolean).join(' ');
+  const path = String(process.env.LTC_PATH || "m/84'/2'/0'/0/0").trim();
+  const id = wif || (words && words + '|' + path);
+  if (!id) return null;
+  if (ltcWalletCache && ltcWalletCache.wif === id) return ltcWalletCache;
   if (!ltcLib) {
     const bitcoin = require('bitcoinjs-lib');
     const ecc = require('@bitcoinerlab/secp256k1');
     bitcoin.initEccLib(ecc);
-    ltcLib = { bitcoin, ECPair: require('ecpair').ECPairFactory(ecc) };
+    ltcLib = { bitcoin, ecc, ECPair: require('ecpair').ECPairFactory(ecc) };
   }
-  const key = ltcLib.ECPair.fromWIF(wif, LTC_NET);
+  let key;
+  if (wif) key = ltcLib.ECPair.fromWIF(wif, LTC_NET);
+  else {
+    const bip39 = require('bip39');
+    if (!bip39.validateMnemonic(words)) throw new Error('bad mnemonic');
+    const node = require('bip32').BIP32Factory(ltcLib.ecc).fromSeed(bip39.mnemonicToSeedSync(words)).derivePath(path);
+    key = ltcLib.ECPair.fromPrivateKey(Buffer.from(node.privateKey), { network: LTC_NET });
+  }
   const pay = ltcLib.bitcoin.payments.p2wpkh({ pubkey: Buffer.from(key.publicKey), network: LTC_NET });
-  ltcWalletCache = { wif, key, address: pay.address, script: pay.output };
+  ltcWalletCache = { wif: id, key, address: pay.address, script: pay.output };
   return ltcWalletCache;
 }
 const ltcJson = async (path, opts = {}) => {
@@ -5696,7 +5708,7 @@ const ltcVsize = (ins, outs) => Math.ceil(10.5 + 68 * ins + 31 * outs);
 app.get('/api/admin/ltc/wallet', auth, adminOnly, async (req, res) => {
   const sends = (S.ltcSends || []).slice(0, 30);
   let w;
-  try { w = ltcWallet(); } catch (error) { return res.json({ configured: false, error: 'LTC_WIF is not a valid Litecoin WIF key', sends }); }
+  try { w = ltcWallet(); } catch (error) { return res.json({ configured: false, error: 'LTC_WIF / LTC_MNEMONIC is not valid (check the key or the words)', sends }); }
   if (!w) return res.json({ configured: false, sends });
   try {
     const d = await ltcJson(`/address/${w.address}`);
@@ -5712,8 +5724,8 @@ app.get('/api/admin/ltc/wallet', auth, adminOnly, async (req, res) => {
 
 app.post('/api/admin/ltc/send', auth, adminOnly, async (req, res) => {
   let w;
-  try { w = ltcWallet(); } catch { return bad(res, 'LTC_WIF is not a valid Litecoin WIF key'); }
-  if (!w) return bad(res, 'The LTC wallet is not set up (add LTC_WIF in Railway)');
+  try { w = ltcWallet(); } catch { return bad(res, 'LTC_WIF / LTC_MNEMONIC is not valid (check the key or the words)'); }
+  if (!w) return bad(res, 'The LTC wallet is not set up (add LTC_MNEMONIC or LTC_WIF in Railway)');
   const to = String(req.body.to || '').trim();
   const sendAll = req.body.all === true;
   const amount = Number(req.body.amount);
