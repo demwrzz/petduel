@@ -1607,7 +1607,7 @@
       --bg: #0d0b1a; --header: rgba(17, 14, 34, .78); --panel: #17142b; --panel-2: #131126;
       --border: #2c2748; --muted: #9a94b8; --text: #f7f5ff;
       --purple: #8b5cf6; --pink: #ff4d9d; --cyan: #22d3ee;
-      --rainbow: linear-gradient(90deg, #ff4d6d, #ffa63d, #ffde59, #7cf29a, #4da3ff, #b26bff);
+      --rainbow: linear-gradient(90deg, #ff3d9a, #ff8ad0, #ffc2e6, #d77bff, #ff4fb8, #ff3d9a);
       --glow: 0 10px 30px -12px rgba(139, 92, 246, .55);
     }
     body {
@@ -1699,6 +1699,12 @@
     /* footer */
     .site-footer { border-top: 0; position: relative; }
     .site-footer::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--rainbow); opacity: .5; }
+
+    /* pink chroma: the gradient lines keep flowing */
+    @keyframes chroma-flow { to { background-position: 200% 0; } }
+    .topbar::after, .nav-item.active::after, .site-footer::before, .m-vs { background-size: 200% 100%; animation: chroma-flow 4s linear infinite; }
+    .topbar::after { height: 3px; opacity: 1; box-shadow: 0 0 14px rgba(255, 79, 184, .55); }
+    .hero { box-shadow: 0 10px 34px -12px rgba(255, 79, 184, .55); }
     .foot-brand { font-family: Fredoka, Rubik, sans-serif; }
 
   </style>
