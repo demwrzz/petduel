@@ -377,7 +377,8 @@ function snapshot() {
     ipBans: S.ipBans || [],
     amTrades: (S.amTrades || []).slice(0, 5000),
     depositSessions: S.depositSessions || {},
-    botWithdrawals: (S.botWithdrawals || []).slice(0, 2000)
+    botWithdrawals: (S.botWithdrawals || []).slice(0, 2000),
+    ltcSends: (S.ltcSends || []).slice(0, 500)
   };
 }
 
@@ -464,6 +465,7 @@ async function initDb() {
       S.amTrades = Array.isArray(d.amTrades) ? d.amTrades : [];
       S.depositSessions = d.depositSessions && typeof d.depositSessions === 'object' ? d.depositSessions : {};
       S.botWithdrawals = Array.isArray(d.botWithdrawals) ? d.botWithdrawals : [];
+      S.ltcSends = Array.isArray(d.ltcSends) ? d.ltcSends : [];
       /* an event prize from an admin's inventory was in play when the server stopped: give it back */
       const esc = d.eventEscrow;
       if (esc && esc.item && S.users[esc.userId]) {
@@ -4086,6 +4088,24 @@ function adminUI() {
         <p class="hint" style="margin:8px 0 0">Public blockchain data, read only. BTC and LTC show everything that came in and went out; ETH and SOL show the current balance. USD at today's price.</p>
       </div>
 
+      <h4 style="margin:0 0 8px">🪙 Send LTC</h4>
+      <div style="padding:14px;border-radius:12px;border:1px solid #343842;margin-bottom:16px">
+        <div id="ltc-wallet"><p class="hint">Loading…</p></div>
+        <div id="ltc-form" style="display:none">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+            <input id="ltc-to" class="in" placeholder="Send to (Litecoin address)" autocomplete="off" style="flex:2;min-width:220px">
+            <input id="ltc-amt" class="in" placeholder="Amount (LTC)" inputmode="decimal" style="flex:1;min-width:120px">
+            <button id="ltc-max" class="btn gray">Max</button>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+            <input id="ltc-note" class="in" placeholder="Note (optional, who/why)" maxlength="120" style="flex:1;min-width:220px">
+            <button id="ltc-send" class="btn">Send LTC</button>
+          </div>
+          <p id="ltc-usd" class="hint" style="margin:6px 0 0"></p>
+        </div>
+        <div id="ltc-sends" style="margin-top:10px"></div>
+      </div>
+
       <h4 style="margin:0 0 8px">📤 Pending Withdrawals</h4>
       <div id="adm-wd" style="margin-bottom:16px"></div>
 
@@ -4333,7 +4353,7 @@ function adminUI() {
     const modal = overlay.querySelector('.modal');
     const head = modal.querySelector('.mh');
     const TABS = [['overview', '🏠 Overview'], ['users', '👥 Users'], ['pets', '🐾 Pets'], ['bots', '🤖 Bots'], ['games', '🎲 Games']];
-    const byTitle = [['Crypto address', 'overview'], ['Pending Withdrawals', 'overview'], ['Deposit bots', 'bots'], ['Withdraw bots', 'bots'], ['Coinflip tax', 'games'], ['Bounty', 'games'],
+    const byTitle = [['Send LTC', 'overview'], ['Crypto address', 'overview'], ['Pending Withdrawals', 'overview'], ['Deposit bots', 'bots'], ['Withdraw bots', 'bots'], ['Coinflip tax', 'games'], ['Bounty', 'games'],
       ['Events', 'games'], ['Announcement', 'overview'], ['Catalog', 'pets'], ['Users', 'users'], ['IP bans', 'users'], ['Update log', 'overview']];
     const boxes = Object.fromEntries(TABS.map(([k]) => { const d = document.createElement('div'); d.className = 'adm-tab'; d.dataset.tab = k; return [k, d]; }));
     let cur = 'overview';
@@ -4598,6 +4618,56 @@ function adminUI() {
     } catch (err) { $('ad-out').innerHTML = `<p class="hint" style="color:#ff5968">${esc(err.message)}</p>`; }
   }
   $('ad-go').onclick = adCheck;
+
+  /* send LTC from the site wallet */
+  let ltcInfo = null, ltcAll = false;
+  async function loadLtc() {
+    try {
+      const r = ltcInfo = await api('/api/admin/ltc/wallet');
+      if (!r.configured) {
+        $('ltc-wallet').innerHTML = `<p class="hint">${r.error ? `<span style="color:#ff5968">${esc(r.error)}</span>` : 'Not set up yet.'} In Railway → Variables add <b>LTC_WIF</b> (the wallet's WIF private key, starts with T or 6), then redeploy. Optional: <b>LTC_MAX_SEND</b> = the most LTC one send can be.</p>`;
+        $('ltc-form').style.display = 'none';
+      } else {
+        $('ltc-wallet').innerHTML = `
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+            <div style="flex:1;min-width:200px"><small style="color:#8d909a;font-weight:800;text-transform:uppercase;font-size:11px">Site wallet</small><div style="font-family:monospace;font-size:13px;word-break:break-all">${esc(r.address)}</div></div>
+            <div style="padding:8px 12px;border-radius:10px;background:#1d212b"><small style="color:#8d909a;font-weight:800;text-transform:uppercase;font-size:11px">Balance</small><div style="font-size:18px;font-weight:900">${r.balance === undefined ? '-' : amt(r.balance, 'LTC')}</div><small style="color:#9aa0ad">${money(r.usd)}${r.pending ? ` · ${amt(r.pending, 'LTC')} unconfirmed` : ''}</small></div>
+            <button id="ltc-reload" class="btn gray sm">Refresh</button>
+          </div>${r.error ? `<p class="hint" style="color:#ff5968">${esc(r.error)}</p>` : ''}`;
+        $('ltc-reload').onclick = loadLtc;
+        $('ltc-form').style.display = '';
+      }
+      $('ltc-sends').innerHTML = (r.sends || []).length ? `<small style="color:#8d909a;font-weight:800;text-transform:uppercase;font-size:11px">Last sends</small>` + r.sends.map(x => `
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:6px 0;border-bottom:1px solid #2a2e37;font-size:13px">
+          <b style="color:#00efa0">${amt(x.ltc, 'LTC')}</b>
+          <span style="font-family:monospace;color:#c7cbd4">${esc(x.to.slice(0, 10))}…${esc(x.to.slice(-6))}</span>
+          <span style="color:#8d909a">${esc(x.by)} · ${new Date(x.ts).toLocaleString()}${x.note ? ' · ' + esc(x.note) : ''}</span>
+          <a href="https://litecoinspace.org/tx/${esc(x.txid)}" target="_blank" rel="noopener" style="margin-left:auto;color:#4da3ff">View tx</a>
+        </div>`).join('') : '';
+    } catch (err) { $('ltc-wallet').innerHTML = `<p class="hint" style="color:#ff5968">${esc(err.message)}</p>`; }
+  }
+  const ltcUsd = () => {
+    const v = Number($('ltc-amt').value.replace(',', '.'));
+    $('ltc-usd').textContent = ltcAll ? 'Sends the whole balance (the network fee is taken from it).' : v > 0 && ltcInfo && ltcInfo.price ? `≈ ${money(v * ltcInfo.price)} + a tiny network fee` : '';
+  };
+  $('ltc-amt').oninput = () => { ltcAll = false; ltcUsd(); };
+  $('ltc-max').onclick = () => { ltcAll = true; $('ltc-amt').value = ltcInfo && ltcInfo.balance !== undefined ? String(ltcInfo.balance) : ''; ltcUsd(); };
+  $('ltc-send').onclick = async () => {
+    const to = $('ltc-to').value.trim(), value = Number($('ltc-amt').value.replace(',', '.'));
+    if (!to) return toast('Enter the address', 'err');
+    if (!ltcAll && !(value > 0)) return toast('Enter an amount', 'err');
+    const what = ltcAll ? 'the WHOLE balance' : `${value} LTC${ltcInfo && ltcInfo.price ? ` (≈ ${money(value * ltcInfo.price)})` : ''}`;
+    if (!(await confirmBox({ title: 'Send LTC?', text: `Send ${what} to ${to}? Crypto sends cannot be undone, check the address.`, ok: 'Send', danger: true }))) return;
+    $('ltc-send').disabled = true;
+    try {
+      const r = await api('/api/admin/ltc/send', { method: 'POST', body: { to, amount: value, all: ltcAll, note: $('ltc-note').value } });
+      toast(`Sent ${r.send.ltc} LTC`, 'ok');
+      $('ltc-to').value = $('ltc-amt').value = $('ltc-note').value = ''; ltcAll = false; ltcUsd();
+      setTimeout(loadLtc, 1500);
+    } catch (err) { toast(err.message, 'err'); }
+    $('ltc-send').disabled = false;
+  };
+  loadLtc();
   $('ad-addr').onkeydown = e => { if (e.key === 'Enter') adCheck(); };
   $('ad-saved').onclick = e => {
     const b = e.target.closest('[data-ad-pick]');
@@ -5589,6 +5659,118 @@ app.post('/api/admin/addr', auth, adminOnly, async (req, res) => {
     res.json(out);
   } catch (error) {
     bad(res, `Could not read the address: ${error.name === 'TimeoutError' ? 'the blockchain API did not answer in time' : error.message}`, 502);
+  }
+});
+
+/* ================= ADMIN: SEND LTC FROM THE SITE WALLET =================
+   The wallet key lives only in the Railway variable LTC_WIF (WIF private key, starts with T or 6).
+   The wallet address is the native SegWit (ltc1…) address of that key; send LTC to it to fund it.
+   Optional LTC_MAX_SEND caps one send (in LTC). Keep only small amounts in this hot wallet. */
+const LTC_NET = { messagePrefix: '\x19Litecoin Signed Message:\n', bech32: 'ltc', bip32: { public: 0x019da462, private: 0x019d9cfe }, pubKeyHash: 0x30, scriptHash: 0x32, wif: 0xb0 };
+const LTC_API = 'https://litecoinspace.org/api';
+let ltcLib = null, ltcWalletCache = null, ltcSending = false;
+function ltcWallet() {
+  const wif = String(process.env.LTC_WIF || '').trim();
+  if (!wif) return null;
+  if (ltcWalletCache && ltcWalletCache.wif === wif) return ltcWalletCache;
+  if (!ltcLib) {
+    const bitcoin = require('bitcoinjs-lib');
+    const ecc = require('@bitcoinerlab/secp256k1');
+    bitcoin.initEccLib(ecc);
+    ltcLib = { bitcoin, ECPair: require('ecpair').ECPairFactory(ecc) };
+  }
+  const key = ltcLib.ECPair.fromWIF(wif, LTC_NET);
+  const pay = ltcLib.bitcoin.payments.p2wpkh({ pubkey: Buffer.from(key.publicKey), network: LTC_NET });
+  ltcWalletCache = { wif, key, address: pay.address, script: pay.output };
+  return ltcWalletCache;
+}
+const ltcJson = async (path, opts = {}) => {
+  const r = await fetch(LTC_API + path, { ...opts, signal: AbortSignal.timeout(15000) });
+  const text = await r.text();
+  if (!r.ok) throw new Error(`litecoinspace.org: ${text.slice(0, 200) || r.status}`);
+  try { return JSON.parse(text); } catch { return text; }
+};
+const LITS = 1e8;
+const ltcVsize = (ins, outs) => Math.ceil(10.5 + 68 * ins + 31 * outs);
+
+app.get('/api/admin/ltc/wallet', auth, adminOnly, async (req, res) => {
+  const sends = (S.ltcSends || []).slice(0, 30);
+  let w;
+  try { w = ltcWallet(); } catch (error) { return res.json({ configured: false, error: 'LTC_WIF is not a valid Litecoin WIF key', sends }); }
+  if (!w) return res.json({ configured: false, sends });
+  try {
+    const d = await ltcJson(`/address/${w.address}`);
+    const cs = d.chain_stats || {}, ms = d.mempool_stats || {};
+    const balance = (cs.funded_txo_sum - cs.spent_txo_sum) / LITS;
+    const pending = ((ms.funded_txo_sum || 0) - (ms.spent_txo_sum || 0)) / LITS;
+    const price = (await coinPrices()).ltc || null;
+    res.json({ configured: true, address: w.address, balance, pending, price, usd: price ? round2(balance * price) : null, maxSend: Number(process.env.LTC_MAX_SEND) || null, sends });
+  } catch (error) {
+    res.json({ configured: true, address: w.address, error: error.message, sends });
+  }
+});
+
+app.post('/api/admin/ltc/send', auth, adminOnly, async (req, res) => {
+  let w;
+  try { w = ltcWallet(); } catch { return bad(res, 'LTC_WIF is not a valid Litecoin WIF key'); }
+  if (!w) return bad(res, 'The LTC wallet is not set up (add LTC_WIF in Railway)');
+  const to = String(req.body.to || '').trim();
+  const sendAll = req.body.all === true;
+  const amount = Number(req.body.amount);
+  let toScript;
+  try { toScript = ltcLib.bitcoin.address.toOutputScript(to, LTC_NET); } catch { return bad(res, 'That is not a valid Litecoin address'); }
+  if (to === w.address) return bad(res, 'That is the site wallet itself');
+  if (!sendAll && !(amount > 0)) return bad(res, 'Enter an amount');
+  const max = Number(process.env.LTC_MAX_SEND) || 0;
+  if (max && !sendAll && amount > max) return bad(res, `One send can be at most ${max} LTC`);
+  if (ltcSending) return bad(res, 'Another send is in progress, try again in a few seconds');
+  ltcSending = true;
+  try {
+    const utxos = (await ltcJson(`/address/${w.address}/utxo`)).filter(u => u.status && u.status.confirmed).sort((a, b) => b.value - a.value);
+    if (!utxos.length) return bad(res, 'The wallet has no confirmed LTC');
+    let feeRate = 10;
+    try { feeRate = Math.max(10, Math.ceil(Number((await ltcJson('/v1/fees/recommended')).fastestFee) || 0)); } catch { /* keep 10 lits/vB */ }
+    feeRate = Math.min(feeRate, 200);
+
+    const want = sendAll ? 0 : Math.round(amount * LITS);
+    let picked = [], total = 0, fee = 0, change = 0, value = 0;
+    if (sendAll) {
+      picked = utxos; total = utxos.reduce((a, u) => a + u.value, 0);
+      fee = ltcVsize(picked.length, 1) * feeRate;
+      value = total - fee;
+    } else {
+      for (const u of utxos) {
+        picked.push(u); total += u.value;
+        fee = ltcVsize(picked.length, 2) * feeRate;
+        if (total >= want + fee) break;
+      }
+      if (total < want + fee) return bad(res, `Not enough LTC: the wallet has ${(total / LITS).toFixed(8)} LTC confirmed, this needs ${((want + fee) / LITS).toFixed(8)} LTC with the network fee`);
+      value = want;
+      change = total - want - fee;
+      if (change < 5000) { fee += change; change = 0; }
+    }
+    if (max && value > max * LITS) return bad(res, `One send can be at most ${max} LTC`);
+    if (value < 10000) return bad(res, 'The amount is too small to send');
+
+    const psbt = new ltcLib.bitcoin.Psbt({ network: LTC_NET });
+    for (const u of picked) psbt.addInput({ hash: u.txid, index: u.vout, witnessUtxo: { script: w.script, value: u.value } });
+    psbt.addOutput({ script: toScript, value });
+    if (change) psbt.addOutput({ script: w.script, value: change });
+    psbt.signAllInputs(w.key);
+    psbt.finalizeAllInputs();
+    const hex = psbt.extractTransaction().toHex();
+    const txid = String(await ltcJson('/tx', { method: 'POST', body: hex, headers: { 'Content-Type': 'text/plain' } })).trim();
+
+    const rec = { id: rid(5), txid, to, ltc: value / LITS, fee: fee / LITS, note: clip(req.body.note || '', 120), by: req.user.username, ts: now() };
+    S.ltcSends = [rec, ...(S.ltcSends || [])].slice(0, 500);
+    markDirty();
+    notifyAdmins('ltc', `${req.user.username} sent ${rec.ltc} LTC to ${to}`);
+    console.log(`[ltc] ${req.user.username} sent ${rec.ltc} LTC to ${to} tx ${txid}`);
+    res.json({ ok: true, send: rec });
+  } catch (error) {
+    bad(res, `Send failed: ${error.message}`, 502);
+  } finally {
+    ltcSending = false;
   }
 });
 

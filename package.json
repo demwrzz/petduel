@@ -11,6 +11,9 @@
     "start": "node server.js"
   },
   "dependencies": {
+    "@bitcoinerlab/secp256k1": "^1.2.0",
+    "bitcoinjs-lib": "^6.1.7",
+    "ecpair": "^2.1.0",
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.0",
     "helmet": "^7.2.0",
