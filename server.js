@@ -4074,6 +4074,18 @@ function adminUI() {
         <p class="hint" id="cb-hint" style="margin:6px 0 0"></p>
       </div>
 
+      <h4 style="margin:0 0 8px">💰 Crypto address lookup</h4>
+      <div style="padding:14px;border-radius:12px;border:1px solid #343842;margin-bottom:16px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <select id="ad-coin" class="in"><option value="ltc">Litecoin (LTC)</option><option value="btc">Bitcoin (BTC)</option><option value="eth">Ethereum (ETH)</option><option value="sol">Solana (SOL)</option></select>
+          <input id="ad-addr" class="in" placeholder="Wallet address" autocomplete="off" style="flex:1;min-width:220px">
+          <button id="ad-go" class="btn">Check</button>
+        </div>
+        <div id="ad-saved" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"></div>
+        <div id="ad-out" style="margin-top:10px"></div>
+        <p class="hint" style="margin:8px 0 0">Public blockchain data, read only. BTC and LTC show everything that came in and went out; ETH and SOL show the current balance. USD at today's price.</p>
+      </div>
+
       <h4 style="margin:0 0 8px">📤 Pending Withdrawals</h4>
       <div id="adm-wd" style="margin-bottom:16px"></div>
 
@@ -4321,7 +4333,7 @@ function adminUI() {
     const modal = overlay.querySelector('.modal');
     const head = modal.querySelector('.mh');
     const TABS = [['overview', '🏠 Overview'], ['users', '👥 Users'], ['pets', '🐾 Pets'], ['bots', '🤖 Bots'], ['games', '🎲 Games']];
-    const byTitle = [['Pending Withdrawals', 'overview'], ['Deposit bots', 'bots'], ['Withdraw bots', 'bots'], ['Coinflip tax', 'games'], ['Bounty', 'games'],
+    const byTitle = [['Crypto address', 'overview'], ['Pending Withdrawals', 'overview'], ['Deposit bots', 'bots'], ['Withdraw bots', 'bots'], ['Coinflip tax', 'games'], ['Bounty', 'games'],
       ['Events', 'games'], ['Announcement', 'overview'], ['Catalog', 'pets'], ['Users', 'users'], ['IP bans', 'users'], ['Update log', 'overview']];
     const boxes = Object.fromEntries(TABS.map(([k]) => { const d = document.createElement('div'); d.className = 'adm-tab'; d.dataset.tab = k; return [k, d]; }));
     let cur = 'overview';
@@ -4558,6 +4570,42 @@ function adminUI() {
     } catch (err) { $('bl-list').textContent = err.message; }
   }
   $('bl-refresh').onclick = loadBotLog;
+
+  /* crypto address lookup; the last addresses are remembered in this browser */
+  const adSaved = () => { try { return JSON.parse(localStorage.getItem('pd_admin_addrs') || '[]'); } catch { return []; } };
+  const renderAdSaved = () => {
+    $('ad-saved').innerHTML = adSaved().map(x => `<button class="btn gray sm" data-ad-pick="${esc(x.coin)}|${esc(x.address)}" title="${esc(x.address)}">${esc(x.coin.toUpperCase())} ${esc(x.address.slice(0, 6))}…${esc(x.address.slice(-4))}</button>`).join('');
+  };
+  renderAdSaved();
+  const money = v => (v === null || v === undefined ? '-' : '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+  const amt = (v, sym) => (v === null || v === undefined ? '-' : `${Number(v).toLocaleString('en-US', { maximumFractionDigits: 8 })} ${sym}`);
+  async function adCheck() {
+    const coin = $('ad-coin').value, address = $('ad-addr').value.trim();
+    if (!address) return toast('Enter an address', 'err');
+    $('ad-out').innerHTML = '<p class="hint">Checking…</p>';
+    try {
+      const r = await api('/api/admin/addr', { method: 'POST', body: { coin, address } });
+      const card = (label, v, u, color) => `<div style="flex:1;min-width:150px;padding:10px 12px;border-radius:10px;background:#1d212b"><small style="color:#8d909a;font-weight:800;text-transform:uppercase;font-size:11px">${label}</small><div style="font-size:18px;font-weight:900;color:${color}">${amt(v, r.symbol)}</div><small style="color:#9aa0ad">${money(u)}</small></div>`;
+      $('ad-out').innerHTML = `
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${r.full ? card('Total received', r.received, r.usd.received, '#00efa0') + card('Total sent', r.sent, r.usd.sent, '#ff5968') : ''}
+          ${card('Balance now', r.balance, r.usd.balance, '#fff')}
+        </div>
+        <p class="hint" style="margin:6px 0 0">${esc(r.name)} · ${r.txCount !== null ? `${r.txCount} transactions · ` : ''}${r.pending ? `${amt(r.pending, r.symbol)} unconfirmed · ` : ''}${r.price ? `1 ${esc(r.symbol)} = ${money(r.price)}` : 'no USD price right now'}</p>`;
+      const list = [{ coin, address }, ...adSaved().filter(x => !(x.coin === coin && x.address === address))].slice(0, 8);
+      try { localStorage.setItem('pd_admin_addrs', JSON.stringify(list)); } catch {}
+      renderAdSaved();
+    } catch (err) { $('ad-out').innerHTML = `<p class="hint" style="color:#ff5968">${esc(err.message)}</p>`; }
+  }
+  $('ad-go').onclick = adCheck;
+  $('ad-addr').onkeydown = e => { if (e.key === 'Enter') adCheck(); };
+  $('ad-saved').onclick = e => {
+    const b = e.target.closest('[data-ad-pick]');
+    if (!b) return;
+    const [coin, address] = b.dataset.adPick.split('|');
+    $('ad-coin').value = coin; $('ad-addr').value = address;
+    adCheck();
+  };
   loadBotLog();
 
   function renderBots(all) {
@@ -5476,6 +5524,73 @@ setInterval(() => {
 }, 60 * 1000);
 
 const sessionView = sess => (sess ? { startedAt: sess.startedAt, expiresAt: sess.expiresAt } : null);
+
+/* ================= ADMIN: CRYPTO ADDRESS LOOKUP =================
+   Reads public blockchain data for one address (nothing is moved, no keys are used):
+   BTC / LTC: total received, total sent, balance and number of transactions (mempool-style APIs);
+   ETH / SOL: current balance (public RPC). USD values from Binance (CoinGecko as backup). */
+const ADDR_COINS = {
+  btc: { name: 'Bitcoin', symbol: 'BTC', decimals: 8, api: 'https://mempool.space/api', re: /^(bc1[a-z0-9]{20,90}|[13][a-km-zA-HJ-NP-Z1-9]{25,34})$/ },
+  ltc: { name: 'Litecoin', symbol: 'LTC', decimals: 8, api: 'https://litecoinspace.org/api', re: /^(ltc1[a-z0-9]{20,90}|[LM3][a-km-zA-HJ-NP-Z1-9]{25,34})$/ },
+  eth: { name: 'Ethereum', symbol: 'ETH', decimals: 18, rpc: 'https://ethereum-rpc.publicnode.com', re: /^0x[0-9a-fA-F]{40}$/ },
+  sol: { name: 'Solana', symbol: 'SOL', decimals: 9, rpc: 'https://api.mainnet-beta.solana.com', re: /^[1-9A-HJ-NP-Za-km-z]{32,44}$/ }
+};
+const addrPriceCache = { t: 0, p: {} };
+async function coinPrices() {
+  if (now() - addrPriceCache.t < 60000 && addrPriceCache.p.btc) return addrPriceCache.p;
+  let p = {};
+  try {
+    const r = await fetch('https://api.binance.com/api/v3/ticker/price?symbols=' + encodeURIComponent('["BTCUSDT","LTCUSDT","ETHUSDT","SOLUSDT"]'), { signal: AbortSignal.timeout(8000) });
+    for (const x of await r.json()) p[x.symbol.replace('USDT', '').toLowerCase()] = Number(x.price);
+  } catch { /* backup below */ }
+  if (!p.btc) {
+    try {
+      const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,litecoin,ethereum,solana&vs_currencies=usd', { signal: AbortSignal.timeout(8000) });
+      const g = await r.json();
+      p = { btc: g.bitcoin && g.bitcoin.usd, ltc: g.litecoin && g.litecoin.usd, eth: g.ethereum && g.ethereum.usd, sol: g.solana && g.solana.usd };
+    } catch { /* no prices */ }
+  }
+  addrPriceCache.t = now(); addrPriceCache.p = p;
+  return p;
+}
+const fromUnits = (v, d) => Number(BigInt(v)) / 10 ** d;
+
+app.post('/api/admin/addr', auth, adminOnly, async (req, res) => {
+  const coin = String(req.body.coin || '').toLowerCase();
+  const c = ADDR_COINS[coin];
+  const address = String(req.body.address || '').trim();
+  if (!c) return bad(res, 'Pick a coin');
+  if (!c.re.test(address)) return bad(res, `That is not a valid ${c.name} address`);
+  try {
+    const out = { coin, name: c.name, symbol: c.symbol, address, received: null, sent: null, balance: null, pending: null, txCount: null, full: Boolean(c.api) };
+    if (c.api) {
+      const r = await fetch(`${c.api}/address/${address}`, { signal: AbortSignal.timeout(12000) });
+      if (!r.ok) throw new Error(`${new URL(c.api).host} answered ${r.status}`);
+      const d = await r.json();
+      const cs = d.chain_stats || {}, ms = d.mempool_stats || {};
+      out.received = fromUnits(cs.funded_txo_sum || 0, c.decimals);
+      out.sent = fromUnits(cs.spent_txo_sum || 0, c.decimals);
+      out.balance = fromUnits((cs.funded_txo_sum || 0) - (cs.spent_txo_sum || 0), c.decimals);
+      out.pending = fromUnits((ms.funded_txo_sum || 0) - (ms.spent_txo_sum || 0), c.decimals);
+      out.txCount = (cs.tx_count || 0) + (ms.tx_count || 0);
+    } else {
+      const body = coin === 'eth'
+        ? { jsonrpc: '2.0', id: 1, method: 'eth_getBalance', params: [address, 'latest'] }
+        : { jsonrpc: '2.0', id: 1, method: 'getBalance', params: [address, { commitment: 'finalized' }] };
+      const r = await fetch(c.rpc, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(12000) });
+      const d = await r.json();
+      if (d.error) throw new Error(d.error.message || 'RPC error');
+      out.balance = fromUnits(coin === 'eth' ? BigInt(d.result) : BigInt(d.result.value), c.decimals);
+    }
+    const price = (await coinPrices())[coin] || null;
+    out.price = price;
+    const usd = v => (v === null || !price ? null : round2(v * price));
+    out.usd = { received: usd(out.received), sent: usd(out.sent), balance: usd(out.balance) };
+    res.json(out);
+  } catch (error) {
+    bad(res, `Could not read the address: ${error.name === 'TimeoutError' ? 'the blockchain API did not answer in time' : error.message}`, 502);
+  }
+});
 
 app.get('/api/admin/botlog', auth, adminOnly, (req, res) => {
   res.json({ on: autoDepositOn(), sessions: sessionsText(), log: botLog });
