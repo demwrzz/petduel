@@ -21,7 +21,7 @@ const BOT_NAME = 'DedokAmp';
 const BOT_LINK = 'https://www.roblox.com/share?code=a0dd8a7bc68f034b99e078f454d4e903&type=Server';
 const MAX_ITEMS = 20;
 
-const DISCORD_INVITE = E.DISCORD_INVITE || 'https://discord.gg/TaPXaAseP';
+const DISCORD_INVITE = E.DISCORD_INVITE || 'https://discord.gg/petduel';
 
 /* ---- Discord ----
    Webhooks are gone: every coinflip / jackpot / giveaway / event / withdraw message is posted by the
@@ -3568,6 +3568,36 @@ app.post('/api/admin/catalog/delete', auth, adminOnly, (req, res) => {
   res.json({ ok: true });
 });
 
+/* ================= GEMS (PS99 diamonds as one item) =================
+   An admin types a username and an amount like 17.5b: the player gets one "17.5B Gems" item worth exactly that.
+   The in-game bot can also deposit diamonds ({ name: "Diamonds", amount: 17500000000 }) and hands them out on withdraw. */
+const GEMS_IMAGE = '/assets/ps99-gems.webp';
+const MAX_GEMS = 1e13;
+function parseAmount(v) {
+  const m = String(v ?? '').trim().toLowerCase().replace(/[,\s_]/g, '').match(/^(\d+(?:\.\d+)?)([kmbt]?)$/);
+  if (!m) return NaN;
+  return Math.round(Number(m[1]) * { '': 1, k: 1e3, m: 1e6, b: 1e9, t: 1e12 }[m[2]]);
+}
+const isGems = i => Boolean(i) && i.catalogId === 'gems';
+function gemsItem(value) {
+  return { uid: rid(12), catalogId: 'gems', name: `${fmtV(value)} Gems`, image: GEMS_IMAGE, value, base: 'Diamonds', variant: 'normal', shiny: false, currency: true };
+}
+
+app.post('/api/admin/gems', auth, adminOnly, (req, res) => {
+  const user = findUserByName(req.body.username);
+  const value = parseAmount(req.body.amount);
+  if (!user) return bad(res, 'User not found. They must log in once.');
+  if (!Number.isFinite(value) || value < 1) return bad(res, 'Write the amount like 17.5b, 500m or 250000000');
+  if (value > MAX_GEMS) return bad(res, `At most ${fmtV(MAX_GEMS)} at once`);
+  const item = gemsItem(value);
+  user.inventory.push(item);
+  addTransaction(user, 'Gems', 'staff', value);
+  markDirty();
+  emitMe(user);
+  notifyAdmins('gems', `${req.user.username} gave ${fmtV(value)} gems to ${user.username}`);
+  res.json({ ok: true, item, username: user.username });
+});
+
 app.post('/api/admin/grant', auth, adminOnly, (req, res) => {
   const user = findUserByName(req.body.username);
   const item = S.catalog.find(x => x.id === req.body.catalogId);
@@ -3697,6 +3727,16 @@ function adminUI() {
             <button id="a-add" class="btn sm">Add / update</button>
           </div>
           <p class="hint">Write the name without Golden / Rainbow / Shiny and pick the version. If the pet and version are already in the catalog, its picture and value are updated.</p>
+        </div>
+
+        <div style="background:#f5faff;padding:14px;border-radius:12px">
+          <h4 style="margin-bottom:10px;display:flex;align-items:center;gap:8px"><img src="/assets/ps99-gems.webp" alt="" style="width:26px;height:26px"> Give Gems</h4>
+          <input id="gm-user" list="g-users" class="in" style="width:100%;margin-bottom:8px" placeholder="Username" autocomplete="off">
+          <div style="display:flex;gap:8px">
+            <input id="gm-amt" class="in" style="flex:1;min-width:0" placeholder="Amount, e.g. 17.5b" autocomplete="off">
+            <button id="gm-go" class="btn">Give</button>
+          </div>
+          <p id="gm-hint" class="hint">k = thousand, m = million, b = billion, t = trillion.</p>
         </div>
 
         <div style="background:#f5faff;padding:14px;border-radius:12px">
@@ -3963,6 +4003,28 @@ function adminUI() {
   };
   $('a-img').oninput = setPreview;
   const rapText = d => { $('rap-msg').textContent = d.rapAt ? `Last update ${new Date(d.rapAt).toLocaleString()}${d.rapInfo ? ': ' + d.rapInfo : ''}` : 'Not updated yet (runs 1 minute after the server starts)'; };
+  const gmParse = v => {
+    const m = String(v || '').trim().toLowerCase().replace(/[,\s_]/g, '').match(/^(\d+(?:\.\d+)?)([kmbt]?)$/);
+    return m ? Math.round(Number(m[1]) * { '': 1, k: 1e3, m: 1e6, b: 1e9, t: 1e12 }[m[2]]) : NaN;
+  };
+  $('gm-amt').oninput = () => {
+    const v = gmParse($('gm-amt').value);
+    $('gm-hint').textContent = v > 0 ? `= ${v.toLocaleString('en-US')} gems (${fmt(v)})` : 'k = thousand, m = million, b = billion, t = trillion.';
+  };
+  const giveGems = async () => {
+    const username = $('gm-user').value.trim(), v = gmParse($('gm-amt').value);
+    if (!username) return toast('Enter a username', 'err');
+    if (!(v > 0)) return toast('Write the amount like 17.5b', 'err');
+    if (!(await confirmBox({ title: 'Give gems?', text: `Give ${fmt(v)} gems (${v.toLocaleString('en-US')}) to ${username}?`, ok: 'Give' }))) return;
+    try {
+      const r = await api('/api/admin/gems', { method: 'POST', body: { username, amount: $('gm-amt').value } });
+      toast(`${fmt(r.item.value)} gems sent to ${r.username}`, 'ok');
+      $('gm-amt').value = ''; $('gm-amt').oninput();
+    } catch (err) { toast(err.message, 'err'); }
+  };
+  $('gm-go').onclick = giveGems;
+  $('gm-amt').onkeydown = e => { if (e.key === 'Enter') giveGems(); };
+
   $('rap-go').onclick = async () => {
     $('rap-go').disabled = true;
     $('rap-msg').textContent = 'Loading the official values…';
@@ -4924,13 +4986,14 @@ io.on('connection', socket => {
     const user = userFromToken(socket.token);
     if (!user) return callback({ error: 'Login to chat' });
 
-    if ((user.mutedUntil || 0) > now()) {
+    const staff = isSupport(user);
+    if (!staff && (user.mutedUntil || 0) > now()) {
       if (user.mutedUntil >= MUTE_FOREVER) return callback({ error: 'You are muted.' });
       const mins = Math.max(1, Math.ceil((user.mutedUntil - now()) / 60000));
       return callback({ error: `You are muted for ${mins} more minute(s).` });
     }
 
-    if (!isAdmin(user) && (user.totalBet || 0) <= 0) return callback({ error: 'Place a bet to chat' });
+    if (!staff && (user.totalBet || 0) <= 0) return callback({ error: 'Place a bet to chat' });
 
     let text = typeof payload === 'string' ? payload : payload && payload.text;
     if (typeof text !== 'string') return callback({ error: 'Invalid message' });
@@ -4951,7 +5014,7 @@ io.on('connection', socket => {
       return callback({ ok: true });
     }
 
-    if (!admin && /(https?:|www\.|discord\.gg|\.gg\/|\.com|\.net|\.xyz|\.ru|\.io)/i.test(text)) {
+    if (!staff && /(https?:|www\.|discord\.gg|\.gg\/|\.com|\.net|\.xyz|\.ru|\.io)/i.test(text)) {
       return callback({ error: 'Links are not allowed in chat' });
     }
 
@@ -5086,6 +5149,7 @@ function rowPet(r) {
 }
 /* one pet for the bot to hand over */
 function botItem(i) {
+  if (isGems(i)) return { name: 'Diamonds', id: 'Diamonds', currency: true, pt: 0, sh: false, variant: 'normal', shiny: false, golden: false, rainbow: false, fullName: i.name, amount: i.value };
   const p = i.base ? { base: i.base, variant: i.variant || 'normal', shiny: Boolean(i.shiny) } : ps99Parse(i.name);
   return { name: p.base, id: p.base, pt: p.variant === 'golden' ? 1 : p.variant === 'rainbow' ? 2 : 0, sh: p.shiny,
     variant: p.variant, shiny: p.shiny, golden: p.variant === 'golden', rainbow: p.variant === 'rainbow', fullName: i.name, amount: 1 };
@@ -5508,6 +5572,15 @@ app.post('/api/bot/confirm-deposit', gameBotOnly, (req, res) => {
   let count = 0;
   for (const r of rows) {
     const p = rowPet(r);
+    if (/^diamonds?$/i.test(p.base)) {
+      const v = Math.floor(Number(r && (r.amount ?? r._am)) || 0);
+      if (v >= 1 && v <= MAX_GEMS) {
+        const g = gemsItem(v);
+        user.inventory.push({ ...g, depositedAt: at, tradeId });
+        credited.push({ name: g.name, value: v, label: g.name });
+      } else logBot(`WARNING trade ${tradeId}: diamonds without a valid amount, nothing added`);
+      continue;
+    }
     const amount = Math.max(1, Math.min(50, Math.floor(Number(r && (r.amount ?? r._am)) || 1)));
     const label = `${amount > 1 ? amount + 'x ' : ''}${p.label}`;
     if (!p.base || ['slot', 'partneroffer'].includes(p.base.toLowerCase().replace(/ /g, ''))) {
@@ -5647,6 +5720,7 @@ app.post('/api/bot/confirm-withdraw', gameBotOnly, (req, res) => {
     }
     delivered = []; back = [];
     for (const item of w.items) {
+      if (isGems(item)) { if (rows.some(r => /^diamonds?$/i.test(String((r && (r.name || r.id)) || '').trim()))) delivered.push(item); else back.push(item); continue; }
       const k = ps99KeyOf(item);
       if ((given.get(k) || 0) > 0) { given.set(k, given.get(k) - 1); delivered.push(item); } else back.push(item);
     }
