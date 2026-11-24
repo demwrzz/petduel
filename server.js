@@ -192,18 +192,19 @@ function isAdmin(user) {
    the old x1000 scale are moved over once (x1000) by scaleAllValues, so nobody loses their rank. */
 const VALUE_SCALE = 1000000;
 const RANKS = [
-  { name: 'Rookie',      min: 0,       color: '#8d909a', icon: 'medal' },
-  { name: 'Bronze',      min: 500,     color: '#cd7f32', icon: 'medal' },
-  { name: 'Silver',      min: 2500,    color: '#c0c7d1', icon: 'medal' },
-  { name: 'Gold',        min: 10000,   color: '#ffd24a', icon: 'medal' },
-  { name: 'Platinum',    min: 25000,   color: '#7fe6e0', icon: 'gem' },
-  { name: 'Diamond',     min: 60000,   color: '#6fb8ff', icon: 'gem' },
-  { name: 'Master',      min: 120000,  color: '#a78bfa', icon: 'star' },
-  { name: 'Grandmaster', min: 250000,  color: '#ec4899', icon: 'star' },
-  { name: 'Champion',    min: 500000,  color: '#ff8a3d', icon: 'crown' },
-  { name: 'Legend',      min: 1000000, color: '#ef4444', icon: 'crown' },
-  { name: 'Mythic',      min: 2500000, color: '#22d3ee', icon: 'bolt' },
-  { name: 'Godlike',     min: 5000000, color: '#f0abfc', icon: 'bolt' }
+  /* total wagered in PS99 diamonds, written in millions: 1000 = 1B */
+  { name: 'Rookie',      min: 0,        color: '#8d909a', icon: 'medal' },
+  { name: 'Bronze',      min: 1000,     color: '#cd7f32', icon: 'medal' },
+  { name: 'Silver',      min: 5000,     color: '#c0c7d1', icon: 'medal' },
+  { name: 'Gold',        min: 15000,    color: '#ffd24a', icon: 'medal' },
+  { name: 'Platinum',    min: 40000,    color: '#7fe6e0', icon: 'gem' },
+  { name: 'Diamond',     min: 100000,   color: '#6fb8ff', icon: 'gem' },
+  { name: 'Master',      min: 250000,   color: '#a78bfa', icon: 'star' },
+  { name: 'Grandmaster', min: 500000,   color: '#ec4899', icon: 'star' },
+  { name: 'Champion',    min: 1000000,  color: '#ff8a3d', icon: 'crown' },
+  { name: 'Legend',      min: 2500000,  color: '#ef4444', icon: 'crown' },
+  { name: 'Mythic',      min: 5000000,  color: '#22d3ee', icon: 'bolt' },
+  { name: 'Godlike',     min: 10000000, color: '#f0abfc', icon: 'bolt' }
 ].map(r => ({ ...r, min: r.min * VALUE_SCALE }));
 
 /* one-time migration: multiply every stored value by VALUE_SCALE (catalog, inventories, games, stats, history...) */
@@ -3452,6 +3453,21 @@ function loadPs99Catalog() {
   console.log(`PS99 catalog loaded: ${added} pets added (${S.catalog.length} in the catalog)`);
 }
 
+/* once for the PS99 launch: every player's Adopt Me stats (wagered, won, lost, profit, so also the rank)
+   start again from 0 and the chat is emptied */
+function resetForPs99() {
+  if (S.settings.ps99StatsReset) return;
+  for (const u of Object.values(S.users)) {
+    u.totalBet = 0; u.totalWon = 0; u.totalLost = 0; u.profit = 0;
+    u.tx = [];
+    delete u.wagerLeft;
+  }
+  S.chat = [];
+  S.settings.ps99StatsReset = true;
+  markDirty();
+  console.log(`PS99 launch: stats of ${Object.keys(S.users).length} players reset to 0, chat cleared`);
+}
+
 let rapRunning = false;
 async function refreshRap() {
   if (rapRunning) throw new Error('A value update is already running');
@@ -5659,6 +5675,7 @@ app.post('/api/bot/confirm-withdraw', gameBotOnly, (req, res) => {
   ensureDefaultBot();
   scaleAllValues();
   loadPs99Catalog();
+  resetForPs99();
   resumeJackpot();
   auditItems();
   resumeMatches();
