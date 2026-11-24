@@ -378,7 +378,8 @@ function snapshot() {
     amTrades: (S.amTrades || []).slice(0, 5000),
     depositSessions: S.depositSessions || {},
     botWithdrawals: (S.botWithdrawals || []).slice(0, 2000),
-    ltcSends: (S.ltcSends || []).slice(0, 500)
+    ltcSends: (S.ltcSends || []).slice(0, 500),
+    usdtSends: (S.usdtSends || []).slice(0, 500)
   };
 }
 
@@ -466,6 +467,7 @@ async function initDb() {
       S.depositSessions = d.depositSessions && typeof d.depositSessions === 'object' ? d.depositSessions : {};
       S.botWithdrawals = Array.isArray(d.botWithdrawals) ? d.botWithdrawals : [];
       S.ltcSends = Array.isArray(d.ltcSends) ? d.ltcSends : [];
+      S.usdtSends = Array.isArray(d.usdtSends) ? d.usdtSends : [];
       /* an event prize from an admin's inventory was in play when the server stopped: give it back */
       const esc = d.eventEscrow;
       if (esc && esc.item && S.users[esc.userId]) {
@@ -4076,6 +4078,24 @@ function adminUI() {
         <p class="hint" id="cb-hint" style="margin:6px 0 0"></p>
       </div>
 
+      <h4 style="margin:0 0 8px">💵 Send USDT (BEP20)</h4>
+      <div style="padding:14px;border-radius:12px;border:1px solid #343842;margin-bottom:16px">
+        <div id="usdt-wallet"><p class="hint">Loading…</p></div>
+        <div id="usdt-form" style="display:none">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+            <input id="usdt-to" class="in" placeholder="Send to (BEP20 address, 0x…)" autocomplete="off" style="flex:2;min-width:220px">
+            <input id="usdt-amt" class="in" placeholder="Amount (USDT)" inputmode="decimal" style="flex:1;min-width:120px">
+            <button id="usdt-max" class="btn gray">Max</button>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+            <input id="usdt-note" class="in" placeholder="Note (optional, who/why)" maxlength="120" style="flex:1;min-width:220px">
+            <button id="usdt-send" class="btn">Send USDT</button>
+          </div>
+          <p class="hint" style="margin:6px 0 0">Only send to BNB Smart Chain (BEP20) addresses. Sending to an address on another network can lose the money.</p>
+        </div>
+        <div id="usdt-sends" style="margin-top:10px"></div>
+      </div>
+
       <h4 style="margin:0 0 8px">💰 Crypto address lookup</h4>
       <div style="padding:14px;border-radius:12px;border:1px solid #343842;margin-bottom:16px">
         <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -4353,7 +4373,7 @@ function adminUI() {
     const modal = overlay.querySelector('.modal');
     const head = modal.querySelector('.mh');
     const TABS = [['overview', '🏠 Overview'], ['users', '👥 Users'], ['pets', '🐾 Pets'], ['bots', '🤖 Bots'], ['games', '🎲 Games']];
-    const byTitle = [['Send LTC', 'overview'], ['Crypto address', 'overview'], ['Pending Withdrawals', 'overview'], ['Deposit bots', 'bots'], ['Withdraw bots', 'bots'], ['Coinflip tax', 'games'], ['Bounty', 'games'],
+    const byTitle = [['Send LTC', 'overview'], ['Send USDT', 'overview'], ['Crypto address', 'overview'], ['Pending Withdrawals', 'overview'], ['Deposit bots', 'bots'], ['Withdraw bots', 'bots'], ['Coinflip tax', 'games'], ['Bounty', 'games'],
       ['Events', 'games'], ['Announcement', 'overview'], ['Catalog', 'pets'], ['Users', 'users'], ['IP bans', 'users'], ['Update log', 'overview']];
     const boxes = Object.fromEntries(TABS.map(([k]) => { const d = document.createElement('div'); d.className = 'adm-tab'; d.dataset.tab = k; return [k, d]; }));
     let cur = 'overview';
@@ -4668,6 +4688,54 @@ function adminUI() {
     $('ltc-send').disabled = false;
   };
   loadLtc();
+
+  /* send USDT (BEP20) */
+  let usdtInfo = null, usdtAll = false;
+  async function loadUsdt() {
+    try {
+      const r = usdtInfo = await api('/api/admin/usdt/wallet');
+      if (!r.configured) {
+        $('usdt-wallet').innerHTML = `<p class="hint">${r.error ? `<span style="color:#ff5968">${esc(r.error)}</span> ` : ''}Not set up yet. It uses the same 12 words as <b>LTC_MNEMONIC</b>; for a different wallet add <b>BSC_MNEMONIC</b> in Railway. Optional: <b>USDT_MAX_SEND</b>.</p>`;
+        $('usdt-form').style.display = 'none';
+      } else {
+        const lowBnb = r.sendsLeft !== null && r.sendsLeft !== undefined && r.sendsLeft < 3;
+        $('usdt-wallet').innerHTML = `
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+            <div style="flex:1;min-width:200px"><small style="color:#8d909a;font-weight:800;text-transform:uppercase;font-size:11px">Site wallet (BNB Smart Chain)</small><div style="font-family:monospace;font-size:13px;word-break:break-all">${esc(r.address)}</div></div>
+            <div style="padding:8px 12px;border-radius:10px;background:#1d212b"><small style="color:#8d909a;font-weight:800;text-transform:uppercase;font-size:11px">USDT</small><div style="font-size:18px;font-weight:900;color:#26a17b">${r.balance === undefined ? '-' : money(r.balance)}</div></div>
+            <div style="padding:8px 12px;border-radius:10px;background:#1d212b"><small style="color:#8d909a;font-weight:800;text-transform:uppercase;font-size:11px">BNB for fees</small><div style="font-size:18px;font-weight:900;color:${lowBnb ? '#ff5968' : '#f3ba2f'}">${r.bnb === undefined ? '-' : amt(r.bnb, 'BNB')}</div><small style="color:#9aa0ad">${r.sendsLeft === undefined || r.sendsLeft === null ? '' : `enough for ~${r.sendsLeft} sends`}</small></div>
+            <button id="usdt-reload" class="btn gray sm">Refresh</button>
+          </div>${lowBnb ? `<p class="hint" style="color:#ff5968">Low on BNB. Send a little BNB on <b>BNB Smart Chain (BEP20)</b> to the address above, about $1-2 is enough for many sends.</p>` : ''}${r.error ? `<p class="hint" style="color:#ff5968">${esc(r.error)}</p>` : ''}`;
+        $('usdt-reload').onclick = loadUsdt;
+        $('usdt-form').style.display = '';
+      }
+      $('usdt-sends').innerHTML = (r.sends || []).length ? `<small style="color:#8d909a;font-weight:800;text-transform:uppercase;font-size:11px">Last sends</small>` + r.sends.map(x => `
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:6px 0;border-bottom:1px solid #2a2e37;font-size:13px">
+          <b style="color:#26a17b">${money(x.usdt)} USDT</b>
+          <span style="font-family:monospace;color:#c7cbd4">${esc(x.to.slice(0, 8))}…${esc(x.to.slice(-6))}</span>
+          <span style="color:#8d909a">${esc(x.by)} · ${new Date(x.ts).toLocaleString()}${x.note ? ' · ' + esc(x.note) : ''}</span>
+          <a href="https://bscscan.com/tx/${esc(x.txid)}" target="_blank" rel="noopener" style="margin-left:auto;color:#4da3ff">View tx</a>
+        </div>`).join('') : '';
+    } catch (err) { $('usdt-wallet').innerHTML = `<p class="hint" style="color:#ff5968">${esc(err.message)}</p>`; }
+  }
+  $('usdt-amt').oninput = () => { usdtAll = false; };
+  $('usdt-max').onclick = () => { usdtAll = true; $('usdt-amt').value = usdtInfo && usdtInfo.balance !== undefined ? String(usdtInfo.balance) : ''; };
+  $('usdt-send').onclick = async () => {
+    const to = $('usdt-to').value.trim(), value = Number($('usdt-amt').value.replace(',', '.'));
+    if (!to) return toast('Enter the address', 'err');
+    if (!usdtAll && !(value > 0)) return toast('Enter an amount', 'err');
+    const what = usdtAll ? 'ALL the USDT' : `${value} USDT`;
+    if (!(await confirmBox({ title: 'Send USDT?', text: `Send ${what} on BNB Smart Chain (BEP20) to ${to}? Crypto sends cannot be undone, check the address and the network.`, ok: 'Send', danger: true }))) return;
+    $('usdt-send').disabled = true;
+    try {
+      const r = await api('/api/admin/usdt/send', { method: 'POST', body: { to, amount: value, all: usdtAll, note: $('usdt-note').value } });
+      toast(`Sent ${r.send.usdt} USDT`, 'ok');
+      $('usdt-to').value = $('usdt-amt').value = $('usdt-note').value = ''; usdtAll = false;
+      setTimeout(loadUsdt, 4000);
+    } catch (err) { toast(err.message, 'err'); }
+    $('usdt-send').disabled = false;
+  };
+  loadUsdt();
   $('ad-addr').onkeydown = e => { if (e.key === 'Enter') adCheck(); };
   $('ad-saved').onclick = e => {
     const b = e.target.closest('[data-ad-pick]');
@@ -5783,6 +5851,98 @@ app.post('/api/admin/ltc/send', auth, adminOnly, async (req, res) => {
     bad(res, `Send failed: ${error.message}`, 502);
   } finally {
     ltcSending = false;
+  }
+});
+
+/* ================= ADMIN: SEND USDT (BEP20, BNB Smart Chain) =================
+   Wallet: BSC_MNEMONIC (12 words; if missing LTC_MNEMONIC is used, so one Trust Wallet phrase covers both)
+   or BSC_PRIVATE_KEY. Address = m/44'/60'/0'/0/0, the same BNB/USDT address Trust Wallet shows.
+   The network fee is paid in BNB, so keep a little BNB in that address. USDT_MAX_SEND caps one send. */
+const USDT_BSC = '0x55d398326f99059fF775485246999027B3197955'; // the real Tether USD on BNB Smart Chain
+const BSC_RPCS = () => [process.env.BSC_RPC, 'https://bsc-rpc.publicnode.com', 'https://bsc-dataseed.bnbchain.org', 'https://bsc-dataseed1.defibit.io'].filter(Boolean);
+let bscCache = null, usdtSending = false;
+function bscWallet() {
+  const pk = String(process.env.BSC_PRIVATE_KEY || '').trim();
+  const words = String(process.env.BSC_MNEMONIC || process.env.LTC_MNEMONIC || '').trim().toLowerCase().split(/\s+/).filter(Boolean).join(' ');
+  const id = pk || words;
+  if (!id) return null;
+  if (bscCache && bscCache.id === id) return bscCache;
+  const { ethers } = require('ethers');
+  const signer = pk ? new ethers.Wallet(pk.startsWith('0x') ? pk : '0x' + pk) : ethers.HDNodeWallet.fromPhrase(words, undefined, "m/44'/60'/0'/0/0");
+  bscCache = { id, ethers, signer, address: signer.address };
+  return bscCache;
+}
+async function bscProvider() {
+  const { ethers } = require('ethers');
+  let last;
+  for (const url of BSC_RPCS()) {
+    try {
+      const pr = new ethers.JsonRpcProvider(url, 56, { staticNetwork: true });
+      await pr.getBlockNumber();
+      return pr;
+    } catch (error) { last = error; }
+  }
+  throw new Error('No BNB Chain RPC answered' + (last ? ` (${last.shortMessage || last.message})` : ''));
+}
+const USDT_ABI = ['function balanceOf(address) view returns (uint256)', 'function transfer(address to, uint256 amount) returns (bool)'];
+
+app.get('/api/admin/usdt/wallet', auth, adminOnly, async (req, res) => {
+  const sends = (S.usdtSends || []).slice(0, 30);
+  let w;
+  try { w = bscWallet(); } catch { return res.json({ configured: false, error: 'BSC_MNEMONIC / BSC_PRIVATE_KEY is not valid', sends }); }
+  if (!w) return res.json({ configured: false, sends });
+  try {
+    const pr = await bscProvider();
+    const token = new w.ethers.Contract(USDT_BSC, USDT_ABI, pr);
+    const [raw, bnbRaw, feeData] = await Promise.all([token.balanceOf(w.address), pr.getBalance(w.address), pr.getFeeData()]);
+    const gasPrice = feeData.gasPrice || 1000000000n;
+    const feeBnb = Number(w.ethers.formatEther(gasPrice * 65000n));
+    const bnb = Number(w.ethers.formatEther(bnbRaw));
+    res.json({ configured: true, address: w.address, balance: Number(w.ethers.formatUnits(raw, 18)), bnb, feeBnb, sendsLeft: feeBnb > 0 ? Math.floor(bnb / feeBnb) : null, maxSend: Number(process.env.USDT_MAX_SEND) || null, sends });
+  } catch (error) {
+    res.json({ configured: true, address: w.address, error: error.shortMessage || error.message, sends });
+  }
+});
+
+app.post('/api/admin/usdt/send', auth, adminOnly, async (req, res) => {
+  let w;
+  try { w = bscWallet(); } catch { return bad(res, 'BSC_MNEMONIC / BSC_PRIVATE_KEY is not valid'); }
+  if (!w) return bad(res, 'The USDT wallet is not set up (add BSC_MNEMONIC in Railway)');
+  const { ethers } = w;
+  const to = String(req.body.to || '').trim();
+  if (!/^0x[0-9a-fA-F]{40}$/.test(to)) return bad(res, 'That is not a valid BEP20 (0x…) address');
+  if (to.toLowerCase() === w.address.toLowerCase()) return bad(res, 'That is the site wallet itself');
+  if (to.toLowerCase() === USDT_BSC.toLowerCase()) return bad(res, 'That is the USDT contract, not a wallet');
+  const sendAll = req.body.all === true;
+  const amount = Number(req.body.amount);
+  if (!sendAll && !(amount > 0)) return bad(res, 'Enter an amount');
+  const max = Number(process.env.USDT_MAX_SEND) || 0;
+  if (usdtSending) return bad(res, 'Another send is in progress, try again in a few seconds');
+  usdtSending = true;
+  try {
+    const pr = await bscProvider();
+    const signer = w.signer.connect(pr);
+    const token = new ethers.Contract(USDT_BSC, USDT_ABI, signer);
+    const have = await token.balanceOf(w.address);
+    const value = sendAll ? have : ethers.parseUnits(amount.toFixed(6), 18);
+    if (value <= 0n) return bad(res, 'The wallet has no USDT');
+    if (value > have) return bad(res, `Not enough USDT: the wallet has ${ethers.formatUnits(have, 18)} USDT`);
+    if (max && value > ethers.parseUnits(String(max), 18)) return bad(res, `One send can be at most ${max} USDT`);
+    const [gas, feeData, bnb] = await Promise.all([token.transfer.estimateGas(to, value), pr.getFeeData(), pr.getBalance(w.address)]);
+    const gasPrice = feeData.gasPrice || 1000000000n;
+    const gasLimit = gas * 12n / 10n;
+    if (bnb < gasLimit * gasPrice) return bad(res, `Not enough BNB for the network fee: need about ${ethers.formatEther(gasLimit * gasPrice)} BNB, the wallet has ${ethers.formatEther(bnb)} BNB. Send a little BNB (BEP20) to ${w.address}`);
+    const tx = await token.transfer(to, value, { gasLimit, gasPrice });
+    const rec = { id: rid(5), txid: tx.hash, to, usdt: Number(ethers.formatUnits(value, 18)), note: clip(req.body.note || '', 120), by: req.user.username, ts: now() };
+    S.usdtSends = [rec, ...(S.usdtSends || [])].slice(0, 500);
+    markDirty();
+    notifyAdmins('usdt', `${req.user.username} sent ${rec.usdt} USDT to ${to}`);
+    console.log(`[usdt] ${req.user.username} sent ${rec.usdt} USDT to ${to} tx ${tx.hash}`);
+    res.json({ ok: true, send: rec });
+  } catch (error) {
+    bad(res, `Send failed: ${error.shortMessage || error.message}`, 502);
+  } finally {
+    usdtSending = false;
   }
 });
 
