@@ -1690,6 +1690,32 @@
 
     .inventory-box { border-radius: 16px; background: #120f24; border: 1px solid #241f42; }
 
+    /* badges */
+    .pf-badges { margin-top: 14px; padding: 14px; border: 1px solid var(--border); border-radius: 16px; background: #14112a; }
+    .pf-badges-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+    .pf-badges-h small { color: var(--muted); }
+    .badge-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+    .badge { display: grid; grid-template-columns: 34px 1fr; grid-template-rows: auto auto; column-gap: 8px; align-items: center; padding: 9px 10px; border: 1px solid #2a2547; border-radius: 12px; background: #1a1631; opacity: .42; filter: grayscale(1); }
+    .badge span { grid-row: span 2; font-size: 26px; text-align: center; }
+    .badge b { font-size: 12px; }
+    .badge small { color: var(--muted); font-size: 10px; line-height: 1.25; }
+    .badge.on { opacity: 1; filter: none; border-color: #6b2552; background: linear-gradient(135deg, #2a1336, #1b1632); box-shadow: 0 6px 18px -10px rgba(255, 79, 184, .7); }
+    .badge-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 4px; }
+    .badge-chip { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; border: 1px solid #4a2348; border-radius: 999px; background: #231633; font-size: 13px; }
+    .badge-chip b { font-size: 11px; }
+    /* provably fair checker */
+    .fair-box { margin-top: 14px; padding: 14px; border: 1px solid var(--border); border-radius: 16px; background: #14112a; }
+    .fair-box h4 { margin-top: 0; }
+    .fair-row { display: flex; gap: 8px; }
+    .fair-row .control { flex: 1; min-width: 0; }
+    .fair-res { margin-top: 12px; padding: 12px; border-radius: 12px; border: 1px solid var(--border); background: #1a1631; }
+    .fair-res.ok { border-color: #2f8a5f; } .fair-res.ok > b { color: #5dffb0; }
+    .fair-res.bad { border-color: #8a2f3f; } .fair-res.bad > b { color: var(--red); }
+    .fair-kv { display: grid; grid-template-columns: 150px 1fr; gap: 8px; margin-top: 6px; font-size: 12px; align-items: baseline; }
+    .fair-kv small { color: var(--muted); }
+    .fair-kv code { word-break: break-all; }
+    @media (max-width: 560px) { .fair-kv { grid-template-columns: 1fr; gap: 2px; } }
+
     /* inputs */
     .control, .in { border-radius: 11px !important; }
     .max-pick { border-radius: 12px; border-color: #3a3360; background: #17142b; }
@@ -2719,6 +2745,46 @@
       return findMatch(id) || (viewCache && viewCache.id === id ? viewCache : null) || HISTORY.find(m => m.id === id);
     }
 
+    /* Provably Fair page: look up a game by ID and redo the maths in the browser */
+    async function fairCheck() {
+      const id = ($("#fairId")?.value || "").trim();
+      const out = $("#fairOut");
+      if (!id || !out) return;
+      out.innerHTML = '<p class="hint">Checking…</p>';
+      try {
+        const g = await api("/api/fair/" + encodeURIComponent(id));
+        if (!g.ended || !g.seed) {
+          out.innerHTML = `<div class="fair-res"><p>This game is still running. Its hash is locked in:</p><code>${esc(g.hash || "")}</code><p class="hint">The seed is shown once it ends.</p></div>`;
+          return;
+        }
+        const enc = new TextEncoder();
+        const hex = buf => Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+        const hash = hex(await crypto.subtle.digest("SHA-256", enc.encode(g.seed)));
+        const key = await crypto.subtle.importKey("raw", enc.encode(g.seed), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+        const sig = hex(await crypto.subtle.sign("HMAC", key, enc.encode(String(g.id))));
+        const roll = parseInt(sig.slice(0, 8), 16) / 4294967296;
+        const hashOk = hash === g.hash;
+        let resultOk, resultText;
+        if (g.type === "coinflip") {
+          const side = roll < 0.5 ? "dog" : "cat";
+          resultOk = side === g.winnerSide;
+          resultText = `Roll ${roll.toFixed(6)} → ${side === "dog" ? "Paw" : "Cat"} coin wins · ${esc(g.host)} vs ${esc(g.joiner)} · pot ${GEM}${fmt(g.value)}`;
+        } else {
+          resultOk = Math.abs(roll - Number(g.roll)) < 1e-9;
+          resultText = `Roll ${roll.toFixed(6)} → ticket ${GEM}${fmt(roll * g.total)} of ${GEM}${fmt(g.total)} · winner ${esc(g.winner)} (${esc(String(g.chance))}% chance)`;
+        }
+        out.innerHTML = `
+          <div class="fair-res ${hashOk && resultOk ? "ok" : "bad"}">
+            <b>${hashOk && resultOk ? "✔ Verified: this game was fair" : "✘ Something does not match"}</b>
+            <div class="fair-kv"><small>Type</small><span>${g.type === "coinflip" ? "Coinflip" : "Jackpot"}${g.at ? " · " + esc(new Date(g.at).toLocaleString()) : ""}</span></div>
+            <div class="fair-kv"><small>Seed</small><code>${esc(g.seed)}</code></div>
+            <div class="fair-kv"><small>Hash shown at the start</small><code>${esc(g.hash)}</code></div>
+            <div class="fair-kv"><small>SHA-256(seed)</small><code>${esc(hash)}</code> ${hashOk ? "✔" : "✘"}</div>
+            <div class="fair-kv"><small>Result</small><span>${resultText} ${resultOk ? "✔" : "✘"}</span></div>
+          </div>`;
+      } catch (error) { out.innerHTML = `<p class="hint" style="color:var(--red)">${esc(error.message)}</p>`; }
+    }
+
     async function verifyMatch(id) {
       const match = lookupMatch(id);
       if (!match || !match.seed) return;
@@ -3202,6 +3268,13 @@
         </svg>`;
     }
 
+    /* earned badges as small chips (player card) */
+    function badgeRow(list, cls = "") {
+      const b = asArray(list);
+      if (!b.length) return "";
+      return `<div class="badge-row ${cls}">${b.map(x => `<span class="badge-chip" title="${esc(x.name)}: ${esc(x.desc)}">${x.icon}<b>${esc(x.name)}</b></span>`).join("")}</div>`;
+    }
+
     function ucRender() {
       const user = ucUser;
       if (!user) return;
@@ -3233,6 +3306,8 @@
             <div class="uc2-chart-head"><small>Game history</small><b class="${profit >= 0 ? "pos" : "neg"}">${GEM}${profit > 0 ? "+" : ""}${fmt(profit)}</b></div>
             ${profitChart(user.series)}
           </div>
+
+          ${badgeRow(user.badges, "uc2-badges")}
 
           ${ME && ME.id !== user.id ? `<button class="btn uc2-tip" data-action="tip" data-id="${esc(user.id)}" data-name="${esc(user.username)}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 8 12 8s1-5 4.5-5a2.5 2.5 0 0 1 0 5"/></svg>
@@ -3290,6 +3365,7 @@
       });
 
       socket.on("chat:clear", () => { STATE.chat = []; renderChat(); });
+      socket.on("badge:new", b => { if (b && b.name) toast(`${b.icon} New badge unlocked: ${b.name}!`, "ok"); });
 
       socket.on("chat:purge", d => {
         STATE.chat = asArray(STATE.chat).filter(m => !(m.user && String(m.user.id) === String(d.userId)));
@@ -4545,6 +4621,14 @@
 
             <div class="uc2-chart" id="pfChart"></div>
 
+            <div class="pf-badges">
+              <div class="pf-badges-h"><b>🏅 Badges</b><small>${asArray(ME.badges).length} / ${asArray(result.allBadges).length} unlocked · ${Number(st.games || 0)} games · ${Number(st.wins || 0)} wins · best streak ${Number(st.bestStreak || 0)}</small></div>
+              <div class="badge-grid">${asArray(result.allBadges).map(b => {
+                const got = asArray(ME.badges).find(x => x.id === b.id);
+                return `<div class="badge ${got ? "on" : ""}" title="${esc(b.desc)}${got ? " · " + esc(new Date(got.ts).toLocaleDateString()) : ""}"><span>${b.icon}</span><b>${esc(b.name)}</b><small>${esc(b.desc)}</small></div>`;
+              }).join("")}</div>
+            </div>
+
             <div class="pf-table">
               ${rows.length ? `
                 <div class="pf-tr pf-th"><span>Type</span><span>ID</span><span>Date and time</span><span>Amount</span></div>
@@ -4723,6 +4807,15 @@
               <li>When the game ends the seed is revealed. Check that <code>SHA-256(seed)</code> equals the hash shown at the start, and calculate the result yourself.</li>
             </ul>
             <p>Every finished game has a <b>Verify result</b> button in its match window that does this check in your browser.</p>
+            <div class="fair-box">
+              <h4>Check any game</h4>
+              <p class="hint" style="margin-top:0">Paste a coinflip or jackpot ID (from your transactions in the profile, or the match window). The check runs in your own browser.</p>
+              <div class="fair-row">
+                <input class="control" id="fairId" placeholder="Game ID" autocomplete="off" spellcheck="false">
+                <button class="btn" data-action="fair-check">Verify</button>
+              </div>
+              <div id="fairOut"></div>
+            </div>
             <h4>How the jackpot is decided</h4>
             <p>The jackpot works the same way: <code>HMAC-SHA256(seed, roundId)</code> gives a number between 0 and 1, multiplied by the total pot. Every player owns the range of the pot their pets cover, so a bigger share means a bigger chance.</p>
           </div>`;
@@ -5926,6 +6019,7 @@
       cancel(el) { cancelMatch(el.dataset.id); },
       view(el) { showView(el.dataset.id); },
       verify(el) { verifyMatch(el.dataset.id); },
+      "fair-check"() { fairCheck(); },
 
       history: showHistory,
       replay(el) { startReplay(el.dataset.id); },

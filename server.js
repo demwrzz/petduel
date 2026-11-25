@@ -266,6 +266,84 @@ function addTransaction(user, type, id, amount) {
   if (user.tx.length > 300) user.tx.length = 300;
 }
 
+/* ================= DAILY SITE STATS (admin panel) =================
+   One entry per day (Turkey time): active players, new players, games, wagered, tax, deposits and withdrawals.
+   The last 90 days are kept. */
+const dayKey = (t = now()) => new Date(t + 3 * 3600 * 1000).toISOString().slice(0, 10);
+function dayStats(t) {
+  S.daily = S.daily || {};
+  const k = dayKey(t);
+  if (!S.daily[k]) {
+    S.daily[k] = { active: {}, players: {}, newUsers: 0, games: 0, wagered: 0, tax: 0, deposits: 0, depositValue: 0, withdrawals: 0, withdrawValue: 0 };
+    const keys = Object.keys(S.daily).sort();
+    while (keys.length > 90) delete S.daily[keys.shift()];
+  }
+  return S.daily[k];
+}
+function dayAdd(d, playerIds) {
+  const x = dayStats();
+  for (const [k, v] of Object.entries(d)) x[k] = round2((x[k] || 0) + v);
+  for (const id of playerIds || []) x.players[id] = 1;
+  markDirty();
+}
+
+/* ================= BADGES =================
+   Earned once and kept (u.badges = { id: time }). Per-player game numbers are in u.g. */
+const LAUNCH_AT = Date.UTC(2026, 10, 27, 18, 0, 0); /* Friday 27 November 2026, 21:00 Turkey time */
+const BADGES = [
+  { id: 'early', icon: '🌟', name: 'Early Player', desc: 'Joined Pet Duel in its first week on PS99' },
+  { id: 'first_win', icon: '🏆', name: 'First Win', desc: 'Won a game' },
+  { id: 'games_10', icon: '🎲', name: 'Regular', desc: 'Played 10 games' },
+  { id: 'games_100', icon: '🎰', name: 'Veteran', desc: 'Played 100 games' },
+  { id: 'games_1000', icon: '👑', name: 'Legend of the Lobby', desc: 'Played 1,000 games' },
+  { id: 'streak_5', icon: '🔥', name: 'On Fire', desc: 'Won 5 games in a row' },
+  { id: 'high_roller', icon: '💎', name: 'High Roller', desc: 'Bet 25B or more in one game' },
+  { id: 'big_win', icon: '💰', name: 'Big Win', desc: 'Won 50B or more in one game' },
+  { id: 'titanic_win', icon: '🐉', name: 'Titanic Hunter', desc: 'Won a game with a Titanic or Gargantuan in the pot' },
+  { id: 'lucky', icon: '🍀', name: 'Lucky', desc: 'Won a jackpot with less than 10% chance' },
+  { id: 'wager_10b', icon: '🥉', name: '10B Wagered', desc: 'Wagered 10B in total' },
+  { id: 'wager_100b', icon: '🥈', name: '100B Wagered', desc: 'Wagered 100B in total' },
+  { id: 'wager_1t', icon: '🥇', name: '1T Wagered', desc: 'Wagered 1T in total' }
+];
+const BADGE_BY_ID = Object.fromEntries(BADGES.map(b => [b.id, b]));
+const publicBadges = u => Object.entries(u.badges || {}).filter(([id]) => BADGE_BY_ID[id]).sort((a, b) => a[1] - b[1]).map(([id, ts]) => ({ ...BADGE_BY_ID[id], ts }));
+
+function giveBadge(u, id) {
+  u.badges = u.badges || {};
+  if (u.badges[id] || !BADGE_BY_ID[id]) return;
+  u.badges[id] = now();
+  markDirty();
+  const b = BADGE_BY_ID[id];
+  if (typeof io !== 'undefined') io.to('u:' + u.id).emit('badge:new', b);
+}
+function checkStaticBadges(u) {
+  if (u.createdAt && u.createdAt < LAUNCH_AT + 7 * 864e5) giveBadge(u, 'early');
+  if (u.totalBet >= 1e10) giveBadge(u, 'wager_10b');
+  if (u.totalBet >= 1e11) giveBadge(u, 'wager_100b');
+  if (u.totalBet >= 1e12) giveBadge(u, 'wager_1t');
+}
+/* after every coinflip / jackpot: o = { bet, won (profit when the player won), win, pot (all items), chance } */
+function recordGame(u, o) {
+  if (!u) return;
+  const g = u.g = u.g || { games: 0, wins: 0, streak: 0, bestStreak: 0, biggestBet: 0, biggestWin: 0 };
+  g.games++;
+  g.biggestBet = Math.max(g.biggestBet, o.bet || 0);
+  if (o.win) {
+    g.wins++; g.streak++; g.bestStreak = Math.max(g.bestStreak, g.streak);
+    g.biggestWin = Math.max(g.biggestWin, o.won || 0);
+    giveBadge(u, 'first_win');
+    if (g.streak >= 5) giveBadge(u, 'streak_5');
+    if ((o.won || 0) >= 5e10) giveBadge(u, 'big_win');
+    if ((o.pot || []).some(isBigItem)) giveBadge(u, 'titanic_win');
+    if (o.chance !== undefined && o.chance < 10) giveBadge(u, 'lucky');
+  } else g.streak = 0;
+  if (g.games >= 10) giveBadge(u, 'games_10');
+  if (g.games >= 100) giveBadge(u, 'games_100');
+  if (g.games >= 1000) giveBadge(u, 'games_1000');
+  if ((o.bet || 0) >= 2.5e10) giveBadge(u, 'high_roller');
+  checkStaticBadges(u);
+}
+
 function inventoryView(item) {
   return { ...item, realCatalogId: item.catalogId, catalogId: item.uid, id: item.uid, qty: 1 };
 }
@@ -283,6 +361,7 @@ function meView(user) {
     isAdmin: isAdmin(user),
     isSupport: isSupport(user),
     maintAccess: user.maintAccess === true,
+    badges: publicBadges(user),
     totalBet: round2(user.totalBet),
     totalWon: round2(user.totalWon),
     totalLost: round2(user.totalLost || 0),
@@ -407,7 +486,8 @@ function snapshot() {
     depositSessions: S.depositSessions || {},
     botWithdrawals: (S.botWithdrawals || []).slice(0, 2000),
     ltcSends: (S.ltcSends || []).slice(0, 500),
-    usdtSends: (S.usdtSends || []).slice(0, 500)
+    usdtSends: (S.usdtSends || []).slice(0, 500),
+    daily: S.daily || {}
   };
 }
 
@@ -533,6 +613,7 @@ async function initDb() {
       S.botWithdrawals = Array.isArray(d.botWithdrawals) ? d.botWithdrawals : [];
       S.ltcSends = Array.isArray(d.ltcSends) ? d.ltcSends : [];
       S.usdtSends = Array.isArray(d.usdtSends) ? d.usdtSends : [];
+      S.daily = d.daily && typeof d.daily === 'object' ? d.daily : {};
       /* an event prize from an admin's inventory was in play when the server stopped: give it back */
       const esc = d.eventEscrow;
       if (esc && esc.item && S.users[esc.userId]) {
@@ -977,7 +1058,11 @@ function userFromToken(token) {
   if (!session || session.exp <= now()) return null;
   const user = S.users[session.userId];
   if (!user || user.banned) return null;
-  if (now() - (user.lastSeen || 0) > 30000) user.lastSeen = now();
+  if (now() - (user.lastSeen || 0) > 30000) {
+    user.lastSeen = now();
+    const ds = dayStats();
+    if (!ds.active[user.id]) { ds.active[user.id] = 1; markDirty(); }
+  }
   return user;
 }
 
@@ -1193,6 +1278,8 @@ function loginUser(id, username, displayName, avatar) {
       avatar: null, createdAt: now(), banned: false
     });
     S.users[id] = user;
+    dayAdd({ newUsers: 1 });
+    checkStaticBadges(user);
     notifyAdmins('register', `New player registered: ${user.username}`);
   }
 
@@ -1537,7 +1624,10 @@ app.get('/api/profile', auth, (req, res) => {
 
   res.json({
     user: meView(user),
+    allBadges: BADGES,
     stats: {
+      games: (user.g && user.g.games) || 0, wins: (user.g && user.g.wins) || 0, bestStreak: (user.g && user.g.bestStreak) || 0,
+      biggestWin: (user.g && user.g.biggestWin) || 0,
       totalBet: round2(user.totalBet),
       totalWon: round2(user.totalWon),
       totalLost: round2(user.totalLost || 0),
@@ -1579,9 +1669,38 @@ app.get('/api/user/:id', (req, res) => {
       lastSeen: user.lastSeen || 0,
       owner: isAdmin(user) && user.adminTag !== false,
       support: !isAdmin(user) && user.support === true,
-      series: profitSeries(user)
+      series: profitSeries(user),
+      badges: publicBadges(user),
+      games: (user.g && user.g.games) || 0, wins: (user.g && user.g.wins) || 0
     }
   });
+});
+
+/* ================= PROVABLY FAIR: look up any game by its ID =================
+   Coinflips (finished or running) and jackpot rounds. The seed is only shown once the game has ended. */
+app.get('/api/fair/:id', (req, res) => {
+  const id = String(req.params.id || '').trim().slice(0, 64);
+  if (!id) return bad(res, 'Enter a game ID');
+  const m = S.history.find(x => x.id === id) || (S.matches[id] && publicMatch(S.matches[id]));
+  if (m) {
+    const ended = m.state === 'finished' || Boolean(m.seed);
+    return res.json({
+      type: 'coinflip', id: m.id, hash: m.hash, seed: ended ? m.seed || null : null, ended,
+      winnerSide: ended ? m.winnerSide : null, hostSide: m.hostSide, joinSide: m.joinSide || null,
+      host: m.host ? nick(m.host) : '', joiner: m.joiner ? nick(m.joiner) : m.opp ? nick(m.opp) : '',
+      value: round2((m.hostValue || 0) + (m.oppValue || 0)), at: m.finishedAt || m.createdAt || 0
+    });
+  }
+  const r = (S.jpHistory || []).find(x => x.id === id);
+  if (r) {
+    return res.json({
+      type: 'jackpot', id: r.id, hash: r.hash, seed: r.seed, ended: true, roll: r.roll, total: r.total,
+      winner: r.winner ? nick(r.winner) : '', chance: r.chance, at: r.finishedAt,
+      players: (r.players || []).map(p => ({ name: nick(p.user), value: p.value }))
+    });
+  }
+  if (JP && JP.id === id) return res.json({ type: 'jackpot', id: JP.id, hash: JP.hash, seed: null, ended: false, total: JP.total });
+  bad(res, 'No game with this ID (only the last 500 coinflips and 100 jackpot rounds are kept)', 404);
 });
 
 app.get('/api/leaderboard', (req, res) => {
@@ -1702,6 +1821,11 @@ function finishMatch(match) {
     emitMe(tax.receiver);
   }
   addTransaction(loser, 'Coinflip Loss', match.id, -loserStake);
+
+  const pot = [...match.hostItems, ...match.oppItems];
+  dayAdd({ games: 1, wagered: match.hostValue + match.oppValue, tax: tax.value || 0 }, [host.id, opponent.id]);
+  recordGame(winner, { bet: hostWins ? match.hostValue : match.oppValue, won: round2(loserStake - tax.value), win: true, pot });
+  recordGame(loser, { bet: loserStake, win: false, pot });
 
   S.history.unshift(publicMatch(match));
   if (S.history.length > 500) S.history.length = 500;
@@ -2368,6 +2492,7 @@ function finishJackpot(j) {
   if (JP !== j || j.state !== 'rolling') return;
 
   const winEntry = j.winner;
+  dayAdd({ games: 1, wagered: j.total }, j.entries.map(e => e.user.id));
   const winner = S.users[winEntry.user.id];
   const allItems = j.entries.flatMap(e => e.items);
 
@@ -2397,7 +2522,9 @@ function finishJackpot(j) {
       const gain = round2(j.total - e.value);
       bump(u, { won: gain, profit: gain });
       addTransaction(u, 'Jackpot Win', j.id, gain);
+      recordGame(u, { bet: e.value, won: gain, win: true, pot: j.entries.flatMap(x => x.items), chance: j.total ? (e.value / j.total) * 100 : 100 });
     } else {
+      recordGame(u, { bet: e.value, win: false });
       bump(u, { lost: e.value, profit: -e.value });
       addTransaction(u, 'Jackpot Loss', j.id, -e.value);
     }
@@ -3098,6 +3225,7 @@ app.get('/api/admin/data', auth, adminOnly, (req, res) => {
 });
 
 function markWithdrawSent(w, by) {
+  dayAdd({ withdrawals: 1, withdrawValue: Number(w.value) || valueOf(w.items || []) });
   w.status = 'done';
   w.doneAt = now();
   w.doneBy = by || '';
@@ -3120,6 +3248,33 @@ function supportOnly(req, res, next) {
   if (!isSupport(req.user)) return bad(res, 'Support access required', 403);
   next();
 }
+
+/* site statistics for the admin panel: the last 30 days + totals right now */
+app.get('/api/admin/sitestats', auth, adminOnly, (req, res) => {
+  const days = [];
+  for (let i = 29; i >= 0; i--) {
+    const k = dayKey(now() - i * 864e5);
+    const x = (S.daily || {})[k] || {};
+    days.push({
+      day: k, active: Object.keys(x.active || {}).length, players: Object.keys(x.players || {}).length, newUsers: x.newUsers || 0,
+      games: x.games || 0, wagered: x.wagered || 0, tax: x.tax || 0,
+      deposits: x.deposits || 0, depositValue: x.depositValue || 0, withdrawals: x.withdrawals || 0, withdrawValue: x.withdrawValue || 0
+    });
+  }
+  const users = Object.values(S.users);
+  res.json({
+    days,
+    totals: {
+      users: users.length,
+      banned: users.filter(u => u.banned).length,
+      online: onlineCount(),
+      inventoryValue: round2(users.reduce((t, u) => t + valueOf(u.inventory), 0)),
+      openGames: Object.values(S.matches).filter(m => m.state === 'waiting').length,
+      openValue: round2(Object.values(S.matches).filter(m => m.state === 'waiting').reduce((t, m) => t + m.hostValue, 0)),
+      totalWagered: round2(users.reduce((t, u) => t + (u.totalBet || 0), 0))
+    }
+  });
+});
 
 app.post('/api/admin/maintaccess', auth, adminOnly, (req, res) => {
   const user = S.users[String(req.body.id || '')];
@@ -3701,6 +3856,24 @@ function adminUI() {
         <p class="hint" id="cb-hint" style="margin:6px 0 0"></p>
       </div>
 
+      <h4 style="margin:0 0 8px;display:flex;align-items:center;gap:8px">📊 Site stats <button id="ss-reload" class="btn gray sm" style="margin-left:auto">Refresh</button></h4>
+      <div style="padding:14px;border-radius:12px;border:1px solid #343842;margin-bottom:16px">
+        <div id="ss-tiles" class="ss-tiles"><p class="hint">Loading…</p></div>
+        <div id="ss-totals" class="hint" style="margin:10px 0 12px"></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px" id="ss-metrics"></div>
+        <div id="ss-chart"></div>
+      </div>
+      <style>
+        .ss-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+        .ss-tile { padding: 10px 12px; border-radius: 12px; background: #1d1a33; border: 1px solid #2c2748; }
+        .ss-tile small { display: block; color: #9a94b8; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .3px; }
+        .ss-tile b { display: block; margin-top: 3px; font-size: 20px; font-weight: 900; }
+        .ss-tile i { font-style: normal; font-size: 11px; font-weight: 800; }
+        .ss-tile i.up { color: #5dffb0; } .ss-tile i.down { color: #ff5968; } .ss-tile i.flat { color: #9a94b8; }
+        .ss-chart svg { display: block; width: 100%; height: 180px; }
+        #ss-metrics button.on { background: linear-gradient(120deg, #ff3d9a, #c64bff); color: #fff; border-color: transparent; }
+      </style>
+
       <h4 style="margin:0 0 8px">💵 Send USDT (BEP20)</h4>
       <div style="padding:14px;border-radius:12px;border:1px solid #343842;margin-bottom:16px">
         <div id="usdt-wallet"><p class="hint">Loading…</p></div>
@@ -3999,7 +4172,7 @@ function adminUI() {
     const modal = overlay.querySelector('.modal');
     const head = modal.querySelector('.mh');
     const TABS = [['overview', '🏠 Overview'], ['users', '👥 Users'], ['pets', '🐾 Pets'], ['bots', '🤖 Bots'], ['games', '🎲 Games']];
-    const byTitle = [['Send LTC', 'overview'], ['Send USDT', 'overview'], ['Crypto address', 'overview'], ['Pending Withdrawals', 'overview'], ['Deposit bots', 'bots'], ['Withdraw bots', 'bots'], ['Coinflip tax', 'games'], ['Bounty', 'games'],
+    const byTitle = [['Site stats', 'overview'], ['Send USDT', 'overview'], ['Send LTC', 'overview'], ['Crypto address', 'overview'], ['Pending Withdrawals', 'overview'], ['Deposit bots', 'bots'], ['Withdraw bots', 'bots'], ['Coinflip tax', 'games'], ['Bounty', 'games'],
       ['Events', 'games'], ['Announcement', 'overview'], ['Catalog', 'pets'], ['Users', 'users'], ['IP bans', 'users'], ['Update log', 'overview']];
     const boxes = Object.fromEntries(TABS.map(([k]) => { const d = document.createElement('div'); d.className = 'adm-tab'; d.dataset.tab = k; return [k, d]; }));
     let cur = 'overview';
@@ -4340,6 +4513,48 @@ function adminUI() {
     $('ltc-send').disabled = false;
   };
   loadLtc();
+
+  /* site stats: today's numbers next to yesterday, totals right now and a 30 day chart */
+  const SS_METRICS = [
+    ['active', 'Active players', false], ['players', 'Players who bet', false], ['newUsers', 'New players', false], ['games', 'Games', false],
+    ['wagered', 'Wagered', true], ['tax', 'Tax earned', true], ['depositValue', 'Deposited', true], ['withdrawValue', 'Withdrawn', true]
+  ];
+  let ssData = null, ssMetric = 'wagered';
+  const ssFmt = (v, money) => money ? fmt(v) : Number(v || 0).toLocaleString('en-US');
+  function ssChart() {
+    if (!ssData) return;
+    const m = SS_METRICS.find(x => x[0] === ssMetric);
+    const days = ssData.days, vals = days.map(d => Number(d[ssMetric] || 0));
+    const max = Math.max(1, ...vals), W = 600, H = 180, pad = 22, bw = (W - 10) / days.length;
+    const bars = days.map((d, i) => {
+      const h = Math.max(vals[i] ? 3 : 1, (vals[i] / max) * (H - pad - 18));
+      const x = 5 + i * bw, y = H - pad - h;
+      return `<rect x="${x + 2}" y="${y}" width="${Math.max(2, bw - 4)}" height="${h}" rx="3" fill="url(#ssg)" opacity="${i === days.length - 1 ? 1 : .8}"><title>${esc(d.day)}: ${esc(ssFmt(vals[i], m[2]))}</title></rect>` +
+        (i % 5 === 4 || i === days.length - 1 ? `<text x="${x + bw / 2}" y="${H - 6}" fill="#9a94b8" font-size="10" text-anchor="middle">${esc(d.day.slice(5))}</text>` : '');
+    }).join('');
+    $('ss-chart').innerHTML = `<div class="ss-chart"><div class="hint" style="margin:0 0 4px">${esc(m[1])} · last 30 days · highest ${esc(ssFmt(max, m[2]))}</div>
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><defs><linearGradient id="ssg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff5fb8"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient></defs>
+      <line x1="0" y1="${H - pad}" x2="${W}" y2="${H - pad}" stroke="#2c2748"/>${bars}</svg></div>`;
+    $('ss-metrics').innerHTML = SS_METRICS.map(([k, label]) => `<button class="btn gray sm ${k === ssMetric ? 'on' : ''}" data-ss="${k}">${esc(label)}</button>`).join('');
+  }
+  async function loadSiteStats() {
+    try {
+      ssData = await api('/api/admin/sitestats');
+      const t = ssData.days[ssData.days.length - 1], y = ssData.days[ssData.days.length - 2] || {};
+      $('ss-tiles').innerHTML = SS_METRICS.map(([k, label, money]) => {
+        const a = Number(t[k] || 0), b = Number(y[k] || 0);
+        const diff = b ? Math.round(((a - b) / b) * 100) : (a ? 100 : 0);
+        const cls = a > b ? 'up' : a < b ? 'down' : 'flat';
+        return `<div class="ss-tile"><small>${esc(label)} today</small><b>${esc(ssFmt(a, money))}</b><i class="${cls}">${a === b ? '= yesterday' : `${a > b ? '▲' : '▼'} ${Math.abs(diff)}% vs yesterday`}</i></div>`;
+      }).join('');
+      const to = ssData.totals;
+      $('ss-totals').innerHTML = `👥 <b>${to.users}</b> players (${to.banned} banned) · 🟢 <b>${to.online}</b> online · 🎲 <b>${to.openGames}</b> open coinflips (${esc(fmt(to.openValue))}) · 🎒 pets in inventories <b>${esc(fmt(to.inventoryValue))}</b> · 💸 wagered all time <b>${esc(fmt(to.totalWagered))}</b>`;
+      ssChart();
+    } catch (err) { $('ss-tiles').innerHTML = `<p class="hint" style="color:#ff5968">${esc(err.message)}</p>`; }
+  }
+  $('ss-metrics').onclick = e => { const b = e.target.closest('[data-ss]'); if (b) { ssMetric = b.dataset.ss; ssChart(); } };
+  $('ss-reload').onclick = loadSiteStats;
+  loadSiteStats();
 
   /* send USDT (BEP20) */
   let usdtInfo = null, usdtAll = false;
@@ -5672,7 +5887,7 @@ app.post('/api/bot/confirm-deposit', gameBotOnly, (req, res) => {
   rememberTrade(tradeId);
   sess.expiresAt = now() + DEPOSIT_SESSION_MS;     /* the session stays open for another trade */
   const total = round2(credited.reduce((t, c) => t + c.value, 0));
-  if (credited.length) addTransaction(user, 'Deposit', tradeId, total);
+  if (credited.length) { addTransaction(user, 'Deposit', tradeId, total); dayAdd({ deposits: 1, depositValue: total }, [user.id]); }
   markDirty();
   emitMe(user);
   io.to('u:' + user.id).emit('deposit:done', { credited: credited.length, total });
@@ -5798,6 +6013,7 @@ app.post('/api/bot/confirm-withdraw', gameBotOnly, (req, res) => {
   w.doneAt = now();
   w.items = delivered;
   w.returned = back;
+  if (delivered.length) dayAdd({ withdrawals: 1, withdrawValue: valueOf(delivered) });
   const user = S.users[w.userId];
   if (user) {
     if (back.length) { user.inventory.push(...back); addTransaction(user, 'Withdraw Refund', w.id, valueOf(back)); }
@@ -5819,6 +6035,7 @@ app.post('/api/bot/confirm-withdraw', gameBotOnly, (req, res) => {
   scaleAllValues();
   loadPs99Catalog();
   resetForPs99();
+  Object.values(S.users).forEach(checkStaticBadges);
   resumeJackpot();
   auditItems();
   resumeMatches();
