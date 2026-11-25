@@ -1750,10 +1750,10 @@
     .giveaways { gap: 12px; }
     .gw2 { position: relative; padding: 2px; border-radius: 20px; background: linear-gradient(120deg, #ff3d9a, #c64bff, #ffd166, #ff3d9a); background-size: 300% 100%; animation: gw2-border 6s linear infinite; box-shadow: 0 14px 34px -16px rgba(255, 61, 154, .8); }
     @keyframes gw2-border { to { background-position: 300% 0; } }
-    .gw2-inner { position: relative; overflow: hidden; padding: 12px 12px 12px; border-radius: 18px; background: radial-gradient(circle at 50% 30%, #3a1b4f 0%, #1b1533 55%, #141127 100%); }
+    .gw2-inner { position: relative; overflow: hidden; padding: 10px 11px 11px; border-radius: 18px; background: radial-gradient(circle at 50% 30%, #3a1b4f 0%, #1b1533 55%, #141127 100%); }
     .gw2-top { display: flex; align-items: center; justify-content: space-between; }
     .gw2-tag { padding: 4px 9px; border-radius: 999px; color: #fff; background: linear-gradient(120deg, #ff3d9a, #c64bff); font-size: 10px; font-weight: 900; letter-spacing: 1.2px; box-shadow: 0 4px 14px -6px rgba(255, 61, 154, .9); }
-    .gw2-ring { position: relative; width: 50px; height: 50px; display: grid; place-items: center; }
+    .gw2-ring { position: relative; width: 44px; height: 44px; display: grid; place-items: center; }
     .gw2-ring svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
     .gw2-ring circle { fill: none; stroke-width: 3.5; }
     .gw2-ring .bg { stroke: rgba(255, 255, 255, .08); }
@@ -1763,23 +1763,23 @@
     .gw2.urgent .gw2-ring { animation: gw2-pulse .9s ease-in-out infinite; }
     .gw2.urgent { animation-duration: 1.5s; }
     @keyframes gw2-pulse { 50% { transform: scale(1.12); } }
-    .gw2-prize { position: relative; display: grid; place-items: center; height: 118px; margin: 2px 0 0; }
-    .gw2-rays { position: absolute; width: 190px; height: 190px; border-radius: 50%; background: repeating-conic-gradient(from 0deg, rgba(255, 210, 240, .16) 0 10deg, transparent 10deg 24deg); -webkit-mask: radial-gradient(circle, #000 18%, transparent 68%); mask: radial-gradient(circle, #000 18%, transparent 68%); animation: gw2-spin 14s linear infinite; }
+    .gw2-prize { position: relative; display: grid; place-items: center; height: 92px; margin: 1px 0 0; }
+    .gw2-rays { position: absolute; width: 150px; height: 150px; border-radius: 50%; background: repeating-conic-gradient(from 0deg, rgba(255, 210, 240, .16) 0 10deg, transparent 10deg 24deg); -webkit-mask: radial-gradient(circle, #000 18%, transparent 68%); mask: radial-gradient(circle, #000 18%, transparent 68%); animation: gw2-spin 14s linear infinite; }
     @keyframes gw2-spin { to { transform: rotate(360deg); } }
-    .gw2-main { position: relative; width: 96px; height: 96px; object-fit: contain; border-radius: 18px; filter: drop-shadow(0 10px 18px rgba(0, 0, 0, .55)) drop-shadow(0 0 16px rgba(255, 95, 184, .45)); animation: gw2-float 3s ease-in-out infinite; }
+    .gw2-main { position: relative; width: 76px; height: 76px; object-fit: contain; border-radius: 16px; filter: drop-shadow(0 10px 18px rgba(0, 0, 0, .55)) drop-shadow(0 0 16px rgba(255, 95, 184, .45)); animation: gw2-float 3s ease-in-out infinite; }
     @keyframes gw2-float { 50% { transform: translateY(-6px) rotate(-2deg); } }
     .gw2-prize .tb { bottom: 2px; }
     .gw2-spark { position: absolute; color: #ffd1ea; font-size: 12px; text-shadow: 0 0 8px #ff5fb8; animation: gw2-twinkle 2.4s ease-in-out infinite; }
     .gw2-spark.s1 { top: 14px; left: 22%; } .gw2-spark.s2 { top: 30px; right: 20%; animation-delay: .8s; font-size: 9px; } .gw2-spark.s3 { bottom: 16px; left: 30%; animation-delay: 1.5s; font-size: 10px; }
     @keyframes gw2-twinkle { 0%, 100% { opacity: .15; transform: scale(.7); } 50% { opacity: 1; transform: scale(1.2); } }
-    .gw2-name { overflow: hidden; color: #fff; font-family: Fredoka, Rubik, sans-serif; font-size: 15px; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
-    .gw2-value { display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 1px; font-family: Fredoka, Rubik, sans-serif; font-size: 24px; font-weight: 700; background: linear-gradient(90deg, #fff, #ffd1ea, #ff8ad0); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .gw2-name { overflow: hidden; color: #fff; font-family: Fredoka, Rubik, sans-serif; font-size: 14px; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+    .gw2-value { display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 1px; font-family: Fredoka, Rubik, sans-serif; font-size: 20px; font-weight: 700; background: linear-gradient(90deg, #fff, #ffd1ea, #ff8ad0); -webkit-background-clip: text; background-clip: text; color: transparent; }
     .gw2-value .gem-i { width: 20px; height: 20px; }
-    .gw2-more { display: flex; align-items: center; justify-content: center; gap: 5px; margin-top: 8px; }
-    .gw2-mini { width: 32px; height: 32px; padding: 3px; border-radius: 9px; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .08); }
+    .gw2-more { display: flex; align-items: center; justify-content: center; gap: 5px; margin-top: 6px; }
+    .gw2-mini { width: 28px; height: 28px; padding: 3px; border-radius: 8px; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .08); }
     .gw2-mini img { width: 100%; height: 100%; object-fit: contain; }
     .gw2-more span { margin-left: 3px; color: #c9b8ff; font-size: 11px; font-weight: 800; }
-    .gw2-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed rgba(255, 255, 255, .1); font-size: 11px; color: #b9b2d6; }
+    .gw2-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(255, 255, 255, .1); font-size: 11px; color: #b9b2d6; }
     .gw2-host, .gw2-people { display: flex; align-items: center; gap: 6px; min-width: 0; }
     .gw2-host > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .gw2-host .av, .gw2-face .av { width: 22px; height: 22px; font-size: 10px; }
@@ -1789,8 +1789,8 @@
     .gw2-people b { color: #fff; }
     .gw2-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
     .gw2-chip { padding: 3px 8px; border-radius: 999px; background: rgba(255, 255, 255, .07); color: #e4def7; font-size: 10.5px; font-weight: 800; }
-    .gw2-actions { display: flex; gap: 6px; margin-top: 10px; }
-    .gw2-btn { position: relative; flex: 1; overflow: hidden; height: 40px; border-radius: 12px; color: #fff; font-weight: 900; font-size: 13px; background: linear-gradient(120deg, #ff3d9a, #c64bff, #ff6fc4, #ff3d9a); background-size: 200% 100%; animation: chroma-flow 4s linear infinite; box-shadow: 0 8px 22px -10px rgba(255, 61, 154, .95); }
+    .gw2-actions { display: flex; gap: 6px; margin-top: 8px; }
+    .gw2-btn { position: relative; flex: 1; overflow: hidden; height: 36px; border-radius: 11px; color: #fff; font-weight: 900; font-size: 13px; background: linear-gradient(120deg, #ff3d9a, #c64bff, #ff6fc4, #ff3d9a); background-size: 200% 100%; animation: chroma-flow 4s linear infinite; box-shadow: 0 8px 22px -10px rgba(255, 61, 154, .95); }
     .gw2-btn::after { content: ""; position: absolute; top: 0; bottom: 0; left: -40%; width: 30%; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent); transform: skewX(-20deg); animation: gw2-shine 2.6s ease-in-out infinite; }
     @keyframes gw2-shine { 0% { left: -40%; } 60%, 100% { left: 130%; } }
     .gw2-btn:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-1px); }
@@ -1801,11 +1801,11 @@
     .gw2.joined .gw2-inner::before { content: "ENTERED"; position: absolute; top: 14px; right: -34px; z-index: 2; width: 130px; padding: 3px 0; transform: rotate(35deg); background: #2bd38a; color: #04240f; font-size: 9px; font-weight: 900; letter-spacing: 1px; text-align: center; }
 
     /* ================= GIVEAWAY WINNER REVEAL ================= */
-    .gww { position: fixed; inset: 0; z-index: 300; display: grid; place-items: center; padding: 16px; background: radial-gradient(circle at 50% 40%, rgba(120, 40, 160, .55), rgba(6, 4, 16, .88)); backdrop-filter: blur(6px); animation: gww-in .3s ease both; }
+    .gww { position: fixed; inset: 0; z-index: 300; display: grid; place-items: center; padding: 14px; overflow: hidden; background: radial-gradient(circle at 50% 40%, rgba(120, 40, 160, .55), rgba(6, 4, 16, .88)); backdrop-filter: blur(6px); animation: gww-in .3s ease both; }
     .gww.out { animation: gww-out .3s ease both; }
     @keyframes gww-in { from { opacity: 0; } }
     @keyframes gww-out { to { opacity: 0; } }
-    .gww-card { position: relative; width: min(640px, 100%); padding: 22px 18px 20px; border-radius: 24px; text-align: center; background: linear-gradient(180deg, #24173f, #150f2b); border: 2px solid transparent; background-clip: padding-box; box-shadow: 0 0 0 2px rgba(255, 95, 184, .55), 0 30px 90px -20px rgba(255, 61, 154, .6); animation: gww-pop .45s cubic-bezier(.2, 1.4, .4, 1) both; }
+    .gww-card { position: relative; width: min(560px, calc(100vw - 28px)); max-width: 100%; box-sizing: border-box; overflow: hidden; padding: 22px 18px 20px; border-radius: 24px; text-align: center; background: linear-gradient(180deg, #24173f, #150f2b); border: 2px solid transparent; background-clip: padding-box; box-shadow: 0 0 0 2px rgba(255, 95, 184, .55), 0 30px 90px -20px rgba(255, 61, 154, .6); animation: gww-pop .45s cubic-bezier(.2, 1.4, .4, 1) both; }
     @keyframes gww-pop { from { transform: scale(.85) translateY(20px); opacity: 0; } }
     .gww-x { position: absolute; top: 10px; right: 12px; width: 32px; height: 32px; border-radius: 10px; background: rgba(255, 255, 255, .08); color: #fff; font-size: 20px; }
     .gww-kicker { color: #ffb8e0; font-size: 12px; font-weight: 900; letter-spacing: .8px; text-transform: uppercase; }
@@ -1830,6 +1830,17 @@
     .gww-pet:nth-child(2) { animation-delay: .3s; } .gww-pet:nth-child(3) { animation-delay: .6s; } .gww-pet:nth-child(4) { animation-delay: .9s; }
     .gww-pet img { width: 100%; height: 100%; object-fit: contain; }
     .gww-confetti { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
+    @media (max-width: 560px) {
+      .gww-card { padding: 18px 12px 16px; border-radius: 20px; }
+      .gww-title { margin: 4px 0 10px; }
+      .gww-reel { height: 92px; }
+      .gww-strip { gap: 6px; padding: 10px 6px; }
+      .gww-tile { width: 62px; padding: 7px 3px; }
+      .gww-tile .av { width: 38px; height: 38px; font-size: 15px; }
+      .gww-tile small { max-width: 56px; font-size: 9px; }
+      .gww-pets { gap: 8px; margin-top: 10px; }
+      .gww-pet { width: 52px; height: 52px; }
+    }
 
   </style>
 </head>
@@ -3175,7 +3186,7 @@
       requestAnimationFrame(() => {
         const tile = strip.children[stop];
         const box = el.querySelector(".gww-reel");
-        const target = -(tile.offsetLeft + tile.offsetWidth / 2 - box.clientWidth / 2) + (Math.random() - .5) * tile.offsetWidth * .5;
+        const target = Math.round(-(tile.offsetLeft + tile.offsetWidth / 2 - box.clientWidth / 2));
         if (matchMedia("(prefers-reduced-motion: reduce)").matches || reel.length < 3) { strip.style.transform = `translateX(${target}px)`; return reveal(); }
         strip.style.transition = "transform 5.2s cubic-bezier(.12, .7, .08, 1)";
         strip.style.transform = `translateX(${target}px)`;

@@ -3219,9 +3219,15 @@ app.get('/api/admin/ui', auth, adminOnly, (req, res) => {
   res.type('application/javascript').send(`(${adminUI.toString()})();`);
 });
 
+/* catalog revision: the admin panel downloads the (big) catalog again only when this changes */
+let catRev = 1;
+const bumpCat = () => { catRev++; };
+
 app.get('/api/admin/data', auth, adminOnly, (req, res) => {
+  const sameCat = String(req.query.cat || '') === String(catRev);
   res.json({
-    catalog: S.catalog,
+    catRev,
+    catalog: sameCat ? null : S.catalog,
     users: Object.values(S.users).map(u => ({
       id: u.id, username: u.username, nickname: u.nickname || '', items: u.inventory.length,
       value: valueOf(u.inventory), totalBet: round2(u.totalBet),
@@ -3625,12 +3631,14 @@ app.post('/api/admin/catalog', auth, adminOnly, (req, res) => {
   const existing = S.catalog.find(c => ps99KeyOf(c) === k);
   if (existing) {
     Object.assign(existing, { image: item.image, value: item.value, manual: true });
+    bumpCat();
     markDirty();
     return res.json({ ok: true, item: existing, updated: true });
   }
   item.id = rid(8);
   item.manual = true;
   S.catalog.push(item);
+  bumpCat();
   markDirty();
   res.json({ ok: true, item });
 });
@@ -3668,6 +3676,7 @@ function loadPs99Catalog() {
     S.catalog.push(item); have.set(k, item); added++;
   }
   S.settings.ps99CatalogV = PS99_CATALOG_V;
+  bumpCat();
   markDirty();
   console.log(`PS99 catalog loaded: ${added} pets added (${S.catalog.length} in the catalog)`);
 }
@@ -3734,6 +3743,7 @@ async function refreshRap() {
     }
     S.settings.rapAt = now();
     S.settings.rapInfo = `${updated} values changed, ${added} new pets, ${owned} owned pets updated`;
+    if (updated || added) bumpCat();
     markDirty();
     console.log(`[RAP] ${S.settings.rapInfo}`);
     return { updated, added, owned };
@@ -3775,6 +3785,7 @@ app.post('/api/admin/catalog/update', auth, adminOnly, (req, res) => {
       if (hit) emitMe(u);
     }
   }
+  bumpCat();
   markDirty();
   res.json({ ok: true, item, changed });
 });
@@ -3783,6 +3794,7 @@ app.post('/api/admin/catalog/delete', auth, adminOnly, (req, res) => {
   const i = S.catalog.findIndex(x => x.id === req.body.id);
   if (i < 0) return bad(res, 'Item not found', 404);
   S.catalog.splice(i, 1);
+  bumpCat();
   markDirty();
   res.json({ ok: true });
 });
@@ -4312,8 +4324,13 @@ function adminUI() {
     $('rap-go').disabled = false;
   };
 
+  /* the catalog (6000+ pets) is kept here and only downloaded again when the server says it changed */
+  let catData = [], catRevLocal = 0;
   async function load() {
-    const data = await api('/api/admin/data');
+    const data = await api('/api/admin/data?cat=' + catRevLocal);
+    const catChanged = Array.isArray(data.catalog);
+    if (catChanged) { catData = data.catalog; catRevLocal = data.catRev; }
+    data.catalog = catData;
 
     const tw = $('tab-wd');
     if (tw) { tw.hidden = !data.withdrawals.length; tw.textContent = data.withdrawals.length; }
@@ -4360,11 +4377,12 @@ function adminUI() {
         .sort((a, b) => sort === 'name' ? a.name.localeCompare(b.name) : sort === 'value-asc' ? a.value - b.value : b.value - a.value);
       $('cat-shown').textContent = `${list.length} / ${data.catalog.length}`;
       $('adm-cat').innerHTML = list.length
-        ? `<div class="cat-grid">${list.slice(0, 400).map((item, i) => catCard(item).replace('<div style="border', `<div class="cat-card" style="animation-delay:${Math.min(i, 30) * 18}ms;border`)).join('')}</div>`
+        ? `<div class="cat-grid">${list.slice(0, 150).map((item, i) => catCard(item).replace('<div style="border', `<div class="cat-card" style="animation-delay:${Math.min(i, 20) * 15}ms;border`)).join('')}</div>${list.length > 150 ? `<p class="hint" style="text-align:center;padding:12px">Showing the first 150 of ${list.length}. Search to find a pet.</p>` : ''}`
         : `<p class="hint" style="text-align:center;padding:30px">${data.catalog.length ? 'No pet matches your search.' : 'No items yet.'}</p>`;
     };
     $('cat-count').textContent = `(${data.catalog.length})`;
-    catRender();
+    /* the catalog grid is only drawn while it is open */
+    if (catPanel.classList.contains('open')) catRender();
 
     catalogCache = data.catalog || [];
     rapText(data);
@@ -4373,19 +4391,21 @@ function adminUI() {
     renderIpBans(data.ipBans || []);
     $('g-users').innerHTML = data.users.map(u => `<option value="${esc(u.username)}"></option>`).join('');
 
-    const prevItem = $('ev-item').value;
-    $('ev-item').innerHTML = data.catalog.length
-      ? [...data.catalog].sort((a, b) => b.value - a.value).slice(0, 600).map(i => `<option value="${esc(i.id)}">${esc(i.name)} (${fmt(i.value)})</option>`).join('')
-      : '<option value="">No catalog items</option>';
-    if (prevItem) $('ev-item').value = prevItem;
+    if (catChanged || !$('ev-item').options.length) {
+      const prevItem = $('ev-item').value;
+      $('ev-item').innerHTML = data.catalog.length
+        ? [...data.catalog].sort((a, b) => b.value - a.value).slice(0, 300).map(i => `<option value="${esc(i.id)}">${esc(i.name)} (${fmt(i.value)})</option>`).join('')
+        : '<option value="">No catalog items</option>';
+      if (prevItem) $('ev-item').value = prevItem;
+      const prevBounty = $('bt-item').value;
+      $('bt-item').innerHTML = $('ev-item').innerHTML;
+      if (prevBounty) $('bt-item').value = prevBounty;
+    }
 
     myInv = data.myInventory || [];
     if (evPick && !myInv.some(i => i.uid === evPick)) evPick = '';
     renderEvInv();
 
-    const prevBounty = $('bt-item').value;
-    $('bt-item').innerHTML = $('ev-item').innerHTML;
-    if (prevBounty) $('bt-item').value = prevBounty;
 
     renderBots(data.bots || []);
     if (document.activeElement !== $('cb-list')) $('cb-list').value = data.blockCountries || '';
@@ -5064,7 +5084,7 @@ function adminUI() {
     $('u-count').textContent = `${list.length} shown · ${online} online · ${usersCache.length} total`;
 
     $('adm-users').innerHTML = list.length
-      ? `<div class="u-grid">${list.slice(0, 120).map((u, k) => `
+      ? `<div class="u-grid">${list.slice(0, 60).map((u, k) => `
         <div class="u-card ${u.banned ? 'is-banned' : ''}" style="animation-delay:${Math.min(k, 24) * 18}ms">
           <div class="u-top">
             <div class="u-av">${u.avatar ? `<img src="${esc(u.avatar)}" alt="">` : `<span>${esc((u.nickname || u.username).charAt(0).toUpperCase())}</span>`}<i class="${u.online ? 'on' : ''}"></i></div>
