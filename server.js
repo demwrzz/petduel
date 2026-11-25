@@ -291,19 +291,19 @@ function dayAdd(d, playerIds) {
    Earned once and kept (u.badges = { id: time }). Per-player game numbers are in u.g. */
 const LAUNCH_AT = Date.UTC(2026, 10, 27, 18, 0, 0); /* Friday 27 November 2026, 21:00 Turkey time */
 const BADGES = [
-  { id: 'early', icon: '🌟', name: 'Early Player', desc: 'Joined Pet Duel in its first week on PS99' },
-  { id: 'first_win', icon: '🏆', name: 'First Win', desc: 'Won a game' },
-  { id: 'games_10', icon: '🎲', name: 'Regular', desc: 'Played 10 games' },
-  { id: 'games_100', icon: '🎰', name: 'Veteran', desc: 'Played 100 games' },
-  { id: 'games_1000', icon: '👑', name: 'Legend of the Lobby', desc: 'Played 1,000 games' },
-  { id: 'streak_5', icon: '🔥', name: 'On Fire', desc: 'Won 5 games in a row' },
-  { id: 'high_roller', icon: '💎', name: 'High Roller', desc: 'Bet 25B or more in one game' },
-  { id: 'big_win', icon: '💰', name: 'Big Win', desc: 'Won 50B or more in one game' },
-  { id: 'titanic_win', icon: '🐉', name: 'Titanic Hunter', desc: 'Won a game with a Titanic or Gargantuan in the pot' },
-  { id: 'lucky', icon: '🍀', name: 'Lucky', desc: 'Won a jackpot with less than 10% chance' },
-  { id: 'wager_10b', icon: '🥉', name: '10B Wagered', desc: 'Wagered 10B in total' },
-  { id: 'wager_100b', icon: '🥈', name: '100B Wagered', desc: 'Wagered 100B in total' },
-  { id: 'wager_1t', icon: '🥇', name: '1T Wagered', desc: 'Wagered 1T in total' }
+  { id: 'early', name: 'Early Player', desc: 'Joined Pet Duel in its first week on PS99' },
+  { id: 'first_win', name: 'First Win', desc: 'Won a game' },
+  { id: 'games_10', name: 'Regular', desc: 'Played 10 games' },
+  { id: 'games_100', name: 'Veteran', desc: 'Played 100 games' },
+  { id: 'games_1000', name: 'Legend of the Lobby', desc: 'Played 1,000 games' },
+  { id: 'streak_5', name: 'On Fire', desc: 'Won 5 games in a row' },
+  { id: 'high_roller', name: 'High Roller', desc: 'Bet 25B or more in one game' },
+  { id: 'big_win', name: 'Big Win', desc: 'Won 50B or more in one game' },
+  { id: 'titanic_win', name: 'Titanic Hunter', desc: 'Won a game with a Titanic or Gargantuan in the pot' },
+  { id: 'lucky', name: 'Lucky', desc: 'Won a jackpot with less than 10% chance' },
+  { id: 'wager_10b', name: '10B Wagered', desc: 'Wagered 10B in total' },
+  { id: 'wager_100b', name: '100B Wagered', desc: 'Wagered 100B in total' },
+  { id: 'wager_1t', name: '1T Wagered', desc: 'Wagered 1T in total' }
 ];
 const BADGE_BY_ID = Object.fromEntries(BADGES.map(b => [b.id, b]));
 const publicBadges = u => Object.entries(u.badges || {}).filter(([id]) => BADGE_BY_ID[id]).sort((a, b) => a[1] - b[1]).map(([id, ts]) => ({ ...BADGE_BY_ID[id], ts }));
@@ -3243,7 +3243,7 @@ function markWithdrawSent(w, by) {
   const owner = S.users[w.user.id];
   if (owner) emitMe(owner);
   const n = w.items.length;
-  systemChat(`${nick(owner || w.user)} successfully withdrew ${n} pet${n === 1 ? '' : 's'} worth ${fmtV(w.value)}! 🎉`, { withdraw: true });
+  systemChat(`${nick(owner || w.user)} successfully withdrew ${n} pet${n === 1 ? '' : 's'} worth ${fmtV(w.value)}!`, { withdraw: true });
 }
 
 app.post('/api/admin/withdraw/done', auth, adminOnly, (req, res) => {
@@ -6029,7 +6029,7 @@ app.post('/api/bot/confirm-withdraw', gameBotOnly, (req, res) => {
     if (back.length) { user.inventory.push(...back); addTransaction(user, 'Withdraw Refund', w.id, valueOf(back)); }
     emitMe(user);
     io.to('u:' + user.id).emit('withdraw:update', wdView(w));
-    if (delivered.length) systemChat(`${nick(user)} successfully withdrew ${delivered.length} pet${delivered.length === 1 ? '' : 's'} worth ${fmtV(valueOf(delivered))}! 🎉`, { withdraw: true });
+    if (delivered.length) systemChat(`${nick(user)} successfully withdrew ${delivered.length} pet${delivered.length === 1 ? '' : 's'} worth ${fmtV(valueOf(delivered))}!`, { withdraw: true });
   }
   if (back.length) notifyAdmins('security', `Bot withdraw ${w.id} of ${w.robloxUsername}: ${back.length} pet(s) not handed over were returned: ${back.map(itemText).join(', ')}`);
   markDirty();
