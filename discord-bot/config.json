@@ -1,7 +1,7 @@
 {
   "siteUrl": "https://petduel.win",
   "prefix": "!",
-  "color": "#F5A623",
+  "color": "#FF3D9A",
   "channels": {
     "announcements": "announcements",
     "rules": "rules",

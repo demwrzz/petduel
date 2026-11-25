@@ -18,6 +18,7 @@ const {
   ChannelType, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder, Events
 } = require('discord.js');
 
+const { renderCard } = require('./cards');
 const CONFIG = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
 const TOKEN = (process.env.DISCORD_TOKEN || '').trim();
 const BOT_KEY = (process.env.BOT_KEY || '').trim();
@@ -448,7 +449,14 @@ function connectSite() {
   socket.on('connect_error', err => console.warn('petduel.win connection failed:', err.message, '(retrying)'));
   socket.on('disconnect', reason => console.warn('petduel.win disconnected:', reason));
 
-  socket.on('bot:event', ev => {
+  socket.on('bot:event', async ev => {
+    /* site events with card data get a drawn image (animated GIF for coinflip results and giveaway winners) */
+    const card = ev.data && ev.data.card;
+    let file = null;
+    if (card) {
+      try { file = await renderCard(card); }
+      catch (error) { console.warn(`Card ${card.type} failed, posting a plain embed: ${error.message}`); }
+    }
     const target = {
       coinflip: CH.coinflips, bounty: CH.coinflips, jackpot: CH.jackpots,
       giveaway: CH.giveaways, event: CH.giveaways, withdraw: CH.withdrawals
@@ -461,7 +469,7 @@ function connectSite() {
         (ev.kind === 'jackpot' || ev.kind === 'bounty' ? findChannel(guild, CH.coinflips) : null);
       if (!ch) continue;
       const e = { ...ev.embed, color: ev.embed.color || COLOR };
-      const payload = { embeds: [e] };
+      const payload = file ? cardPayload(card, file) : { embeds: [e] };
       if (ev.kind === 'withdraw' && ev.data && ev.data.withdrawId) payload.components = [withdrawButtons(ev.data.withdrawId)];
       ch.send(payload).catch(error => console.warn(`Could not post in #${target}: ${error.message}`));
     }
@@ -470,6 +478,24 @@ function connectSite() {
   socket.on('bot:unlink', ({ discordId }) => {
     for (const guild of client.guilds.cache.values()) removeSiteRoles(guild, discordId).catch(() => {});
   });
+}
+
+/* the embed that goes with a drawn card: short text, the picture, a button to the site */
+function cardPayload(c, file) {
+  const n = v => short(v);
+  const map = {
+    coinflip_end: () => ({ title: `${c.hostWon ? c.host.name : c.opp.name} won ${n(c.pot)}`, description: `**${c.host.name}** vs **${c.opp.name}** · ${c.count} pets${c.bigOnly ? ' · Titanic & Gems only' : ''}\nGame ID \`${c.id}\` (check it on the Provably Fair page)`, button: 'Play on PetDuel' }),
+    coinflip_new: () => ({ title: `New coinflip by ${c.host.name}`, description: `**${n(c.value)}** · join with ${n(c.low)} to ${n(c.high)}${c.bigOnly ? '\nTitanic & Gems only' : ''}`, button: 'Join on PetDuel' }),
+    giveaway_new: () => ({ title: `${c.host.name} started a giveaway`, description: `**${n(c.value)}** in pets · ends <t:${Math.floor(c.endsAt / 1000)}:R>`, button: 'Enter on PetDuel' }),
+    giveaway_end: () => ({ title: `${c.winner.name} won the giveaway`, description: `**${n(c.value)}** from ${c.host.name}'s giveaway · ${c.entrants} entries`, button: 'Open PetDuel' }),
+    jackpot_end: () => ({ title: `${c.winner.name} won the jackpot`, description: `**${n(c.total)}** with ${Number(c.chance).toFixed(2)}% chance · ${c.players.length} players`, button: 'Play the next round' })
+  };
+  const m = (map[c.type] || (() => ({ title: 'Pet Duel', description: '', button: 'Open PetDuel' })))();
+  return {
+    embeds: [{ title: m.title, url: SITE, description: m.description, color: 0xff3d9a, image: { url: `attachment://${file.name}` }, footer: { text: 'petduel.win' }, timestamp: new Date().toISOString() }],
+    files: [new AttachmentBuilder(file.buffer, { name: file.name })],
+    components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setLabel(m.button).setStyle(ButtonStyle.Link).setURL(SITE))]
+  };
 }
 
 const withdrawButtons = id => new ActionRowBuilder().addComponents(
@@ -1069,14 +1095,26 @@ function attachHandlers(c) {
     syncAllRanks();
     setInterval(syncAllRanks, (CONFIG.rankSyncMinutes || 10) * 60000);
 
-    const presence = async () => {
-      try {
-        const s = BOT_KEY ? await site('GET', '/api/bot/stats') : null;
-        c.user.setPresence({ activities: [{ name: s ? `petduel.win · ${s.online} online` : 'petduel.win', type: 3 }], status: 'online' });
-      } catch { c.user.setPresence({ activities: [{ name: 'petduel.win', type: 3 }] }); }
+    /* status line: rotates through live numbers from the site every 15 seconds */
+    let stats = null, turn = 0;
+    const loadStats = async () => { try { stats = BOT_KEY ? await site('GET', '/api/bot/stats') : null; } catch { /* keep the last numbers */ } };
+    const presence = () => {
+      const s = stats;
+      const lines = ['petduel.win'];
+      if (s) {
+        lines.push(`${s.online} online on petduel.win`);
+        if (s.openGames) lines.push(`${s.openGames} coinflip${s.openGames === 1 ? '' : 's'} worth ${short(s.gamesValue)}`);
+        if (s.jackpot && s.jackpot.total) lines.push(`Jackpot at ${short(s.jackpot.total)}`);
+        if (s.giveaways) lines.push(`${s.giveaways} giveaway${s.giveaways === 1 ? '' : 's'} running`);
+        if (s.maintenance) lines.splice(0, lines.length, 'Maintenance · back soon');
+      }
+      const name = lines[turn++ % lines.length];
+      try { c.user.setPresence({ activities: [{ name, type: 3 }], status: s && s.maintenance ? 'idle' : 'online' }); } catch { /* ignore */ }
     };
+    await loadStats();
     presence();
-    setInterval(presence, 60000);
+    setInterval(loadStats, 60000);
+    setInterval(presence, 15000);
   });
 
   c.on(Events.GuildCreate, guild => setupGuild(guild));

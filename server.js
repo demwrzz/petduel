@@ -144,6 +144,11 @@ const itemLine = items => clip(items.map(i => `${i.name} - ${fmtV(i.value)}`).jo
 /* pictures for embeds: only public https images are sent to Discord */
 const httpsUrl = v => (typeof v === 'string' && /^https:\/\/[^\s"'<>]{4,500}$/.test(v) ? v : null);
 const avatarOf = u => httpsUrl(u && (S.users[u.id]?.avatar || u.avatar));
+/* data for the Discord bot's image cards: full picture links, players with avatars, the best pets first */
+const absImage = img => { const v = String(img || ''); return /^https:\/\//.test(v) ? v : v.startsWith('/') ? SITE_URL.replace(/\/+$/, '') + v : null; };
+const cardUser = u => ({ name: nick(u), avatar: avatarOf(u) });
+const cardPets = (items, n = 5) => [...(items || [])].sort((a, b) => Number(b.value || 0) - Number(a.value || 0)).slice(0, n)
+  .map(i => ({ name: i.name, image: absImage(i.image), value: i.value }));
 const topImage = items => {
   const best = [...(items || [])].sort((a, b) => Number(b.value || 0) - Number(a.value || 0)).find(i => httpsUrl(i.image));
   return best ? best.image : null;
@@ -1847,7 +1852,11 @@ function finishMatch(match) {
       { name: 'Match / Hash', value: clip(`${match.id}\n${match.hash}`, 300) }
     ],
     timestamp: new Date().toISOString()
-  }, { thumb: winner, author: winner, image: topImage([...match.hostItems, ...match.oppItems]) });
+  }, { thumb: winner, author: winner, image: topImage([...match.hostItems, ...match.oppItems]), data: { card: {
+    type: 'coinflip_end', id: match.id, host: cardUser(match.host), opp: cardUser(match.opp), hostSide: match.hostSide, winnerSide: match.winnerSide,
+    hostWon: match.winnerSide === match.hostSide, hostValue: match.hostValue, oppValue: match.oppValue, pot: match.hostValue + match.oppValue,
+    pets: cardPets([...match.hostItems, ...match.oppItems]), count: match.hostItems.length + match.oppItems.length, bigOnly: Boolean(match.bigOnly)
+  } } });
 
   io.emit('match:update', publicMatch(match));
   emitMe(winner);
@@ -1925,7 +1934,10 @@ app.post('/api/match/create', auth, actionLimit, (req, res) => {
       { name: `Pets (${items.length})`, value: itemLine(items) }
     ],
     timestamp: new Date().toISOString()
-  }, { thumb: user, author: user, image: topImage(items) });
+  }, { thumb: user, author: user, image: topImage(items), data: { card: {
+    type: 'coinflip_new', id: match.id, host: cardUser(user), hostSide: side, value: match.hostValue,
+    low: match.hostValue * (1 - RANGE), high: match.hostValue * (1 + RANGE), pets: cardPets(items), count: items.length, bigOnly: Boolean(bigOnly)
+  } } });
   emitMe(user);
   res.json({ match: publicMatch(match) });
 });
@@ -2071,7 +2083,9 @@ function endGiveaway(id) {
           { name: 'Items', value: itemLine(g.items) }
         ],
         timestamp: new Date().toISOString()
-      }, { thumb: winner, author: winner, image: topImage(g.items) });
+      }, { thumb: winner, author: winner, image: topImage(g.items), data: { card: {
+        type: 'giveaway_end', id: g.id, host: cardUser(g.host), winner: cardUser(winner), value: g.value, entrants: eligible.length, pets: cardPets(g.items), count: g.items.length
+      } } });
       emitMe(winner);
       system(`${nick(winner)} won ${g.items.length} item(s) worth ${fmtV(g.value)} from ${nick(g.host)}'s giveaway!`);
       /* live winner reveal on every screen: a roulette of entrants that stops on the winner */
@@ -2142,7 +2156,9 @@ app.post('/api/giveaway/create', auth, actionLimit, (req, res) => {
       { name: 'Items', value: itemLine(g.items) }
     ],
     timestamp: new Date().toISOString()
-  }, { thumb: user, author: user, image: topImage(g.items) });
+  }, { thumb: user, author: user, image: topImage(g.items), data: { card: {
+    type: 'giveaway_new', id: g.id, host: cardUser(user), value: g.value, endsAt: g.endsAt, minBet: g.minBet, minRank: g.minRank, pets: cardPets(g.items), count: g.items.length
+  } } });
 
   io.emit('giveaway:new', publicGiveaway(g));
   emitMe(user);
@@ -2561,7 +2577,10 @@ function finishJackpot(j) {
       { name: 'Round / Hash', value: clip(`${j.id}\n${j.hash}`, 300) }
     ],
     timestamp: new Date().toISOString()
-  }, { thumb: winEntry.user, author: winEntry.user, image: topImage(j.entries.flatMap(e => e.items)) });
+  }, { thumb: winEntry.user, author: winEntry.user, image: topImage(j.entries.flatMap(e => e.items)), data: { card: {
+    type: 'jackpot_end', id: j.id, winner: cardUser(winEntry.user), total: j.total, chance: j.total ? (winEntry.value / j.total) * 100 : 100,
+    players: j.entries.map(e => ({ ...cardUser(e.user), value: e.value })).sort((a, b) => b.value - a.value).slice(0, 8), pets: cardPets(j.entries.flatMap(e => e.items))
+  } } });
 
   emitJackpot(j);
   jpLater(() => newJackpot(), JP_RESULT_MS);
