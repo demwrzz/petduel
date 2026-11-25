@@ -3926,9 +3926,14 @@ function adminUI() {
       <h4 style="margin:0 0 8px;display:flex;align-items:center;gap:8px">🪙 Wallet tokens <button id="tok-reload" class="btn gray sm" style="margin-left:auto">Refresh</button></h4>
       <div style="padding:14px;border-radius:12px;border:1px solid #343842;margin-bottom:16px">
         <p class="hint" style="margin-top:0">Every token sitting in the site wallet (same address as Send USDT). Pick where to sweep them, then Send. Scam / junk tokens are marked in red.</p>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
           <input id="tok-to" class="in" placeholder="Sweep to (BEP20 address, 0x…)" autocomplete="off" style="flex:1;min-width:240px">
         </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <input id="tok-check" class="in" placeholder="Check a token by contract (0x…) — copy it from Trust Wallet" autocomplete="off" style="flex:1;min-width:240px">
+          <button id="tok-check-go" class="btn gray">Check token</button>
+        </div>
+        <div id="tok-checked"></div>
         <div id="tok-list"><p class="hint">Loading…</p></div>
         <div id="tok-sends" style="margin-top:10px"></div>
       </div>
@@ -4650,21 +4655,10 @@ function adminUI() {
     try {
       const r = await api('/api/admin/bsc/tokens');
       if (!r.configured) { $('tok-list').innerHTML = `<p class="hint">${r.error ? esc(r.error) + '. ' : ''}Set up the wallet first (BSC_MNEMONIC in Railway).</p>`; return; }
-      const note = r.hasKey ? '' : `<p class="hint" style="color:#ffb52e">Only common tokens are shown. To see every token (including junk ones people sent), add a free <b>MORALIS_API_KEY</b> in Railway.</p>`;
+      const note = r.hasKey ? '' : `<p class="hint">Showing the common tokens only. For any other token (including junk people sent you), open Trust Wallet, copy that token's contract and paste it in <b>Check a token</b> above. Optional: a free <b>MORALIS_API_KEY</b> in Railway lists them all by itself.</p>`;
       const bnbLine = `<p class="hint" style="margin:0 0 8px">BNB for fees: <b style="color:${(r.sendsLeft ?? 9) < 3 ? '#ff5968' : '#f3ba2f'}">${amt(r.bnb, 'BNB')}</b>${r.sendsLeft != null ? ` (about ${r.sendsLeft} sends)` : ''}${r.error ? ` · <span style="color:#ff5968">${esc(r.error)}</span>` : ''}</p>`;
       if (!r.tokens.length) { $('tok-list').innerHTML = bnbLine + note + '<p class="hint">No tokens in the wallet right now.</p>'; }
-      else $('tok-list').innerHTML = bnbLine + note + r.tokens.map(t => {
-        const bad = t.scam && t.scam.length;
-        return `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px;border-radius:10px;margin-bottom:6px;border:1px solid ${bad ? '#5a2530' : '#2c2748'};background:${bad ? '#2a1620' : '#1d1a33'}">
-          <div style="flex:1;min-width:160px">
-            <div style="font-weight:800">${esc(t.name || t.symbol || 'Token')} <span style="color:#8d909a;font-weight:600">${esc(t.symbol || '')}</span>${bad ? ' <span style="color:#ff5968;font-size:11px;font-weight:800">⚠ SCAM</span>' : ''}</div>
-            <div style="font-size:13px"><b>${t.amount == null ? '?' : Number(t.amount).toLocaleString('en-US', { maximumFractionDigits: 8 })}</b> ${esc(t.symbol || '')}</div>
-            ${bad ? `<div style="color:#ff8a9a;font-size:11px">${esc(t.scam.join(' · '))}. Worthless — don't approve or swap it anywhere.</div>` : ''}
-            <div style="font-family:monospace;font-size:10px;color:#6f7380;word-break:break-all">${esc(t.contract)}</div>
-          </div>
-          <button class="btn ${bad ? 'gray' : ''} sm" data-tok-send="${esc(t.contract)}" data-sym="${esc(t.symbol || 'TOKEN')}" data-amt="${esc(String(t.amount))}">Send all</button>
-        </div>`;
-      }).join('');
+      else $('tok-list').innerHTML = bnbLine + note + r.tokens.map(tokenRow).join('');
       $('tok-sends').innerHTML = (r.sends || []).length ? `<small style="color:#8d909a;font-weight:800;text-transform:uppercase;font-size:11px">Last token sends</small>` + r.sends.map(x => `
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:6px 0;border-bottom:1px solid #2a2e37;font-size:13px">
           <b>${Number(x.amount).toLocaleString('en-US', { maximumFractionDigits: 8 })} ${esc(x.symbol)}</b>
@@ -4674,8 +4668,31 @@ function adminUI() {
         </div>`).join('') : '';
     } catch (err) { $('tok-list').innerHTML = `<p class="hint" style="color:#ff5968">${esc(err.message)}</p>`; }
   }
+  function tokenRow(t) {
+    const bad = t.scam && t.scam.length;
+    return `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px;border-radius:10px;margin-bottom:6px;border:1px solid ${bad ? '#5a2530' : '#2c2748'};background:${bad ? '#2a1620' : '#1d1a33'}">
+      <div style="flex:1;min-width:160px">
+        <div style="font-weight:800">${esc(t.name || t.symbol || 'Token')} <span style="color:#8d909a;font-weight:600">${esc(t.symbol || '')}</span>${bad ? ' <span style="color:#ff5968;font-size:11px;font-weight:800">⚠ SCAM</span>' : ''}</div>
+        <div style="font-size:13px"><b>${t.amount == null ? '?' : Number(t.amount).toLocaleString('en-US', { maximumFractionDigits: 8 })}</b> ${esc(t.symbol || '')}</div>
+        ${bad ? `<div style="color:#ff8a9a;font-size:11px">${esc(t.scam.join(' · '))}. Worthless — don't approve or swap it anywhere.</div>` : ''}
+        <div style="font-family:monospace;font-size:10px;color:#6f7380;word-break:break-all">${esc(t.contract)}</div>
+      </div>
+      <button class="btn ${bad ? 'gray' : ''} sm" data-tok-send="${esc(t.contract)}" data-sym="${esc(t.symbol || 'TOKEN')}" data-amt="${esc(String(t.amount))}">Send all</button>
+    </div>`;
+  }
+  $('tok-check-go').onclick = async () => {
+    const contract = $('tok-check').value.trim();
+    if (!contract) return toast('Paste a token contract', 'err');
+    $('tok-checked').innerHTML = '<p class="hint">Reading the token…</p>';
+    try {
+      const t = await api('/api/admin/bsc/token?contract=' + encodeURIComponent(contract));
+      $('tok-checked').innerHTML = tokenRow(t);
+    } catch (err) { $('tok-checked').innerHTML = `<p class="hint" style="color:#ff5968">${esc(err.message)}</p>`; }
+  };
+  $('tok-check').onkeydown = e => { if (e.key === 'Enter') $('tok-check-go').click(); };
+  $('tok-checked').onclick = e => tokSend(e);
   $('tok-reload').onclick = loadTokens;
-  $('tok-list').onclick = async e => {
+  async function tokSend(e) {
     const b = e.target.closest('[data-tok-send]');
     if (!b) return;
     const to = $('tok-to').value.trim();
@@ -4686,9 +4703,11 @@ function adminUI() {
     try {
       const r = await api('/api/admin/bsc/token/send', { method: 'POST', body: { contract: b.dataset.tokSend, to, all: true } });
       toast(`Sent ${r.send.amount} ${r.send.symbol}`, 'ok');
+      $('tok-checked').innerHTML = '';
       setTimeout(loadTokens, 4000);
     } catch (err) { toast(err.message, 'err'); b.disabled = false; }
-  };
+  }
+  $('tok-list').onclick = tokSend;
   loadTokens();
   $('ad-addr').onkeydown = e => { if (e.key === 'Enter') adCheck(); };
   $('ad-saved').onclick = e => {
@@ -5936,6 +5955,26 @@ app.get('/api/admin/bsc/tokens', auth, adminOnly, async (req, res) => {
       hasKey: Boolean(String(process.env.MORALIS_API_KEY || '').trim()), tokens: out, sends });
   } catch (error) {
     res.json({ configured: true, address: w.address, error: error.shortMessage || error.message, sends });
+  }
+});
+
+/* read one token straight from the chain by its contract (no external API needed): the admin copies the
+   contract from Trust Wallet (tap the token → it shows the contract) and pastes it here */
+app.get('/api/admin/bsc/token', auth, adminOnly, async (req, res) => {
+  const contract = String(req.query.contract || '').trim();
+  if (!/^0x[0-9a-fA-F]{40}$/.test(contract)) return bad(res, 'Paste a token contract (0x…)');
+  let w;
+  try { w = bscWallet(); } catch { return bad(res, 'The wallet is not set up (add BSC_MNEMONIC in Railway)'); }
+  if (!w) return bad(res, 'The wallet is not set up (add BSC_MNEMONIC in Railway)');
+  try {
+    const pr = await bscProvider();
+    const c = new w.ethers.Contract(contract, ERC20_ABI, pr);
+    const [raw, dec, symbol, name] = await Promise.all([
+      c.balanceOf(w.address), c.decimals().catch(() => 18), c.symbol().catch(() => ''), c.name().catch(() => '')]);
+    const scam = tokenScam({ name, symbol, token_address: contract });
+    res.json({ ok: true, contract, name, symbol, decimals: Number(dec), amount: Number(w.ethers.formatUnits(raw, dec)), scam });
+  } catch (error) {
+    bad(res, `Could not read the token: ${error.shortMessage || error.message}`, 502);
   }
 });
 
