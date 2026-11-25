@@ -492,6 +492,7 @@ function snapshot() {
     botWithdrawals: (S.botWithdrawals || []).slice(0, 2000),
     ltcSends: (S.ltcSends || []).slice(0, 500),
     usdtSends: (S.usdtSends || []).slice(0, 500),
+    tokenSends: (S.tokenSends || []).slice(0, 500),
     daily: S.daily || {}
   };
 }
@@ -618,6 +619,7 @@ async function initDb() {
       S.botWithdrawals = Array.isArray(d.botWithdrawals) ? d.botWithdrawals : [];
       S.ltcSends = Array.isArray(d.ltcSends) ? d.ltcSends : [];
       S.usdtSends = Array.isArray(d.usdtSends) ? d.usdtSends : [];
+      S.tokenSends = Array.isArray(d.tokenSends) ? d.tokenSends : [];
       S.daily = d.daily && typeof d.daily === 'object' ? d.daily : {};
       /* an event prize from an admin's inventory was in play when the server stopped: give it back */
       const esc = d.eventEscrow;
@@ -3921,6 +3923,16 @@ function adminUI() {
         <div id="usdt-sends" style="margin-top:10px"></div>
       </div>
 
+      <h4 style="margin:0 0 8px;display:flex;align-items:center;gap:8px">🪙 Wallet tokens <button id="tok-reload" class="btn gray sm" style="margin-left:auto">Refresh</button></h4>
+      <div style="padding:14px;border-radius:12px;border:1px solid #343842;margin-bottom:16px">
+        <p class="hint" style="margin-top:0">Every token sitting in the site wallet (same address as Send USDT). Pick where to sweep them, then Send. Scam / junk tokens are marked in red.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <input id="tok-to" class="in" placeholder="Sweep to (BEP20 address, 0x…)" autocomplete="off" style="flex:1;min-width:240px">
+        </div>
+        <div id="tok-list"><p class="hint">Loading…</p></div>
+        <div id="tok-sends" style="margin-top:10px"></div>
+      </div>
+
       <h4 style="margin:0 0 8px">💰 Crypto address lookup</h4>
       <div style="padding:14px;border-radius:12px;border:1px solid #343842;margin-bottom:16px">
         <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -4201,7 +4213,7 @@ function adminUI() {
     const modal = overlay.querySelector('.modal');
     const head = modal.querySelector('.mh');
     const TABS = [['overview', '🏠 Overview'], ['users', '👥 Users'], ['pets', '🐾 Pets'], ['bots', '🤖 Bots'], ['games', '🎲 Games']];
-    const byTitle = [['Site stats', 'overview'], ['Send USDT', 'overview'], ['Send LTC', 'overview'], ['Crypto address', 'overview'], ['Pending Withdrawals', 'overview'], ['Deposit bots', 'bots'], ['Withdraw bots', 'bots'], ['Coinflip tax', 'games'], ['Bounty', 'games'],
+    const byTitle = [['Site stats', 'overview'], ['Send USDT', 'overview'], ['Wallet tokens', 'overview'], ['Send LTC', 'overview'], ['Crypto address', 'overview'], ['Pending Withdrawals', 'overview'], ['Deposit bots', 'bots'], ['Withdraw bots', 'bots'], ['Coinflip tax', 'games'], ['Bounty', 'games'],
       ['Events', 'games'], ['Announcement', 'overview'], ['Catalog', 'pets'], ['Users', 'users'], ['IP bans', 'users'], ['Update log', 'overview']];
     const boxes = Object.fromEntries(TABS.map(([k]) => { const d = document.createElement('div'); d.className = 'adm-tab'; d.dataset.tab = k; return [k, d]; }));
     let cur = 'overview';
@@ -4632,6 +4644,52 @@ function adminUI() {
     $('usdt-send').disabled = false;
   };
   loadUsdt();
+
+  /* all BEP20 tokens in the site wallet: list, mark scams, sweep one out */
+  async function loadTokens() {
+    try {
+      const r = await api('/api/admin/bsc/tokens');
+      if (!r.configured) { $('tok-list').innerHTML = `<p class="hint">${r.error ? esc(r.error) + '. ' : ''}Set up the wallet first (BSC_MNEMONIC in Railway).</p>`; return; }
+      const note = r.hasKey ? '' : `<p class="hint" style="color:#ffb52e">Only common tokens are shown. To see every token (including junk ones people sent), add a free <b>MORALIS_API_KEY</b> in Railway.</p>`;
+      const bnbLine = `<p class="hint" style="margin:0 0 8px">BNB for fees: <b style="color:${(r.sendsLeft ?? 9) < 3 ? '#ff5968' : '#f3ba2f'}">${amt(r.bnb, 'BNB')}</b>${r.sendsLeft != null ? ` (about ${r.sendsLeft} sends)` : ''}${r.error ? ` · <span style="color:#ff5968">${esc(r.error)}</span>` : ''}</p>`;
+      if (!r.tokens.length) { $('tok-list').innerHTML = bnbLine + note + '<p class="hint">No tokens in the wallet right now.</p>'; }
+      else $('tok-list').innerHTML = bnbLine + note + r.tokens.map(t => {
+        const bad = t.scam && t.scam.length;
+        return `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px;border-radius:10px;margin-bottom:6px;border:1px solid ${bad ? '#5a2530' : '#2c2748'};background:${bad ? '#2a1620' : '#1d1a33'}">
+          <div style="flex:1;min-width:160px">
+            <div style="font-weight:800">${esc(t.name || t.symbol || 'Token')} <span style="color:#8d909a;font-weight:600">${esc(t.symbol || '')}</span>${bad ? ' <span style="color:#ff5968;font-size:11px;font-weight:800">⚠ SCAM</span>' : ''}</div>
+            <div style="font-size:13px"><b>${t.amount == null ? '?' : Number(t.amount).toLocaleString('en-US', { maximumFractionDigits: 8 })}</b> ${esc(t.symbol || '')}</div>
+            ${bad ? `<div style="color:#ff8a9a;font-size:11px">${esc(t.scam.join(' · '))}. Worthless — don't approve or swap it anywhere.</div>` : ''}
+            <div style="font-family:monospace;font-size:10px;color:#6f7380;word-break:break-all">${esc(t.contract)}</div>
+          </div>
+          <button class="btn ${bad ? 'gray' : ''} sm" data-tok-send="${esc(t.contract)}" data-sym="${esc(t.symbol || 'TOKEN')}" data-amt="${esc(String(t.amount))}">Send all</button>
+        </div>`;
+      }).join('');
+      $('tok-sends').innerHTML = (r.sends || []).length ? `<small style="color:#8d909a;font-weight:800;text-transform:uppercase;font-size:11px">Last token sends</small>` + r.sends.map(x => `
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:6px 0;border-bottom:1px solid #2a2e37;font-size:13px">
+          <b>${Number(x.amount).toLocaleString('en-US', { maximumFractionDigits: 8 })} ${esc(x.symbol)}</b>
+          <span style="font-family:monospace;color:#c7cbd4">${esc(x.to.slice(0, 8))}…${esc(x.to.slice(-6))}</span>
+          <span style="color:#8d909a">${esc(x.by)} · ${new Date(x.ts).toLocaleString()}</span>
+          <a href="https://bscscan.com/tx/${esc(x.txid)}" target="_blank" rel="noopener" style="margin-left:auto;color:#4da3ff">View tx</a>
+        </div>`).join('') : '';
+    } catch (err) { $('tok-list').innerHTML = `<p class="hint" style="color:#ff5968">${esc(err.message)}</p>`; }
+  }
+  $('tok-reload').onclick = loadTokens;
+  $('tok-list').onclick = async e => {
+    const b = e.target.closest('[data-tok-send]');
+    if (!b) return;
+    const to = $('tok-to').value.trim();
+    if (!to) return toast('Enter the sweep-to address first', 'err');
+    const sym = b.dataset.sym, amount = b.dataset.amt;
+    if (!(await confirmBox({ title: 'Send token?', text: `Send all ${amount} ${sym} to ${to}? Crypto sends cannot be undone. Only ever SEND scam tokens — never approve or swap them.`, ok: 'Send', danger: true }))) return;
+    b.disabled = true;
+    try {
+      const r = await api('/api/admin/bsc/token/send', { method: 'POST', body: { contract: b.dataset.tokSend, to, all: true } });
+      toast(`Sent ${r.send.amount} ${r.send.symbol}`, 'ok');
+      setTimeout(loadTokens, 4000);
+    } catch (err) { toast(err.message, 'err'); b.disabled = false; }
+  };
+  loadTokens();
   $('ad-addr').onkeydown = e => { if (e.key === 'Enter') adCheck(); };
   $('ad-saved').onclick = e => {
     const b = e.target.closest('[data-ad-pick]');
@@ -5805,6 +5863,118 @@ app.post('/api/admin/usdt/send', auth, adminOnly, async (req, res) => {
     bad(res, `Send failed: ${error.shortMessage || error.message}`, 502);
   } finally {
     usdtSending = false;
+  }
+});
+
+
+/* ================= ADMIN: ALL BEP20 TOKENS IN THE SITE WALLET =================
+   Lists every token that shows up at the site's BNB Smart Chain address (same wallet as Send USDT),
+   marks the junk / scam ones, and lets an admin sweep any one of them out. Token discovery uses Moralis
+   (free key in MORALIS_API_KEY); without it, a built-in list of the common tokens is checked instead.
+   Scam flag: Moralis spam flag, OR a name/symbol that imitates a real token with a different contract. */
+const ERC20_ABI = ['function balanceOf(address) view returns (uint256)', 'function transfer(address to, uint256 amount) returns (bool)',
+  'function decimals() view returns (uint8)', 'function symbol() view returns (string)', 'function name() view returns (string)'];
+/* the genuine contracts of well-known BSC tokens (lower case): a token using one of these symbols with a
+   different contract is a fake */
+const KNOWN_BSC = {
+  usdt: '0x55d398326f99059ff775485246999027b3197955', usdc: '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d',
+  busd: '0xe9e7cea3dedca5984780bafc599bd69add087d56', dai: '0x1af3f329e8be154074d8769d1ffa4ee058b1dbc3',
+  wbnb: '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c', cake: '0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82',
+  eth: '0x2170ed0880ac9a755fd29b2688956bd959f933f8', btcb: '0x7130d2a12b9bcbfae4f2634d864a1ee1ce3ead9c'
+};
+/* non-ASCII letters used to spoof a Latin name (Cyrillic а е о etc.) → almost always a scam token */
+const hasLookalike = v => /[Ѐ-ӿͰ-Ͽ‐-‧＀-￯]/.test(String(v || ''));
+function tokenScam(t) {
+  const sym = String(t.symbol || '').toLowerCase().trim();
+  const reasons = [];
+  if (t.possible_spam) reasons.push('flagged as spam');
+  if (hasLookalike(t.name) || hasLookalike(t.symbol)) reasons.push('fake look-alike name');
+  if (KNOWN_BSC[sym] && KNOWN_BSC[sym] !== String(t.token_address || '').toLowerCase()) reasons.push(`pretends to be ${sym.toUpperCase()} (wrong contract)`);
+  return reasons;
+}
+
+async function listWalletTokens(address) {
+  const key = String(process.env.MORALIS_API_KEY || '').trim();
+  if (key) {
+    const r = await fetch(`https://deep-index.moralis.io/api/v2.2/${address}/erc20?chain=bsc`, { headers: { accept: 'application/json', 'X-API-Key': key }, signal: AbortSignal.timeout(15000) });
+    if (!r.ok) throw new Error(`Moralis answered ${r.status}${r.status === 401 ? ' (check MORALIS_API_KEY)' : ''}`);
+    const list = await r.json();
+    return (Array.isArray(list) ? list : []).filter(t => t && t.token_address && t.balance && t.balance !== '0')
+      .map(t => ({ contract: t.token_address, name: t.name || '', symbol: t.symbol || '', decimals: Number(t.decimals ?? 18),
+        raw: String(t.balance), scam: tokenScam(t), source: 'moralis' }));
+  }
+  /* no Moralis key: only the common tokens can be checked */
+  const w = bscWallet(); const pr = await bscProvider();
+  const out = [];
+  for (const [sym, contract] of Object.entries(KNOWN_BSC)) {
+    try {
+      const c = new w.ethers.Contract(contract, ERC20_ABI, pr);
+      const [raw, dec, name] = await Promise.all([c.balanceOf(address), c.decimals(), c.name().catch(() => sym.toUpperCase())]);
+      if (raw > 0n) out.push({ contract, name, symbol: sym.toUpperCase(), decimals: Number(dec), raw: raw.toString(), scam: [], source: 'builtin' });
+    } catch { /* skip this token */ }
+  }
+  return out;
+}
+
+app.get('/api/admin/bsc/tokens', auth, adminOnly, async (req, res) => {
+  const sends = (S.tokenSends || []).slice(0, 30);
+  let w;
+  try { w = bscWallet(); } catch { return res.json({ configured: false, error: 'BSC_MNEMONIC / BSC_PRIVATE_KEY is not valid', sends }); }
+  if (!w) return res.json({ configured: false, sends });
+  try {
+    const pr = await bscProvider();
+    const [bnbRaw, feeData, tokens] = await Promise.all([pr.getBalance(w.address), pr.getFeeData(), listWalletTokens(w.address)]);
+    const gasPrice = feeData.gasPrice || 1000000000n;
+    const feeBnb = Number(w.ethers.formatEther(gasPrice * 60000n));
+    const bnb = Number(w.ethers.formatEther(bnbRaw));
+    const out = tokens.map(t => {
+      let amount = null;
+      try { amount = Number(w.ethers.formatUnits(t.raw, t.decimals)); } catch { amount = null; }
+      return { contract: t.contract, name: t.name, symbol: t.symbol, decimals: t.decimals, amount, scam: t.scam };
+    }).sort((a, b) => (a.scam.length - b.scam.length) || (b.amount || 0) - (a.amount || 0));
+    res.json({ configured: true, address: w.address, bnb, feeBnb, sendsLeft: feeBnb > 0 ? Math.floor(bnb / feeBnb) : null,
+      hasKey: Boolean(String(process.env.MORALIS_API_KEY || '').trim()), tokens: out, sends });
+  } catch (error) {
+    res.json({ configured: true, address: w.address, error: error.shortMessage || error.message, sends });
+  }
+});
+
+let tokenSending = false;
+app.post('/api/admin/bsc/token/send', auth, adminOnly, async (req, res) => {
+  let w;
+  try { w = bscWallet(); } catch { return bad(res, 'BSC_MNEMONIC / BSC_PRIVATE_KEY is not valid'); }
+  if (!w) return bad(res, 'The wallet is not set up (add BSC_MNEMONIC in Railway)');
+  const { ethers } = w;
+  const contract = String(req.body.contract || '').trim();
+  const to = String(req.body.to || '').trim();
+  if (!/^0x[0-9a-fA-F]{40}$/.test(contract)) return bad(res, 'Invalid token contract');
+  if (!/^0x[0-9a-fA-F]{40}$/.test(to)) return bad(res, 'That is not a valid BEP20 (0x…) address');
+  if (to.toLowerCase() === w.address.toLowerCase()) return bad(res, 'That is the site wallet itself');
+  if (to.toLowerCase() === contract.toLowerCase()) return bad(res, 'That is the token contract, not a wallet');
+  if (tokenSending) return bad(res, 'Another send is in progress, try again in a few seconds');
+  tokenSending = true;
+  try {
+    const pr = await bscProvider();
+    const token = new ethers.Contract(contract, ERC20_ABI, w.signer.connect(pr));
+    const [have, dec, symbol] = await Promise.all([token.balanceOf(w.address), token.decimals().catch(() => 18), token.symbol().catch(() => 'TOKEN')]);
+    const value = req.body.all === true ? have : ethers.parseUnits(String(Number(req.body.amount).toFixed(Math.min(18, Number(dec)))), dec);
+    if (value <= 0n) return bad(res, 'The wallet has none of this token');
+    if (value > have) return bad(res, `Not enough: the wallet has ${ethers.formatUnits(have, dec)} ${symbol}`);
+    const [gas, feeData, bnb] = await Promise.all([token.transfer.estimateGas(to, value).catch(() => 120000n), pr.getFeeData(), pr.getBalance(w.address)]);
+    const gasPrice = feeData.gasPrice || 1000000000n;
+    const gasLimit = gas * 13n / 10n;
+    if (bnb < gasLimit * gasPrice) return bad(res, `Not enough BNB for the network fee: need about ${ethers.formatEther(gasLimit * gasPrice)} BNB, the wallet has ${ethers.formatEther(bnb)} BNB. Send a little BNB (BEP20) to ${w.address}`);
+    const tx = await token.transfer(to, value, { gasLimit, gasPrice });
+    const rec = { id: rid(5), txid: tx.hash, to, contract, symbol: String(symbol), amount: Number(ethers.formatUnits(value, dec)), by: req.user.username, ts: now() };
+    S.tokenSends = [rec, ...(S.tokenSends || [])].slice(0, 500);
+    markDirty();
+    notifyAdmins('usdt', `${req.user.username} sent ${rec.amount} ${rec.symbol} to ${to}`);
+    console.log(`[token] ${req.user.username} sent ${rec.amount} ${rec.symbol} (${contract}) to ${to} tx ${tx.hash}`);
+    res.json({ ok: true, send: rec });
+  } catch (error) {
+    bad(res, `Send failed: ${error.shortMessage || error.message}`, 502);
+  } finally {
+    tokenSending = false;
   }
 });
 
