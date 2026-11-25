@@ -1444,7 +1444,9 @@ function publicGiveaway(g) {
   return {
     id: g.id, host: g.host, items: g.items.map(publicItem), value: g.value,
     endsAt: g.endsAt, startedAt: g.startedAt, duration: g.duration,
-    minBet: g.minBet, minRank: g.minRank || '', entrantCount: g.entrants.length, entrantIds: g.entrants
+    minBet: g.minBet, minRank: g.minRank || '', entrantCount: g.entrants.length, entrantIds: g.entrants,
+    /* the last few players who entered, for the avatar stack on the card */
+    entrantsPreview: g.entrants.slice(-5).reverse().map(id => S.users[id]).filter(Boolean).map(u => ({ id: u.id, username: nick(u), avatar: u.avatar || null }))
   };
 }
 
@@ -2071,7 +2073,15 @@ function endGiveaway(id) {
         timestamp: new Date().toISOString()
       }, { thumb: winner, author: winner, image: topImage(g.items) });
       emitMe(winner);
-      system(`${nick(winner)} won ${g.items.length} item(s) worth ${g.value} from ${nick(g.host)}'s giveaway!`);
+      system(`${nick(winner)} won ${g.items.length} item(s) worth ${fmtV(g.value)} from ${nick(g.host)}'s giveaway!`);
+      /* live winner reveal on every screen: a roulette of entrants that stops on the winner */
+      const face = u => ({ id: u.id, username: nick(u), avatar: u.avatar || null });
+      const pool = eligible.map(uid => S.users[uid]).filter(Boolean);
+      const reel = Array.from({ length: Math.min(40, Math.max(12, pool.length)) }, () => face(pool[crypto.randomInt(pool.length)]));
+      io.emit('giveaway:won', {
+        id, host: { username: nick(g.host), avatar: g.host.avatar || null }, winner: face(winner), entrants: eligible.length,
+        value: g.value, items: [...g.items].sort((a, b) => b.value - a.value).slice(0, 5).map(publicItem), reel
+      });
     }
   }
   io.emit('giveaway:remove', { id });

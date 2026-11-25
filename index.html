@@ -1733,6 +1733,91 @@
     .hero { box-shadow: 0 10px 34px -12px rgba(255, 79, 184, .55); }
     .foot-brand { font-family: Fredoka, Rubik, sans-serif; }
 
+    /* ================= GIVEAWAY CARDS (v2) ================= */
+    .giveaways { gap: 12px; }
+    .gw2 { position: relative; padding: 2px; border-radius: 20px; background: linear-gradient(120deg, #ff3d9a, #c64bff, #ffd166, #ff3d9a); background-size: 300% 100%; animation: gw2-border 6s linear infinite; box-shadow: 0 14px 34px -16px rgba(255, 61, 154, .8); }
+    @keyframes gw2-border { to { background-position: 300% 0; } }
+    .gw2-inner { position: relative; overflow: hidden; padding: 12px 12px 12px; border-radius: 18px; background: radial-gradient(circle at 50% 30%, #3a1b4f 0%, #1b1533 55%, #141127 100%); }
+    .gw2-top { display: flex; align-items: center; justify-content: space-between; }
+    .gw2-tag { padding: 4px 9px; border-radius: 999px; color: #fff; background: linear-gradient(120deg, #ff3d9a, #c64bff); font-size: 10px; font-weight: 900; letter-spacing: 1.2px; box-shadow: 0 4px 14px -6px rgba(255, 61, 154, .9); }
+    .gw2-ring { position: relative; width: 50px; height: 50px; display: grid; place-items: center; }
+    .gw2-ring svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+    .gw2-ring circle { fill: none; stroke-width: 3.5; }
+    .gw2-ring .bg { stroke: rgba(255, 255, 255, .08); }
+    .gw2-ring .fg { stroke: #ff5fb8; stroke-linecap: round; stroke-dasharray: 100; transition: stroke-dashoffset .3s linear; filter: drop-shadow(0 0 4px rgba(255, 95, 184, .8)); }
+    .gw2-ring b { position: relative; font-size: 10px; font-weight: 900; color: #fff; letter-spacing: -.2px; }
+    .gw2.urgent .gw2-ring .fg { stroke: #ff5968; }
+    .gw2.urgent .gw2-ring { animation: gw2-pulse .9s ease-in-out infinite; }
+    .gw2.urgent { animation-duration: 1.5s; }
+    @keyframes gw2-pulse { 50% { transform: scale(1.12); } }
+    .gw2-prize { position: relative; display: grid; place-items: center; height: 118px; margin: 2px 0 0; }
+    .gw2-rays { position: absolute; width: 190px; height: 190px; border-radius: 50%; background: repeating-conic-gradient(from 0deg, rgba(255, 210, 240, .16) 0 10deg, transparent 10deg 24deg); -webkit-mask: radial-gradient(circle, #000 18%, transparent 68%); mask: radial-gradient(circle, #000 18%, transparent 68%); animation: gw2-spin 14s linear infinite; }
+    @keyframes gw2-spin { to { transform: rotate(360deg); } }
+    .gw2-main { position: relative; width: 96px; height: 96px; object-fit: contain; border-radius: 18px; filter: drop-shadow(0 10px 18px rgba(0, 0, 0, .55)) drop-shadow(0 0 16px rgba(255, 95, 184, .45)); animation: gw2-float 3s ease-in-out infinite; }
+    @keyframes gw2-float { 50% { transform: translateY(-6px) rotate(-2deg); } }
+    .gw2-prize .tb { bottom: 2px; }
+    .gw2-spark { position: absolute; color: #ffd1ea; font-size: 12px; text-shadow: 0 0 8px #ff5fb8; animation: gw2-twinkle 2.4s ease-in-out infinite; }
+    .gw2-spark.s1 { top: 14px; left: 22%; } .gw2-spark.s2 { top: 30px; right: 20%; animation-delay: .8s; font-size: 9px; } .gw2-spark.s3 { bottom: 16px; left: 30%; animation-delay: 1.5s; font-size: 10px; }
+    @keyframes gw2-twinkle { 0%, 100% { opacity: .15; transform: scale(.7); } 50% { opacity: 1; transform: scale(1.2); } }
+    .gw2-name { overflow: hidden; color: #fff; font-family: Fredoka, Rubik, sans-serif; font-size: 15px; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+    .gw2-value { display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 1px; font-family: Fredoka, Rubik, sans-serif; font-size: 24px; font-weight: 700; background: linear-gradient(90deg, #fff, #ffd1ea, #ff8ad0); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .gw2-value .gem-i { width: 20px; height: 20px; }
+    .gw2-more { display: flex; align-items: center; justify-content: center; gap: 5px; margin-top: 8px; }
+    .gw2-mini { width: 32px; height: 32px; padding: 3px; border-radius: 9px; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .08); }
+    .gw2-mini img { width: 100%; height: 100%; object-fit: contain; }
+    .gw2-more span { margin-left: 3px; color: #c9b8ff; font-size: 11px; font-weight: 800; }
+    .gw2-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed rgba(255, 255, 255, .1); font-size: 11px; color: #b9b2d6; }
+    .gw2-host, .gw2-people { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    .gw2-host > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .gw2-host .av, .gw2-face .av { width: 22px; height: 22px; font-size: 10px; }
+    .gw2-faces { display: flex; }
+    .gw2-face { margin-left: -7px; border-radius: 50%; box-shadow: 0 0 0 2px #1b1533; }
+    .gw2-face:first-child { margin-left: 0; }
+    .gw2-people b { color: #fff; }
+    .gw2-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+    .gw2-chip { padding: 3px 8px; border-radius: 999px; background: rgba(255, 255, 255, .07); color: #e4def7; font-size: 10.5px; font-weight: 800; }
+    .gw2-actions { display: flex; gap: 6px; margin-top: 10px; }
+    .gw2-btn { position: relative; flex: 1; overflow: hidden; height: 40px; border-radius: 12px; color: #fff; font-weight: 900; font-size: 13px; background: linear-gradient(120deg, #ff3d9a, #c64bff, #ff6fc4, #ff3d9a); background-size: 200% 100%; animation: chroma-flow 4s linear infinite; box-shadow: 0 8px 22px -10px rgba(255, 61, 154, .95); }
+    .gw2-btn::after { content: ""; position: absolute; top: 0; bottom: 0; left: -40%; width: 30%; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent); transform: skewX(-20deg); animation: gw2-shine 2.6s ease-in-out infinite; }
+    @keyframes gw2-shine { 0% { left: -40%; } 60%, 100% { left: 130%; } }
+    .gw2-btn:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-1px); }
+    .gw2-btn.in { background: linear-gradient(120deg, #1f6b4d, #1a5a4a); animation: none; box-shadow: none; cursor: default; opacity: 1; }
+    .gw2-btn.in::after, .gw2-btn.off::after { display: none; }
+    .gw2-btn.off { background: #2a2547; animation: none; box-shadow: none; color: #b9b2d6; }
+    .gw2-del { width: 40px; height: 40px; border-radius: 12px; background: #3a1726; color: #ff8a9a; }
+    .gw2.joined .gw2-inner::before { content: "✔ ENTERED"; position: absolute; top: 14px; right: -34px; z-index: 2; width: 130px; padding: 3px 0; transform: rotate(35deg); background: #2bd38a; color: #04240f; font-size: 9px; font-weight: 900; letter-spacing: 1px; text-align: center; }
+
+    /* ================= GIVEAWAY WINNER REVEAL ================= */
+    .gww { position: fixed; inset: 0; z-index: 300; display: grid; place-items: center; padding: 16px; background: radial-gradient(circle at 50% 40%, rgba(120, 40, 160, .55), rgba(6, 4, 16, .88)); backdrop-filter: blur(6px); animation: gww-in .3s ease both; }
+    .gww.out { animation: gww-out .3s ease both; }
+    @keyframes gww-in { from { opacity: 0; } }
+    @keyframes gww-out { to { opacity: 0; } }
+    .gww-card { position: relative; width: min(640px, 100%); padding: 22px 18px 20px; border-radius: 24px; text-align: center; background: linear-gradient(180deg, #24173f, #150f2b); border: 2px solid transparent; background-clip: padding-box; box-shadow: 0 0 0 2px rgba(255, 95, 184, .55), 0 30px 90px -20px rgba(255, 61, 154, .6); animation: gww-pop .45s cubic-bezier(.2, 1.4, .4, 1) both; }
+    @keyframes gww-pop { from { transform: scale(.85) translateY(20px); opacity: 0; } }
+    .gww-x { position: absolute; top: 10px; right: 12px; width: 32px; height: 32px; border-radius: 10px; background: rgba(255, 255, 255, .08); color: #fff; font-size: 20px; }
+    .gww-kicker { color: #ffb8e0; font-size: 12px; font-weight: 900; letter-spacing: .8px; text-transform: uppercase; }
+    .gww-title { margin: 6px 0 14px; font-family: Fredoka, Rubik, sans-serif; font-size: clamp(24px, 5vw, 34px); color: #fff; }
+    .gww-reel { position: relative; overflow: hidden; height: 112px; border-radius: 16px; background: rgba(0, 0, 0, .3); -webkit-mask: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent); mask: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent); }
+    .gww-pointer { position: absolute; top: 0; bottom: 0; left: 50%; z-index: 2; width: 3px; transform: translateX(-50%); background: linear-gradient(#ffd166, #ff3d9a); box-shadow: 0 0 14px #ff3d9a; }
+    .gww-pointer::before { content: ""; position: absolute; top: -2px; left: 50%; transform: translateX(-50%); border: 9px solid transparent; border-top-color: #ffd166; }
+    .gww-strip { display: flex; gap: 8px; padding: 12px 8px; will-change: transform; }
+    .gww-tile { flex: none; display: grid; justify-items: center; gap: 6px; width: 84px; padding: 8px 4px; border-radius: 14px; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .08); }
+    .gww-tile .av { width: 46px; height: 46px; font-size: 18px; }
+    .gww-tile small { max-width: 76px; overflow: hidden; color: #d9d3f2; font-size: 10px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+    .gww.done .gww-tile.win { background: linear-gradient(135deg, #ff3d9a, #c64bff); border-color: #ffd1ea; box-shadow: 0 0 24px rgba(255, 61, 154, .9); transform: scale(1.08); transition: transform .3s, box-shadow .3s; }
+    .gww.done .gww-tile.win small { color: #fff; }
+    .gww-result { max-height: 0; overflow: hidden; opacity: 0; transition: max-height .5s ease, opacity .5s ease .1s; }
+    .gww.done .gww-result { max-height: 260px; opacity: 1; }
+    .gww-name { margin-top: 16px; font-family: Fredoka, Rubik, sans-serif; font-size: clamp(26px, 6vw, 40px); background: linear-gradient(90deg, #fff, #ffd1ea, #ff5fb8, #c9a6ff); -webkit-background-clip: text; background-clip: text; color: transparent; animation: gww-bounce .6s cubic-bezier(.2, 1.6, .4, 1) both .1s; }
+    @keyframes gww-bounce { from { transform: scale(.6); } }
+    .gww.me .gww-name { font-size: clamp(32px, 8vw, 52px); }
+    .gww-value { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 2px; color: #fff; font-family: Fredoka, Rubik, sans-serif; font-size: 22px; }
+    .gww-pets { display: flex; justify-content: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+    .gww-pet { position: relative; width: 62px; height: 62px; padding: 5px; border-radius: 14px; background: rgba(255, 255, 255, .07); animation: gw2-float 3s ease-in-out infinite; }
+    .gww-pet:nth-child(2) { animation-delay: .3s; } .gww-pet:nth-child(3) { animation-delay: .6s; } .gww-pet:nth-child(4) { animation-delay: .9s; }
+    .gww-pet img { width: 100%; height: 100%; object-fit: contain; }
+    .gww-confetti { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
+
   </style>
 </head>
 
@@ -2930,51 +3015,131 @@
     /* ---------- Giveaways ---------- */
     function renderGiveaways() {
       const list = asArray(STATE.giveaways);
-      const sig = JSON.stringify([list.map(g => [g.id, g.entrantCount]), ME && ME.id, ME && ME.isAdmin]);
+      const sig = JSON.stringify([list.map(g => [g.id, g.entrantCount, asArray(g.entrantsPreview).map(u => u.id).join()]), ME && ME.id, ME && ME.isAdmin]);
       if (sig === gwSig) return;
       gwSig = sig;
 
       $("#giveaways").innerHTML = list.map(g => {
         const items = byValue(g.items);
+        const top = items[0] || {};
         const entered = ME && asArray(g.entrantIds).includes(ME.id);
         const mine = ME && g.host && g.host.id === ME.id;
+        const count = Number(g.entrantCount || 0);
 
         const chips = [
-          Number(g.minBet) > 0 ? `<span class="gw-chip">Min bet ${fmt(g.minBet)}</span>` : "",
-          g.minRank ? `<span class="gw-chip" style="color:${rankColor(g.minRank)}">Min rank ${esc(g.minRank)}</span>` : ""
+          Number(g.minBet) > 0 ? `<span class="gw2-chip">💸 Min bet ${fmt(g.minBet)}</span>` : "",
+          g.minRank ? `<span class="gw2-chip" style="color:${rankColor(g.minRank)}">🏅 ${esc(g.minRank)}+</span>` : ""
         ].join("");
 
         const button = mine
-          ? '<button class="btn gray sm" disabled>Your giveaway</button>'
+          ? '<button class="gw2-btn off" disabled>Your giveaway</button>'
           : entered
-            ? '<button class="btn gray sm" disabled>✔ Entered</button>'
-            : `<button class="btn sun sm" data-action="enter-giveaway" data-id="${esc(g.id)}">Enter</button>`;
+            ? '<button class="gw2-btn in" disabled>✔ You\'re in! Good luck</button>'
+            : `<button class="gw2-btn" data-action="enter-giveaway" data-id="${esc(g.id)}"><span>🎉 Enter giveaway</span></button>`;
+
+        const faces = asArray(g.entrantsPreview).map(u => `<span class="gw2-face" title="${esc(u.username)}">${avatar(u, "sm")}</span>`).join("");
 
         return `
-          <div class="gw-card enter">
-            <div class="gw-head">
-              ${avatar(g.host, "md")}
-              <div class="gw-title">
-                <b>${esc(getUsername(g.host))}'s Giveaway</b>
-                <small>${GEM}${fmt(g.value)} · ${Number(g.entrantCount || 0)} entered</small>
+          <div class="gw2 ${entered ? "joined" : ""}" data-gw-end="${Number(g.endsAt || 0)}">
+            <div class="gw2-inner">
+              <div class="gw2-top">
+                <span class="gw2-tag">🎁 GIVEAWAY</span>
+                <div class="gw2-ring" title="Time left">
+                  <svg viewBox="0 0 40 40"><circle class="bg" cx="20" cy="20" r="17"/><circle class="fg ticker-ring" cx="20" cy="20" r="17" pathLength="100" data-end="${Number(g.endsAt || 0)}" data-dur="${Number(g.duration || 60)}"/></svg>
+                  <b class="ticker-giveaway" data-end="${Number(g.endsAt || 0)}"></b>
+                </div>
               </div>
-              <div class="gw-timer ticker-giveaway" data-end="${Number(g.endsAt || 0)}"></div>
+
+              <div class="gw2-prize" data-tip="${esc(itemLabel(top))}" data-tip-value="${esc(fmt(top.value))}">
+                <div class="gw2-rays"></div>
+                <div class="gw2-spark s1">✦</div><div class="gw2-spark s2">✦</div><div class="gw2-spark s3">✦</div>
+                <img class="gw2-main" src="${esc(itemImage(top))}" alt="">
+                ${thumbBadges(top)}
+              </div>
+              <div class="gw2-name">${esc(itemLabel(top))}</div>
+              <div class="gw2-value">${GEM}${fmt(g.value)}</div>
+
+              ${items.length > 1 ? `<div class="gw2-more">${items.slice(1, 5).map(i => `
+                <div class="gw2-mini" data-tip="${esc(itemLabel(i))}" data-tip-value="${esc(fmt(i.value))}"><img src="${esc(itemImage(i))}" alt=""></div>`).join("")}
+                <span>+${items.length - 1} more</span></div>` : ""}
+
+              <div class="gw2-meta">
+                <span class="gw2-host">${avatar(g.host, "sm")}<span>by <b>${esc(getUsername(g.host))}</b></span></span>
+                <span class="gw2-people">${faces ? `<span class="gw2-faces">${faces}</span>` : ""}<b>${count}</b> ${count === 1 ? "entry" : "entries"}</span>
+              </div>
+              ${chips ? `<div class="gw2-chips">${chips}</div>` : ""}
+
+              <div class="gw2-actions">${button}${ME && ME.isAdmin ? `<button class="gw2-del" data-action="gw-delete" data-id="${esc(g.id)}" title="Delete giveaway (admin)">🗑</button>` : ""}</div>
             </div>
-
-            <div class="gw-pets">
-              ${items.slice(0, 5).map(i => `
-                <div class="gw-pet" data-tip="${esc(itemLabel(i))}" data-tip-value="${esc(fmt(i.value))}">
-                  <div class="gw-pet-img"><img src="${esc(itemImage(i))}" alt="">${thumbBadges(i)}</div>
-                  <div class="gw-pet-name">${esc(itemLabel(i))}</div>
-                  <b>${GEM}${fmt(i.value)}</b>
-                </div>`).join("")}
-            </div>
-
-            <div class="gw-bar"><i class="ticker-bar" data-end="${Number(g.endsAt || 0)}" data-dur="${Number(g.duration || 60)}"></i></div>
-
-            <div class="gw-foot">${chips}<span style="flex:1"></span>${ME && ME.isAdmin ? `<button class="btn red sm" data-action="gw-delete" data-id="${esc(g.id)}" title="Delete giveaway (admin)">🗑</button>` : ""}${button}</div>
           </div>`;
       }).join("");
+    }
+
+    /* ---------- giveaway winner reveal: roulette of entrants, then confetti ---------- */
+    function confettiBurst(host, amount = 160) {
+      const cv = document.createElement("canvas");
+      cv.className = "gww-confetti";
+      host.appendChild(cv);
+      const ctx = cv.getContext("2d");
+      const W = cv.width = host.clientWidth * devicePixelRatio, H = cv.height = host.clientHeight * devicePixelRatio;
+      const colors = ["#ff3d9a", "#ff8ad0", "#c64bff", "#8b5cf6", "#ffd166", "#4fd8ff", "#ffffff"];
+      const parts = Array.from({ length: amount }, () => ({
+        x: W / 2 + (Math.random() - .5) * W * .3, y: H * .45, vx: (Math.random() - .5) * 26 * devicePixelRatio, vy: (-Math.random() * 22 - 8) * devicePixelRatio,
+        s: (5 + Math.random() * 7) * devicePixelRatio, r: Math.random() * 6, vr: (Math.random() - .5) * .4, c: colors[Math.floor(Math.random() * colors.length)]
+      }));
+      const start = performance.now();
+      (function frame(t) {
+        ctx.clearRect(0, 0, W, H);
+        for (const p of parts) {
+          p.vy += .55 * devicePixelRatio; p.vx *= .99; p.x += p.vx; p.y += p.vy; p.r += p.vr;
+          ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.fillStyle = p.c; ctx.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2); ctx.restore();
+        }
+        if (t - start < 4500 && cv.isConnected) requestAnimationFrame(frame); else cv.remove();
+      })(start);
+    }
+
+    function showGiveawayWin(d) {
+      if (!d || !d.winner) return;
+      document.getElementById("gwWin")?.remove();
+      const me = ME && ME.id === d.winner.id;
+      const reel = asArray(d.reel).length ? asArray(d.reel).slice() : [d.winner];
+      const stop = Math.max(0, reel.length - 6);
+      reel[stop] = d.winner;
+      const el = document.createElement("div");
+      el.id = "gwWin";
+      el.className = "gww" + (me ? " me" : "");
+      el.innerHTML = `
+        <div class="gww-card">
+          <button class="gww-x" aria-label="Close">×</button>
+          <div class="gww-kicker">🎁 ${esc(d.host.username)}'s giveaway · ${Number(d.entrants || 0)} entries</div>
+          <div class="gww-title">Drawing the winner…</div>
+          <div class="gww-reel"><div class="gww-pointer"></div><div class="gww-strip">${reel.map((u, i) => `<div class="gww-tile ${i === stop ? "win" : ""}">${avatar(u, "md")}<small>${esc(u.username)}</small></div>`).join("")}</div></div>
+          <div class="gww-result">
+            <div class="gww-name">${me ? "🎉 YOU WON! 🎉" : `${esc(d.winner.username)} won!`}</div>
+            <div class="gww-value">${GEM}${fmt(d.value)}</div>
+            <div class="gww-pets">${asArray(d.items).map(i => `<div class="gww-pet" data-tip="${esc(itemLabel(i))}" data-tip-value="${esc(fmt(i.value))}"><img src="${esc(itemImage(i))}" alt="">${thumbBadges(i)}</div>`).join("")}</div>
+          </div>
+        </div>`;
+      document.body.appendChild(el);
+      const close = () => { el.classList.add("out"); setTimeout(() => el.remove(), 300); };
+      el.querySelector(".gww-x").onclick = close;
+      el.addEventListener("mousedown", e => { if (e.target === el) close(); });
+      const strip = el.querySelector(".gww-strip");
+      const reveal = () => {
+        el.classList.add("done");
+        el.querySelector(".gww-title").textContent = me ? "Congratulations!" : "We have a winner!";
+        confettiBurst(el, me ? 260 : 150);
+        setTimeout(close, me ? 14000 : 9000);
+      };
+      requestAnimationFrame(() => {
+        const tile = strip.children[stop];
+        const box = el.querySelector(".gww-reel");
+        const target = -(tile.offsetLeft + tile.offsetWidth / 2 - box.clientWidth / 2) + (Math.random() - .5) * tile.offsetWidth * .5;
+        if (matchMedia("(prefers-reduced-motion: reduce)").matches || reel.length < 3) { strip.style.transform = `translateX(${target}px)`; return reveal(); }
+        strip.style.transition = "transform 5.2s cubic-bezier(.12, .7, .08, 1)";
+        strip.style.transform = `translateX(${target}px)`;
+        setTimeout(reveal, 5300);
+      });
     }
 
     function showGiveaway() {
@@ -3365,6 +3530,7 @@
       });
 
       socket.on("chat:clear", () => { STATE.chat = []; renderChat(); });
+      socket.on("giveaway:won", d => showGiveawayWin(d));
       socket.on("badge:new", b => { if (b && b.name) toast(`${b.icon} New badge unlocked: ${b.name}!`, "ok"); });
 
       socket.on("chat:purge", d => {
@@ -3531,6 +3697,14 @@
 
       document.querySelectorAll(".ticker-jp").forEach(el => {
         el.textContent = Math.max(0, Math.ceil((Number(el.dataset.end) - time) / 1000));
+      });
+
+      document.querySelectorAll(".ticker-ring").forEach(el => {
+        const dur = Math.max(1, Number(el.dataset.dur)) * 1000;
+        el.style.strokeDashoffset = 100 - Math.max(0, Math.min(100, ((Number(el.dataset.end) - time) / dur) * 100));
+      });
+      document.querySelectorAll("[data-gw-end]").forEach(el => {
+        el.classList.toggle("urgent", Number(el.dataset.gwEnd) - time < 30000);
       });
 
       document.querySelectorAll(".ticker-bar").forEach(el => {
