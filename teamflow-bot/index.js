@@ -19,6 +19,7 @@ const {
 } = require('discord.js');
 
 const CONFIG = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
+let banner = null; try { banner = require('./banner'); } catch (e) { console.warn('banner images off:', e.message); }
 const TOKEN = (process.env.DISCORD_TOKEN || '').trim();
 const ONLY_GUILD = (process.env.GUILD_ID || '').trim();
 const P = String(process.env.PREFIX || CONFIG.prefix || '!').trim() || '!';
@@ -55,16 +56,24 @@ const logChannel = g => findChannel(g, CONFIG.logChannelId, CONFIG.channelNames.
 const optionById = id => (CONFIG.options || []).find(o => o.id === id);
 
 /* ---------------- the buy/sell panel ---------------- */
-function panelMessage() {
+function panelEmbed() {
   const lines = (CONFIG.options || []).map(o => `${o.emoji || '•'} **${o.label}** — ${o.blurb}`);
-  const e = embed(`${BRAND} — ${CONFIG.subtitle || 'Buy & Sell'}`,
+  return embed(`${BRAND} — ${CONFIG.subtitle || 'Buy & Sell'}`,
     `Open a ticket below and a staff member will help you.\n\n${lines.join('\n')}\n\n` +
     `**Payment:** ${(CONFIG.paymentMethods || []).join(' · ')}\n` +
     `Please stay in the ticket until a staff member confirms your order. Never send anything to someone who DMs you first.`);
-  const row = new ActionRowBuilder().addComponents(
-    (CONFIG.options || []).map(o => new ButtonBuilder().setCustomId(`tf_open:${o.id}`).setLabel(o.label)
-      .setEmoji(o.emoji || '🎫').setStyle(o.id === 'buy' ? ButtonStyle.Success : o.id === 'sell' ? ButtonStyle.Primary : ButtonStyle.Secondary)));
-  return { embeds: [e], components: [row] };
+}
+const panelButtons = () => new ActionRowBuilder().addComponents(
+  (CONFIG.options || []).map(o => new ButtonBuilder().setCustomId(`tf_open:${o.id}`).setLabel(o.label)
+    .setEmoji(o.emoji || '🎫').setStyle(o.id === 'buy' ? ButtonStyle.Success : o.id === 'sell' ? ButtonStyle.Primary : ButtonStyle.Secondary)));
+/* with a rendered banner image when possible, otherwise a plain embed */
+async function panelMessage() {
+  const e = panelEmbed(), components = [panelButtons()];
+  if (banner) {
+    try { const buf = await banner.panelBanner(CONFIG); return { embeds: [e.setImage('attachment://panel.png')], components, files: [new AttachmentBuilder(buf, { name: 'panel.png' })] }; }
+    catch (err) { console.warn('panel banner failed:', err.message); }
+  }
+  return { embeds: [e], components };
 }
 
 const ticketControls = () => new ActionRowBuilder().addComponents(
@@ -107,7 +116,9 @@ async function openTicket(interaction, optId) {
     `• Your **GrowID** (Growtopia username)\n\n` +
     `A staff member will be with you shortly. Only deal with staff inside this ticket — never with someone who DMs you.`);
   const staffPing = staffRoleIds(guild).map(id => `<@&${id}>`).join(' ');
-  await ch.send({ content: `${interaction.user} ${staffPing}`.trim(), embeds: [e], components: [ticketControls()] });
+  const payload = { content: `${interaction.user} ${staffPing}`.trim(), embeds: [e], components: [ticketControls()] };
+  if (banner) { try { payload.files = [new AttachmentBuilder(await banner.ticketBanner(CONFIG, opt), { name: 'ticket.png' })]; payload.embeds = [e.setImage('attachment://ticket.png')]; } catch { /* plain embed */ } }
+  await ch.send(payload);
   await interaction.editReply({ content: `Your ticket is open: ${ch}` });
   const log = logChannel(guild);
   if (log && log.id !== ch.id) log.send({ embeds: [embed('🎫 Ticket opened', `**${opt.label}** · ${interaction.user} · ${ch}`)] }).catch(() => {});
@@ -179,7 +190,7 @@ async function doWipeAndSetup(guild, invoker, backup) {
   await log.send({ embeds: [embed('🗄️ Server backup', `Backup of the old server taken before the TeamFlow setup by ${invoker}. Keep this file safe.`)], files: [file] }).catch(() => {});
   await rules.send({ embeds: [embed(`${BRAND} — Rules`, CONFIG.setup.rulesText || 'Rules')] }).catch(() => {});
   await prices.send({ embeds: [embed(`${BRAND} — Prices`, CONFIG.setup.pricesText || 'Prices')] }).catch(() => {});
-  await panel.send(panelMessage()).catch(() => {});
+  await panel.send(await panelMessage()).catch(() => {});
 
   /* delete the old channels */
   let deleted = 0, failed = 0;
@@ -207,7 +218,7 @@ client.on(Events.MessageCreate, async msg => {
 
   if (name === 'panel') {
     if (!staff) return;
-    await msg.channel.send(panelMessage()).catch(e => msg.reply(`Could not post the panel: ${e.message}`));
+    await msg.channel.send(await panelMessage()).catch(e => msg.reply(`Could not post the panel: ${e.message}`));
     msg.delete().catch(() => {});
     return;
   }
