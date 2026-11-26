@@ -1746,59 +1746,33 @@
     .badge .bi .ico { width: 26px; height: 26px; }
     .badge-chip .bi .ico { width: 14px; height: 14px; }
 
-    /* ================= GIVEAWAY CARDS (v2) ================= */
-    .giveaways { gap: 12px; }
-    .gw2 { position: relative; padding: 2px; border-radius: 20px; background: linear-gradient(120deg, #ff3d9a, #c64bff, #ffd166, #ff3d9a); background-size: 300% 100%; animation: gw2-border 6s linear infinite; box-shadow: 0 14px 34px -16px rgba(255, 61, 154, .8); }
-    @keyframes gw2-border { to { background-position: 300% 0; } }
-    .gw2-inner { position: relative; overflow: hidden; padding: 10px 11px 11px; border-radius: 18px; background: radial-gradient(circle at 50% 30%, #3a1b4f 0%, #1b1533 55%, #141127 100%); }
-    .gw2-top { display: flex; align-items: center; justify-content: space-between; }
-    .gw2-tag { padding: 4px 9px; border-radius: 999px; color: #fff; background: linear-gradient(120deg, #ff3d9a, #c64bff); font-size: 10px; font-weight: 900; letter-spacing: 1.2px; box-shadow: 0 4px 14px -6px rgba(255, 61, 154, .9); }
-    .gw2-ring { position: relative; width: 44px; height: 44px; display: grid; place-items: center; }
-    .gw2-ring svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
-    .gw2-ring circle { fill: none; stroke-width: 3.5; }
-    .gw2-ring .bg { stroke: rgba(255, 255, 255, .08); }
-    .gw2-ring .fg { stroke: #ff5fb8; stroke-linecap: round; stroke-dasharray: 100; transition: stroke-dashoffset .3s linear; filter: drop-shadow(0 0 4px rgba(255, 95, 184, .8)); }
-    .gw2-ring b { position: relative; font-size: 10px; font-weight: 900; color: #fff; letter-spacing: -.2px; }
-    .gw2.urgent .gw2-ring .fg { stroke: #ff5968; }
-    .gw2.urgent .gw2-ring { animation: gw2-pulse .9s ease-in-out infinite; }
-    .gw2.urgent { animation-duration: 1.5s; }
-    @keyframes gw2-pulse { 50% { transform: scale(1.12); } }
-    .gw2-prize { position: relative; display: grid; place-items: center; height: 92px; margin: 1px 0 0; }
-    .gw2-rays { position: absolute; width: 150px; height: 150px; border-radius: 50%; background: repeating-conic-gradient(from 0deg, rgba(255, 210, 240, .16) 0 10deg, transparent 10deg 24deg); -webkit-mask: radial-gradient(circle, #000 18%, transparent 68%); mask: radial-gradient(circle, #000 18%, transparent 68%); animation: gw2-spin 14s linear infinite; }
-    @keyframes gw2-spin { to { transform: rotate(360deg); } }
-    .gw2-main { position: relative; width: 76px; height: 76px; object-fit: contain; border-radius: 16px; filter: drop-shadow(0 10px 18px rgba(0, 0, 0, .55)) drop-shadow(0 0 16px rgba(255, 95, 184, .45)); animation: gw2-float 3s ease-in-out infinite; }
-    @keyframes gw2-float { 50% { transform: translateY(-6px) rotate(-2deg); } }
-    .gw2-prize .tb { bottom: 2px; }
-    .gw2-spark { position: absolute; color: #ffd1ea; font-size: 12px; text-shadow: 0 0 8px #ff5fb8; animation: gw2-twinkle 2.4s ease-in-out infinite; }
-    .gw2-spark.s1 { top: 14px; left: 22%; } .gw2-spark.s2 { top: 30px; right: 20%; animation-delay: .8s; font-size: 9px; } .gw2-spark.s3 { bottom: 16px; left: 30%; animation-delay: 1.5s; font-size: 10px; }
-    @keyframes gw2-twinkle { 0%, 100% { opacity: .15; transform: scale(.7); } 50% { opacity: 1; transform: scale(1.2); } }
-    .gw2-name { overflow: hidden; color: #fff; font-family: Fredoka, Rubik, sans-serif; font-size: 14px; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
-    .gw2-value { display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 1px; font-family: Fredoka, Rubik, sans-serif; font-size: 20px; font-weight: 700; background: linear-gradient(90deg, #fff, #ffd1ea, #ff8ad0); -webkit-background-clip: text; background-clip: text; color: transparent; }
-    .gw2-value .gem-i { width: 20px; height: 20px; }
-    .gw2-more { display: flex; align-items: center; justify-content: center; gap: 5px; margin-top: 6px; }
-    .gw2-mini { width: 28px; height: 28px; padding: 3px; border-radius: 8px; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .08); }
-    .gw2-mini img { width: 100%; height: 100%; object-fit: contain; }
-    .gw2-more span { margin-left: 3px; color: #c9b8ff; font-size: 11px; font-weight: 800; }
-    .gw2-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(255, 255, 255, .1); font-size: 11px; color: #b9b2d6; }
-    .gw2-host, .gw2-people { display: flex; align-items: center; gap: 6px; min-width: 0; }
-    .gw2-host > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .gw2-host .av, .gw2-face .av { width: 22px; height: 22px; font-size: 10px; }
-    .gw2-faces { display: flex; }
-    .gw2-face { margin-left: -7px; border-radius: 50%; box-shadow: 0 0 0 2px #1b1533; }
-    .gw2-face:first-child { margin-left: 0; }
-    .gw2-people b { color: #fff; }
-    .gw2-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
-    .gw2-chip { padding: 3px 8px; border-radius: 999px; background: rgba(255, 255, 255, .07); color: #e4def7; font-size: 10.5px; font-weight: 800; }
-    .gw2-actions { display: flex; gap: 6px; margin-top: 8px; }
-    .gw2-btn { position: relative; flex: 1; overflow: hidden; height: 36px; border-radius: 11px; color: #fff; font-weight: 900; font-size: 13px; background: linear-gradient(120deg, #ff3d9a, #c64bff, #ff6fc4, #ff3d9a); background-size: 200% 100%; animation: chroma-flow 4s linear infinite; box-shadow: 0 8px 22px -10px rgba(255, 61, 154, .95); }
-    .gw2-btn::after { content: ""; position: absolute; top: 0; bottom: 0; left: -40%; width: 30%; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent); transform: skewX(-20deg); animation: gw2-shine 2.6s ease-in-out infinite; }
-    @keyframes gw2-shine { 0% { left: -40%; } 60%, 100% { left: 130%; } }
-    .gw2-btn:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-1px); }
-    .gw2-btn.in { background: linear-gradient(120deg, #1f6b4d, #1a5a4a); animation: none; box-shadow: none; cursor: default; opacity: 1; }
-    .gw2-btn.in::after, .gw2-btn.off::after { display: none; }
-    .gw2-btn.off { background: #2a2547; animation: none; box-shadow: none; color: #b9b2d6; }
-    .gw2-del { width: 40px; height: 40px; border-radius: 12px; background: #3a1726; color: #ff8a9a; }
-    .gw2.joined .gw2-inner::before { content: "ENTERED"; position: absolute; top: 14px; right: -34px; z-index: 2; width: 130px; padding: 3px 0; transform: rotate(35deg); background: #2bd38a; color: #04240f; font-size: 9px; font-weight: 900; letter-spacing: 1px; text-align: center; }
+    /* ================= GIVEAWAY CARDS (compact) ================= */
+    .giveaways { gap: 8px; }
+    .gw2 { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px;
+      border: 1px solid #2f2952; background: linear-gradient(180deg, #1c1736, #161228); }
+    .gw2.joined { border-color: #1f6b4d; }
+    .gw2.urgent { border-color: #ff5968; }
+    .gw2-thumb { position: relative; flex: none; width: 44px; height: 44px; border-radius: 10px; overflow: hidden;
+      background: #241f42; display: grid; place-items: center; }
+    .gw2-thumb img { width: 100%; height: 100%; object-fit: contain; }
+    .gw2-n { position: absolute; right: 2px; bottom: 2px; padding: 0 4px; border-radius: 6px; font-size: 9px; font-weight: 800;
+      color: #fff; background: rgba(0, 0, 0, .6); }
+    .gw2-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+    .gw2-sub { display: flex; align-items: center; gap: 4px; color: #b9b2d6; font-size: 11px; font-weight: 700; }
+    .gw2-sub .ico { width: 12px; height: 12px; color: var(--green); }
+    .gw2-name { overflow: hidden; color: #fff; font-size: 14px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+    .gw2-line { display: flex; align-items: center; color: var(--green); font-size: 12px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .gw2-line .gem-i { width: 12px; height: 12px; }
+    .gw2-line i { font-style: normal; color: #ffb52e; margin: 0 2px; }
+    .gw2.urgent .gw2-line i { color: #ff5968; }
+    .gw2-join { flex: none; height: 34px; padding: 0 16px; border-radius: 9px; color: #fff; font-weight: 800; font-size: 13px;
+      background: linear-gradient(135deg, #ff9f43, #ff7a1a); box-shadow: 0 4px 12px -6px rgba(255, 122, 26, .9); }
+    .gw2-join:hover:not(:disabled) { filter: brightness(1.08); }
+    .gw2-join.in { background: #1f6b4d; padding: 0 12px; }
+    .gw2-join.in .ico { width: 15px; height: 15px; }
+    .gw2-join.off { background: #2a2547; color: #b9b2d6; }
+    .gw2-del { flex: none; width: 30px; height: 30px; border-radius: 8px; background: #3a1726; color: #ff8a9a; display: grid; place-items: center; }
+    .gw2-del .ico { width: 15px; height: 15px; }
 
     /* ================= GIVEAWAY WINNER REVEAL ================= */
     .gww { position: fixed; inset: 0; z-index: 300; display: grid; place-items: center; padding: 14px; overflow: hidden; background: radial-gradient(circle at 50% 40%, rgba(120, 40, 160, .55), rgba(6, 4, 16, .88)); backdrop-filter: blur(6px); animation: gww-in .3s ease both; }
@@ -3092,37 +3066,28 @@
 
         const faces = asArray(g.entrantsPreview).map(u => `<span class="gw2-face" title="${esc(u.username)}">${avatar(u, "sm")}</span>`).join("");
 
+        const extra = [
+          count ? `${count} ${count === 1 ? "entry" : "entries"}` : "",
+          Number(g.minBet) > 0 ? `min ${fmt(g.minBet)}` : "",
+          g.minRank ? `${esc(g.minRank)}+` : ""
+        ].filter(Boolean).join(" · ");
+        const joinBtn = mine
+          ? '<button class="gw2-join off" disabled>Yours</button>'
+          : entered
+            ? `<button class="gw2-join in" disabled>${icon("check")}</button>`
+            : `<button class="gw2-join" data-action="enter-giveaway" data-id="${esc(g.id)}">Join</button>`;
+
         return `
           <div class="gw2 ${entered ? "joined" : ""}" data-gw-end="${Number(g.endsAt || 0)}">
-            <div class="gw2-inner">
-              <div class="gw2-top">
-                <span class="gw2-tag">${icon("gift")} GIVEAWAY</span>
-                <div class="gw2-ring" title="Time left">
-                  <svg viewBox="0 0 40 40"><circle class="bg" cx="20" cy="20" r="17"/><circle class="fg ticker-ring" cx="20" cy="20" r="17" pathLength="100" data-end="${Number(g.endsAt || 0)}" data-dur="${Number(g.duration || 60)}"/></svg>
-                  <b class="ticker-giveaway" data-end="${Number(g.endsAt || 0)}"></b>
-                </div>
-              </div>
-
-              <div class="gw2-prize" data-tip="${esc(itemLabel(top))}" data-tip-value="${esc(fmt(top.value))}">
-                <div class="gw2-rays"></div>
-                                <img class="gw2-main" src="${esc(itemImage(top))}" alt="">
-                ${thumbBadges(top)}
-              </div>
-              <div class="gw2-name">${esc(itemLabel(top))}</div>
-              <div class="gw2-value">${GEM}${fmt(g.value)}</div>
-
-              ${items.length > 1 ? `<div class="gw2-more">${items.slice(1, 5).map(i => `
-                <div class="gw2-mini" data-tip="${esc(itemLabel(i))}" data-tip-value="${esc(fmt(i.value))}"><img src="${esc(itemImage(i))}" alt=""></div>`).join("")}
-                <span>+${items.length - 1} more</span></div>` : ""}
-
-              <div class="gw2-meta">
-                <span class="gw2-host">${avatar(g.host, "sm")}<span>by <b>${esc(getUsername(g.host))}</b></span></span>
-                <span class="gw2-people">${faces ? `<span class="gw2-faces">${faces}</span>` : ""}<b>${count}</b> ${count === 1 ? "entry" : "entries"}</span>
-              </div>
-              ${chips ? `<div class="gw2-chips">${chips}</div>` : ""}
-
-              <div class="gw2-actions">${button}${ME && ME.isAdmin ? `<button class="gw2-del" data-action="gw-delete" data-id="${esc(g.id)}" title="Delete giveaway (admin)">${icon("trash")}</button>` : ""}</div>
+            <div class="gw2-thumb" data-tip="${esc(itemLabel(top))}" data-tip-value="${esc(fmt(top.value))}">
+              <img src="${esc(itemImage(top))}" alt="">${items.length > 1 ? `<span class="gw2-n">+${items.length - 1}</span>` : ""}
             </div>
+            <div class="gw2-info">
+              <small class="gw2-sub">${icon("gift")} Giveaway · by ${esc(getUsername(g.host))}</small>
+              <b class="gw2-name">${esc(itemLabel(top))}</b>
+              <span class="gw2-line">${GEM}${fmt(g.value)} · <i class="ticker-giveaway" data-end="${Number(g.endsAt || 0)}"></i> left${extra ? ` · ${extra}` : ""}</span>
+            </div>
+            ${joinBtn}${ME && ME.isAdmin ? `<button class="gw2-del" data-action="gw-delete" data-id="${esc(g.id)}" title="Delete (admin)">${icon("trash")}</button>` : ""}
           </div>`;
       }).join("");
     }
