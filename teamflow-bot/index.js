@@ -139,6 +139,57 @@ async function closeTicket(channel, byUser) {
   return true;
 }
 
+/* ================= !bglkur : back up, then rebuild the server as TeamFlow =================
+   Admin only. Takes a JSON backup of every channel + its recent messages, then (after a confirm
+   button) deletes the old channels and creates the TeamFlow channels. The backup is uploaded to the
+   new log channel AND DMed to whoever ran it, so nothing is lost for good. */
+const pendingWipe = new Map(); // key: `${guildId}:${userId}` -> { backup, at }
+const isAdminMember = m => Boolean(m) && (m.permissions.has(PermissionFlagsBits.Administrator) || m.id === m.guild.ownerId);
+
+async function buildBackup(guild) {
+  const out = { guild: guild.name, id: guild.id, savedAt: new Date().toISOString(), channels: [] };
+  const texts = [...guild.channels.cache.values()].filter(c => c.type === ChannelType.GuildText || c.type === ChannelType.GuildAnnouncement);
+  for (const c of guild.channels.cache.values()) {
+    const entry = { name: c.name, type: c.type, parent: c.parent ? c.parent.name : null, topic: c.topic || null, messages: [] };
+    if (texts.includes(c)) {
+      const batch = await c.messages.fetch({ limit: 100 }).catch(() => null);
+      if (batch) entry.messages = [...batch.values()].reverse().map(m => ({ t: new Date(m.createdTimestamp).toISOString(), a: m.author.tag, c: m.content, att: [...m.attachments.values()].map(x => x.url), embeds: m.embeds.length }));
+    }
+    out.channels.push(entry);
+  }
+  return out;
+}
+
+async function doWipeAndSetup(guild, invoker, backup) {
+  const keep = new Set((CONFIG.setup.keepChannelNames || []).map(norm));
+  const before = [...guild.channels.cache.values()]; // snapshot of the OLD channels (these get deleted)
+  const created = new Set();
+  const mk = async opts => { const c = await guild.channels.create(opts); created.add(c.id); return c; };
+
+  /* TeamFlow structure */
+  const tfCat = await mk({ name: CONFIG.setup.infoCategory || 'TeamFlow', type: ChannelType.GuildCategory });
+  const rules = await mk({ name: CONFIG.setup.rulesChannel || 'rules', type: ChannelType.GuildText, parent: tfCat.id });
+  const prices = await mk({ name: CONFIG.setup.pricesChannel || 'prices', type: ChannelType.GuildText, parent: tfCat.id });
+  const panel = await mk({ name: CONFIG.channelNames.panel || 'buy-sell', type: ChannelType.GuildText, parent: tfCat.id });
+  const ticketsCat = await mk({ name: CONFIG.channelNames.ticketCategory || 'tickets', type: ChannelType.GuildCategory });
+  const log = await mk({ name: CONFIG.channelNames.log || 'ticket-logs', type: ChannelType.GuildText, parent: ticketsCat.id,
+    permissionOverwrites: [{ id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] }, ...staffRoleIds(guild).map(id => ({ id, allow: [PermissionFlagsBits.ViewChannel] }))] });
+
+  const file = new AttachmentBuilder(Buffer.from(JSON.stringify(backup, null, 2), 'utf8'), { name: `backup-${guild.id}-${Date.now()}.json` });
+  await log.send({ embeds: [embed('🗄️ Server backup', `Backup of the old server taken before the TeamFlow setup by ${invoker}. Keep this file safe.`)], files: [file] }).catch(() => {});
+  await rules.send({ embeds: [embed(`${BRAND} — Rules`, CONFIG.setup.rulesText || 'Rules')] }).catch(() => {});
+  await prices.send({ embeds: [embed(`${BRAND} — Prices`, CONFIG.setup.pricesText || 'Prices')] }).catch(() => {});
+  await panel.send(panelMessage()).catch(() => {});
+
+  /* delete the old channels */
+  let deleted = 0, failed = 0;
+  for (const c of before) {
+    if (created.has(c.id) || keep.has(norm(c.name))) continue;
+    try { await c.delete('TeamFlow setup (!bglkur)'); deleted++; } catch { failed++; }
+  }
+  return { deleted, failed, panel, log };
+}
+
 /* ---------------- events ---------------- */
 client.once(Events.ClientReady, c => {
   console.log(`\n  Logged in as ${c.user.tag} — ${BRAND} ${CONFIG.subtitle || ''}\n`);
@@ -160,6 +211,28 @@ client.on(Events.MessageCreate, async msg => {
     msg.delete().catch(() => {});
     return;
   }
+  if (name === 'bglkur' || name === 'setup') {
+    if (!isAdminMember(msg.member)) return msg.reply('Only a server admin / owner can run this.');
+    const status = await msg.channel.send({ embeds: [embed('🗄️ Backing up the server…', 'Reading every channel and its recent messages. This can take a moment.')] }).catch(() => null);
+    let backup;
+    try { backup = await buildBackup(msg.guild); }
+    catch (error) { return msg.channel.send({ embeds: [embed('Backup failed', `Nothing was changed. ${error.message}`)] }); }
+    const file = new AttachmentBuilder(Buffer.from(JSON.stringify(backup, null, 2), 'utf8'), { name: `backup-${msg.guild.id}.json` });
+    await msg.author.send({ content: 'TeamFlow setup — here is the backup of your server (channels + recent messages). Keep it safe.', files: [file] }).catch(() => {});
+    pendingWipe.set(`${msg.guild.id}:${msg.author.id}`, { backup, at: Date.now() });
+    const channelCount = msg.guild.channels.cache.size;
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('bgl_confirm').setLabel('Yes, wipe & set up TeamFlow').setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId('bgl_cancel').setLabel('Cancel').setStyle(ButtonStyle.Secondary));
+    if (status) status.delete().catch(() => {});
+    await msg.channel.send({ embeds: [embed('⚠️ Confirm server wipe',
+      `Backup saved (also DMed to you).
+
+This will **delete ${channelCount} channels** (everything except: ${(CONFIG.setup.keepChannelNames || []).map(n => '`' + n + '`').join(', ') || 'none'}) and set up the **${BRAND}** channels: rules, prices, buy-sell panel, tickets, ticket-logs.
+
+**This cannot be undone.** Press the button within 2 minutes.`)], components: [row] });
+    return;
+  }
   if (name === 'close') {
     if (!staff) return msg.reply('Only staff can close tickets.');
     if (!(await closeTicket(msg.channel, msg.author))) return msg.reply('This is not a ticket channel.');
@@ -174,6 +247,7 @@ client.on(Events.MessageCreate, async msg => {
   }
   if (name === 'help') {
     return msg.reply({ embeds: [embed(`${BRAND} commands`,
+      `**Admin:** \`${P}bglkur\` (back up + wipe the old channels and set up TeamFlow)\n` +
       `**Staff:** \`${P}panel\` (post the buy/sell panel) · \`${P}close\` · \`${P}add @user\` · \`${P}remove @user\`\n` +
       `Customers just press the buttons on the panel.`)] });
   }
@@ -184,6 +258,26 @@ client.on(Events.InteractionCreate, async interaction => {
     if (!interaction.isButton() || !interaction.guild) return;
     const [action, arg] = interaction.customId.split(':');
     if (ONLY_GUILD && interaction.guild.id !== ONLY_GUILD) return;
+
+    if (action === 'bgl_cancel') {
+      pendingWipe.delete(`${interaction.guild.id}:${interaction.user.id}`);
+      return interaction.update({ embeds: [embed('Cancelled', 'Nothing was changed.')], components: [] }).catch(() => {});
+    }
+    if (action === 'bgl_confirm') {
+      if (!isAdminMember(interaction.member)) return interaction.reply({ content: 'Only a server admin / owner can confirm.', flags: 64 });
+      const key = `${interaction.guild.id}:${interaction.user.id}`;
+      const pend = pendingWipe.get(key);
+      if (!pend || Date.now() - pend.at > 120000) { pendingWipe.delete(key); return interaction.reply({ content: 'This confirmation expired. Run the command again.', flags: 64 }); }
+      pendingWipe.delete(key);
+      await interaction.update({ embeds: [embed('🧹 Setting up TeamFlow…', 'Creating channels and removing the old ones. Give me a moment.')], components: [] }).catch(() => {});
+      try {
+        const r = await doWipeAndSetup(interaction.guild, interaction.user, pend.backup);
+        await r.log.send({ embeds: [embed('✅ TeamFlow set up', `${r.deleted} old channel(s) removed${r.failed ? `, ${r.failed} could not be deleted (Community server channels are protected — remove them by hand)` : ''}. Panel is in ${r.panel}.`)] }).catch(() => {});
+      } catch (error) {
+        await interaction.channel?.send?.({ embeds: [embed('Setup error', `${error.message}. Make sure my role is at the TOP with **Administrator** (or Manage Channels + Manage Roles).`)] }).catch(() => {});
+      }
+      return;
+    }
 
     if (action === 'tf_open') return openTicket(interaction, arg);
 

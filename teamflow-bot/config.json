@@ -13,12 +13,49 @@
     "log": "ticket-logs",
     "panel": "buy-sell"
   },
-  "staffRoleNames": ["Owner", "Admin", "Staff", "Support", "Middleman"],
-  "paymentMethods": ["Crypto (LTC / USDT / BTC)", "PayPal", "Other — ask staff"],
-  "options": [
-    { "id": "buy", "label": "Buy BGL", "emoji": "🛒", "blurb": "You pay, you receive BGL in Growtopia." },
-    { "id": "sell", "label": "Sell BGL", "emoji": "💰", "blurb": "You give BGL, you get paid." },
-    { "id": "support", "label": "Support", "emoji": "❓", "blurb": "A question or a problem with an order." }
+  "staffRoleNames": [
+    "Owner",
+    "Admin",
+    "Staff",
+    "Support",
+    "Middleman"
   ],
-  "maxOpenTicketsPerUser": 2
+  "paymentMethods": [
+    "Crypto (LTC / USDT / BTC)",
+    "PayPal",
+    "Other — ask staff"
+  ],
+  "options": [
+    {
+      "id": "buy",
+      "label": "Buy BGL",
+      "emoji": "🛒",
+      "blurb": "You pay, you receive BGL in Growtopia."
+    },
+    {
+      "id": "sell",
+      "label": "Sell BGL",
+      "emoji": "💰",
+      "blurb": "You give BGL, you get paid."
+    },
+    {
+      "id": "support",
+      "label": "Support",
+      "emoji": "❓",
+      "blurb": "A question or a problem with an order."
+    }
+  ],
+  "maxOpenTicketsPerUser": 2,
+  "setup": {
+    "_note": "!bglkur komutu: önce yedek alır, onay sorar, sonra eski kanalları silip bunları kurar.",
+    "keepChannelNames": [
+      "rules",
+      "moderator-only"
+    ],
+    "infoCategory": "TeamFlow",
+    "rulesChannel": "rules",
+    "pricesChannel": "prices",
+    "rulesText": "Welcome to TeamFlow — BGL Buy & Sell.\n\n• Open a ticket in #buy-sell to buy or sell BGL.\n• Only deal with staff inside your ticket. Never trust anyone who DMs you first.\n• Payment is arranged by staff in the ticket. Prices are in #prices.\n• Be respectful. Staff decisions are final.",
+    "pricesText": "**BGL Prices** (staff set the live rate in your ticket)\n\n• Buy BGL — ask in a ticket\n• Sell BGL — ask in a ticket\n\nRates change with the market. Open a ticket in #buy-sell for the current price."
+  }
 }

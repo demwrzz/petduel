@@ -33,6 +33,18 @@ PetDuel ile hiçbir bağlantısı yok. Kendi başına çalışan bir **ticket (s
 - Yetkili: `!panel` (butonlu paneli atar) · `!close` · `!add @kişi` · `!remove @kişi` · `!help`
 - Müşteriler sadece panel butonlarına basar.
 
+
+## Sunucuyu TeamFlow'a çevirme (`!bglkur`)
+Sunucuda **yönetici** olarak `!bglkur` yaz:
+1. Bot önce **bütün sunucunun yedeğini** alır (kanallar + son 100 mesaj) ve sana **DM** ile JSON dosyası atar.
+2. Bir **onay** mesajı çıkar: kaç kanal silineceğini ve nelerin kurulacağını yazar. 2 dakika içinde **"Yes, wipe & set up TeamFlow"** butonuna bas.
+3. Bot eski (PetDuel) kanalları siler ve TeamFlow düzenini kurar: `rules`, `prices`, `buy-sell` (panel burada), `tickets` kategorisi, `ticket-logs`. Yedek dosyası `ticket-logs` kanalına da yüklenir.
+
+**Önemli:**
+- Bu işlem **geri alınamaz**, ama yedek DM'de ve `ticket-logs`'ta durur (metin olarak).
+- `config.json` → `setup.keepChannelNames` içine **silinmesini istemediğin** kanalları yaz (örn. `rules`, `moderator-only`).
+- Botun rolü listede **en üstte** ve **Administrator** (ya da en az Manage Channels + Manage Roles) olmalı, yoksa kanalları silemez/kuramaz. Community sunucularda `rules`/`updates` kanalları Discord tarafından korunur, onları elle silersin.
+
 ## Dikkat
 - BGL gibi oyun parasını gerçek para karşılığı almak/satmak genelde oyunun kurallarına aykırıdır (RMT), sorumluluk sana ait.
 - Botu sahte ödeme onayı/escrow taklidi için **kullanma**; o yüzden o özellikler yok.
