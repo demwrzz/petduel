@@ -711,6 +711,40 @@ async function handlePrefix(msg) {
   const words = tokens(body);
   if (!words.length) return;
   const name = words[0].v.toLowerCase();
+
+  /* !restore : rebuild the server channels from a backup JSON (the file TeamFlow's !bglkur produced).
+     Attach that .json file to the message. Admin / owner only. */
+  if (name === 'restore') {
+    if (!(msg.member && (msg.member.permissions.has(PermissionFlagsBits.Administrator) || msg.member.id === msg.guild.ownerId)))
+      return msg.reply('⛔ Only a server admin / owner can restore.').catch(() => {});
+    const att = msg.attachments.find(a => /\.json$/i.test(a.name || ''));
+    if (!att) return msg.reply(`Attach the backup **.json** file (the one you got from \`!bglkur\`) to a message with \`${P}restore\`.`).catch(() => {});
+    let data;
+    try { const r = await fetch(att.url); data = await r.json(); } catch (e) { return msg.reply('Could not read that file as JSON.').catch(() => {}); }
+    const list = Array.isArray(data.channels) ? data.channels : null;
+    if (!list) return msg.reply('That does not look like a server backup (no "channels").').catch(() => {});
+    await msg.reply(`Restoring **${list.length}** channels from the backup of **${data.guild || 'the server'}**… existing channels with the same name are skipped.`).catch(() => {});
+    const TYPE = { 2: ChannelType.GuildVoice, 4: ChannelType.GuildCategory, 5: ChannelType.GuildText, 13: ChannelType.GuildStageVoice, 15: ChannelType.GuildForum, 16: ChannelType.GuildText };
+    const existing = n => msg.guild.channels.cache.find(c => c.name.toLowerCase() === String(n || '').toLowerCase());
+    const catId = {};
+    let made = 0, skipped = 0, failed = 0;
+    /* categories first so children can be parented */
+    for (const c of list.filter(c => c.type === 4)) {
+      const have = msg.guild.channels.cache.find(c2 => c2.type === ChannelType.GuildCategory && c2.name.toLowerCase() === String(c.name).toLowerCase());
+      if (have) { catId[c.name] = have.id; skipped++; continue; }
+      try { const ch = await msg.guild.channels.create({ name: c.name, type: ChannelType.GuildCategory }); catId[c.name] = ch.id; made++; }
+      catch { failed++; }
+    }
+    for (const c of list.filter(c => c.type !== 4)) {
+      if (existing(c.name)) { skipped++; continue; }
+      try {
+        await msg.guild.channels.create({ name: c.name, type: TYPE[c.type] || ChannelType.GuildText, parent: c.parent && catId[c.parent] ? catId[c.parent] : undefined, topic: (c.topic || undefined) });
+        made++;
+      } catch { failed++; }
+    }
+    return msg.channel.send({ embeds: [embed('✅ Restore done', `Created **${made}** channel(s), skipped **${skipped}** (already there)${failed ? `, **${failed}** failed (check my permissions / role position)` : ''}.\nOld messages are kept inside the backup file — Discord does not let a bot repost them as the original authors.`)] }).catch(() => {});
+  }
+
   const cmd = commandsByName().get(name);
   if (!cmd) return;
 
