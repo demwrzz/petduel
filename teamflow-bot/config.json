@@ -1,0 +1,24 @@
+{
+  "brand": "TeamFlow",
+  "subtitle": "BGL Buy & Sell",
+  "currency": "BGL",
+  "color": "#2bd38a",
+  "prefix": "!",
+  "_note_ids": "Fill these with real IDs (right click a channel/category in Discord with Developer Mode on → Copy ID). Left empty, the bot falls back to the names below.",
+  "ticketCategoryId": "",
+  "logChannelId": "",
+  "panelChannelId": "",
+  "channelNames": {
+    "ticketCategory": "tickets",
+    "log": "ticket-logs",
+    "panel": "buy-sell"
+  },
+  "staffRoleNames": ["Owner", "Admin", "Staff", "Support", "Middleman"],
+  "paymentMethods": ["Crypto (LTC / USDT / BTC)", "PayPal", "Other — ask staff"],
+  "options": [
+    { "id": "buy", "label": "Buy BGL", "emoji": "🛒", "blurb": "You pay, you receive BGL in Growtopia." },
+    { "id": "sell", "label": "Sell BGL", "emoji": "💰", "blurb": "You give BGL, you get paid." },
+    { "id": "support", "label": "Support", "emoji": "❓", "blurb": "A question or a problem with an order." }
+  ],
+  "maxOpenTicketsPerUser": 2
+}
