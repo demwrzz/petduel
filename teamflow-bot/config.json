@@ -9,9 +9,10 @@
   "logChannelId": "",
   "panelChannelId": "",
   "channelNames": {
-    "ticketCategory": "tickets",
-    "log": "ticket-logs",
-    "panel": "buy-sell"
+    "ticketCategory": "🎫 tickets",
+    "log": "📒┃ticket-logs",
+    "panel": "💎┃buy-sell",
+    "completed": "✅┃completed-deals"
   },
   "staffRoleNames": [
     "Owner",
@@ -21,9 +22,11 @@
     "Middleman"
   ],
   "paymentMethods": [
-    "Crypto (LTC / USDT / BTC)",
-    "PayPal",
-    "Other — ask staff"
+    "USDT",
+    "USDC",
+    "LTC",
+    "BTC",
+    "ETH"
   ],
   "options": [
     {
@@ -52,10 +55,42 @@
       "rules",
       "moderator-only"
     ],
-    "infoCategory": "TeamFlow",
-    "rulesChannel": "rules",
-    "pricesChannel": "prices",
-    "rulesText": "Welcome to TeamFlow — BGL Buy & Sell.\n\n• Open a ticket in #buy-sell to buy or sell BGL.\n• Only deal with staff inside your ticket. Never trust anyone who DMs you first.\n• Payment is arranged by staff in the ticket. Prices are in #prices.\n• Be respectful. Staff decisions are final.",
-    "pricesText": "**BGL Prices** (staff set the live rate in your ticket)\n\n• Buy BGL — ask in a ticket\n• Sell BGL — ask in a ticket\n\nRates change with the market. Open a ticket in #buy-sell for the current price."
-  }
+    "infoCategory": "💠 TeamFlow",
+    "rulesChannel": "📜┃rules",
+    "pricesChannel": "🏷️┃prices",
+    "rulesText": "Welcome to TeamFlow — BGL Buy & Sell.\n\n• Open a ticket in 💎┃buy-sell to buy or sell BGL.\n• Only deal with staff inside your ticket. Never trust anyone who DMs you first.\n• Payment is arranged by staff in the ticket. Prices are in 🏷️┃prices.\n• Completed deals are logged in ✅┃completed-deals.\n• Be respectful. Staff decisions are final.",
+    "pricesText": "💎 **BGL PRICES**\n\n**1 BGL = €4**\n\n**We accept:** USDT · USDC · LTC · BTC · ETH (stable crypto preferred)\n\nRates can change with the market — open a ticket in 💎┃buy-sell for the live price. Staff confirm the final rate inside your ticket."
+  },
+  "rate": {
+    "bglToEur": 4,
+    "currencySymbol": "€"
+  },
+  "methods": [
+    {
+      "id": "usdt",
+      "label": "USDT",
+      "color": "#26a17b"
+    },
+    {
+      "id": "usdc",
+      "label": "USDC",
+      "color": "#2775ca"
+    },
+    {
+      "id": "ltc",
+      "label": "LTC",
+      "color": "#b8b8b8"
+    },
+    {
+      "id": "btc",
+      "label": "BTC",
+      "color": "#f7931a"
+    },
+    {
+      "id": "eth",
+      "label": "ETH",
+      "color": "#8a92b2"
+    }
+  ],
+  "completedChannelId": ""
 }

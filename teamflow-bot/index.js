@@ -52,8 +52,20 @@ function findChannel(guild, id, name, types) {
     guild.channels.cache.find(c => types.includes(c.type) && norm(c.name).includes(want)) || null;
 }
 const ticketCategory = g => findChannel(g, CONFIG.ticketCategoryId, CONFIG.channelNames.ticketCategory, [ChannelType.GuildCategory]);
+const completedChannel = g => findChannel(g, CONFIG.completedChannelId, CONFIG.channelNames.completed, [ChannelType.GuildText]);
 const logChannel = g => findChannel(g, CONFIG.logChannelId, CONFIG.channelNames.log, [ChannelType.GuildText]);
 const optionById = id => (CONFIG.options || []).find(o => o.id === id);
+
+const DATA_DIR = (() => { for (const d of ['/app/data', path.join(__dirname, 'data')]) { try { fs.mkdirSync(d, { recursive: true }); fs.accessSync(d, fs.constants.W_OK); return d; } catch { /* next */ } } return __dirname; })();
+const DEALS_FILE = path.join(DATA_DIR, 'deals.json');
+function nextDealNo() {
+  let store = { count: 0 };
+  try { store = JSON.parse(fs.readFileSync(DEALS_FILE, 'utf8')); } catch { /* new file */ }
+  store.count = (store.count || 0) + 1;
+  try { fs.writeFileSync(DEALS_FILE, JSON.stringify(store)); } catch { /* ignore */ }
+  return store.count;
+}
+const methodById = v => (CONFIG.methods || []).find(m => m.id === String(v || '').toLowerCase() || norm(m.label) === norm(v));
 
 /* ---------------- the buy/sell panel ---------------- */
 function panelEmbed() {
@@ -185,12 +197,15 @@ async function doWipeAndSetup(guild, invoker, backup) {
   const ticketsCat = await mk({ name: CONFIG.channelNames.ticketCategory || 'tickets', type: ChannelType.GuildCategory });
   const log = await mk({ name: CONFIG.channelNames.log || 'ticket-logs', type: ChannelType.GuildText, parent: ticketsCat.id,
     permissionOverwrites: [{ id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] }, ...staffRoleIds(guild).map(id => ({ id, allow: [PermissionFlagsBits.ViewChannel] }))] });
+  const completed = await mk({ name: CONFIG.channelNames.completed || 'completed-deals', type: ChannelType.GuildText, parent: tfCat.id,
+    permissionOverwrites: [{ id: guild.roles.everyone.id, deny: [PermissionFlagsBits.SendMessages] }, ...staffRoleIds(guild).map(id => ({ id, allow: [PermissionFlagsBits.SendMessages] }))] });
 
   const file = new AttachmentBuilder(Buffer.from(JSON.stringify(backup, null, 2), 'utf8'), { name: `backup-${guild.id}-${Date.now()}.json` });
   await log.send({ embeds: [embed('🗄️ Server backup', `Backup of the old server taken before the TeamFlow setup by ${invoker}. Keep this file safe.`)], files: [file] }).catch(() => {});
   await rules.send({ embeds: [embed(`${BRAND} — Rules`, CONFIG.setup.rulesText || 'Rules')] }).catch(() => {});
   await prices.send({ embeds: [embed(`${BRAND} — Prices`, CONFIG.setup.pricesText || 'Prices')] }).catch(() => {});
   await panel.send(await panelMessage()).catch(() => {});
+  await completed.send({ embeds: [embed('✅ Completed deals', 'Finished buys and sells are logged here by staff with `!done`. Every entry is a real deal handled inside a ticket.')] }).catch(() => {});
 
   /* delete the old channels */
   let deleted = 0, failed = 0;
@@ -244,6 +259,42 @@ This will **delete ${channelCount} channels** (everything except: ${(CONFIG.setu
 **This cannot be undone.** Press the button within 2 minutes.`)], components: [row] });
     return;
   }
+  if (name === 'rate') {
+    if (!staff) return;
+    const v = Number(args[0]);
+    if (v > 0) { CONFIG.rate.bglToEur = v; return msg.reply({ embeds: [embed('Rate updated (this session)', `1 BGL = ${CONFIG.rate.currencySymbol || '€'}${v}. To make it permanent, change \`rate.bglToEur\` in config.json.`)] }); }
+    return msg.reply({ embeds: [embed('Current rate', `1 BGL = ${CONFIG.rate.currencySymbol || '€'}${CONFIG.rate.bglToEur}`)] });
+  }
+  if (name === 'done' || name === 'deal') {
+    if (!staff) return msg.reply('Only staff can log a completed deal.');
+    const inTicket = msg.channel.topic && msg.channel.topic.startsWith('tf:');
+    const type = /^(buy|sell|b|s)$/i.test(args[0] || '') ? (/^b/i.test(args[0]) ? 'buy' : 'sell') : null;
+    if (!type) return msg.reply(`Usage: \`${P}done <buy|sell> <bgl> [eur] [@customer] [method]\`  e.g. \`${P}done buy 5 20 @user usdt\``);
+    const nums = args.filter(a => /^[0-9]+(\.[0-9]+)?$/.test(a)).map(Number);
+    const bgl = nums[0];
+    if (!(bgl > 0)) return msg.reply('Enter the BGL amount, e.g. `' + P + 'done buy 5`.');
+    const eur = nums[1] != null ? nums[1] : Math.round(bgl * (CONFIG.rate.bglToEur || 0) * 100) / 100;
+    const method = methodById(args.find(a => methodById(a))) || (CONFIG.methods || [])[0] || { id: '', label: '—' };
+    let customer = msg.mentions.users.first();
+    if (!customer && inTicket) { const opener = msg.channel.topic.split(':')[1]; customer = await client.users.fetch(opener).catch(() => null); }
+    const completed = completedChannel(msg.guild);
+    if (!completed) return msg.reply('No completed-deals channel found. Run `' + P + 'bglkur` or create a channel named `' + (CONFIG.channelNames.completed || 'completed-deals') + '`.');
+    const deal = {
+      id: String(nextDealNo()).padStart(4, '0'), type, bgl: String(bgl), eur: String(eur), method: method.id,
+      customer: customer ? (customer.globalName || customer.username) : 'Customer',
+      customerAvatar: customer ? customer.displayAvatarURL({ extension: 'png', size: 128 }) : null,
+      staff: msg.author.globalName || msg.author.username, staffAvatar: msg.author.displayAvatarURL({ extension: 'png', size: 128 }),
+      date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+    };
+    try {
+      let files = null;
+      if (banner) { try { files = [new AttachmentBuilder(await banner.dealCard(deal, CONFIG), { name: 'deal.gif' })]; } catch (e) { console.warn('deal card failed:', e.message); } }
+      const e = embed(null, `**${type === 'buy' ? 'Bought' : 'Sold'} ${deal.bgl} BGL** for ${CONFIG.rate.currencySymbol || '€'}${deal.eur} via ${method.label} · ${customer ? `<@${customer.id}>` : 'customer'} · handled by ${msg.author}`).setTitle(`✅ Deal #${deal.id} completed`);
+      await completed.send(files ? { embeds: [e.setImage('attachment://deal.gif')], files } : { embeds: [e] });
+      await msg.reply({ embeds: [embed('Logged ✅', `Deal #${deal.id} posted in ${completed}.`)] });
+    } catch (error) { msg.reply(`Could not log the deal: ${error.message}`); }
+    return;
+  }
   if (name === 'close') {
     if (!staff) return msg.reply('Only staff can close tickets.');
     if (!(await closeTicket(msg.channel, msg.author))) return msg.reply('This is not a ticket channel.');
@@ -259,7 +310,7 @@ This will **delete ${channelCount} channels** (everything except: ${(CONFIG.setu
   if (name === 'help') {
     return msg.reply({ embeds: [embed(`${BRAND} commands`,
       `**Admin:** \`${P}bglkur\` (back up + wipe the old channels and set up TeamFlow)\n` +
-      `**Staff:** \`${P}panel\` (post the buy/sell panel) · \`${P}close\` · \`${P}add @user\` · \`${P}remove @user\`\n` +
+      `**Staff:** \`${P}panel\` · \`${P}done <buy|sell> <bgl> [eur] [@customer] [method]\` (log a completed deal) · \`${P}rate [eur]\` · \`${P}close\` · \`${P}add @user\` · \`${P}remove @user\`\n` +
       `Customers just press the buttons on the panel.`)] });
   }
 });

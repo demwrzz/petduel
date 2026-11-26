@@ -30,8 +30,20 @@ PetDuel ile hiçbir bağlantısı yok. Kendi başına çalışan bir **ticket (s
 - `maxOpenTicketsPerUser` → bir kişinin aynı anda açabileceği ticket sayısı.
 
 ## Komutlar (prefix `!`)
-- Yetkili: `!panel` (butonlu paneli atar) · `!close` · `!add @kişi` · `!remove @kişi` · `!help`
+- **Admin:** `!bglkur` (yedek al + sunucuyu TeamFlow'a çevir)
+- **Yetkili:** `!panel` · `!done` · `!rate` · `!close` · `!add @kişi` · `!remove @kişi` · `!help`
 - Müşteriler sadece panel butonlarına basar.
+
+## Tamamlanan işlemler (`!done`)
+Bir alım/satım **ticket içinde gerçekten bitince**, yetkili şunu yazar:
+```
+!done buy 5 20 @müşteri usdt
+```
+= müşteri 5 BGL aldı, 20€, USDT ile.
+- `eur` yazmazsan kur × BGL otomatik hesaplanır (`!rate` ile kur: şu an 1 BGL = €4).
+- `@müşteri` yazmazsan ticket'ı açan kişi alınır.
+- Bot **✅┃completed-deals** kanalına **animasyonlu resimli bir işlem kartı** atar (BGL, €, kur, ödeme kripto logosu, müşteri + yetkili, işlem no). Her kart sadece yetkilinin kaydettiği **gerçek** işlemi gösterir — sahte blockchain/işlem onayı yoktur.
+- `!rate 5` → kuru o oturum için 1 BGL = €5 yapar (kalıcı için `config.json` → `rate.bglToEur`).
 
 
 ## Sunucuyu TeamFlow'a çevirme (`!bglkur`)
